@@ -15,8 +15,12 @@ vela 원격은 **추가하지 않는다**. vela 는 경험이지 원격이 아�
 코드를 당겨 온다(이식 폐기 결정). 필요한 문서는 전부 이 저장소 `docs/` 에 있다.
 
 PowerShell 5.1 의 `>` 는 UTF-16 으로 쓴다 — 한글 파일을 리다이렉트로 만들지 않는다.
-대장을 화면에 띄우려면 `python docs\render_backlog.py docs\agrodss_backlog.md backlog.html`
-(`python -m pip install markdown` 1회 필요).
+
+**내부 화면(M-13)**: `run_frontend.bat` 를 더블클릭하면 의존성 설치 후 `http://127.0.0.1:8765/`
+가 브라우저 새 창에 열린다(첫 페이지 = 대장). 문서를 고치고 새로고침하면 그대로 보인다.
+루프백 전용이라 외부에서 접근할 수 없다(D-6). 포트는 `AGRODSS_FRONTEND_PORT` 로 바꾼다.
+
+관문: `python -m pytest` (루트에서). 세션 마감 전 반드시 전체 실행.
 
 ## 2. 세션 시작 시 확인 1회
 
