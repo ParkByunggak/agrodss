@@ -36,8 +36,12 @@ registry.register(registry.Decision(
         "heavy_rain_mm_horizon": 50.0,
         "wet_days_pop": 70,
         "wet_days_run": 3,
+        "pest_signal_words": ("발생", "주의", "경보", "다발", "증가"),
+        "pest_name_keys": {"고자리파리": ("고자리",), "파총채벌레 · 파좀나방": ("총채", "좀나방"), "노균병": ("노균",),
+                           "녹병 · 잎마름병": ("녹병", "잎마름")},
         "sources": "임계 전부 보수적 대체값(격자 위험 트리거 문면에서) — 쪽파 정본 임계는 미채움, 발행자 검토 대기. "
-                   "frost 0℃(영하) · 강우 50mm/7일 · 강수확률 70% 3일 연속(잎 젖음 대용)",
+                   "frost 0℃(영하) · 강우 50mm/7일 · 강수확률 70% 3일 연속(잎 젖음 대용) · 예찰: 병해충명이 맞고 "
+                   "수준/본문에 발생·주의·경보·다발·증가 중 하나(NCPMS 필드 미확정 — 원문 기반)",
     },
 ))
 
@@ -82,6 +86,30 @@ def _signals(forecast: list[dict[str, Any]], today: date, params: dict[str, Any]
     return {"frost_day": frost_day, "rain_mm": round(rain, 1), "wet_run": best_run}
 
 
+def _pest_signal(risk: dict[str, Any], pest: list[dict[str, Any]], params: dict[str, Any]) -> str | None:
+    """예찰 레코드 중 이 위험의 병해충명과 맞고 수준/본문에 신호 어휘가 있으면 근거 문장."""
+    if "pest_regional" not in set(risk.get("axes", [])) or not pest:
+        return None
+    keys = None
+    for rname, ks in params["pest_name_keys"].items():
+        if rname in risk.get("name", "") or risk.get("name", "") in rname:
+            keys = ks
+            break
+    if not keys:
+        return None
+    words = params["pest_signal_words"]
+    for r in pest:
+        v = r.get("values", {})
+        pname = v.get("pest") or ""
+        if not any(k in pname for k in keys):
+            continue
+        blob = " ".join(x for x in (v.get("level"), v.get("text")) if x)
+        if any(w in blob for w in words):
+            proxy = f" (대리 작물 {r['crop_code_crop']})" if r.get("proxy_reason") else ""
+            return f"예찰 {r.get('region', '?')} {r.get('observed_at', '?')} '{pname}' {blob}{proxy}"
+    return None
+
+
 def _risk_signal(risk: dict[str, Any], sig: dict[str, Any], params: dict[str, Any]) -> str | None:
     """이 위험에 해당하는 예보 신호가 임계를 넘으면 근거 문장, 아니면 None."""
     axes = set(risk.get("axes", []))
@@ -98,7 +126,7 @@ def _risk_signal(risk: dict[str, Any], sig: dict[str, Any], params: dict[str, An
 
 
 def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
-          today: date | None = None) -> Envelope:
+          today: date | None = None, pest: list[dict[str, Any]] | None = None) -> Envelope:
     today = today or date.today()
     as_of = _now()
     sid = subject.get("id", "?")
@@ -135,7 +163,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         stage_open = w["from_day"] <= day <= w["to_day"]
         for r in risks:
             unrec = r.get("recoverable") is False
-            basis = _risk_signal(r, sig, d.params) if sig else None
+            basis = (_risk_signal(r, sig, d.params) if sig else None) or _pest_signal(r, pest or [], d.params)
             if unrec:
                 if basis:
                     level = "경보"
@@ -166,6 +194,13 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         inputs.append(AxisUse("forecast", f0.get("observed_at"), f0.get("source", "?"), f0.get("resolution", "?"), "관측"))
     else:
         notes.append("예보 없음 — 회복 불가 위험은 달력만으로 '주의', 회복 가능 위험은 판정 보류")
+    if pest:
+        p0 = pest[0]
+        inputs.append(AxisUse("pest_regional", p0.get("observed_at"), p0.get("source", "?"), p0.get("resolution", "?"), "관측"))
+        if p0.get("proxy_reason"):
+            notes.append(f"예찰은 대리 작물 기준: {p0['proxy_reason']}")
+    else:
+        notes.append("예찰 없음 — 병해충 위험은 달력·예보만으로")
     order = {"경보": 0, "주의": 1, "예고": 2}
     alerts.sort(key=lambda a: order.get(a["level"], 9))
     return Envelope(

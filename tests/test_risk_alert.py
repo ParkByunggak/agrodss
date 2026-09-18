@@ -94,6 +94,31 @@ def test_before_any_stage_is_not_applicable():
     assert A.judge(SUBJ, today=date(2026, 8, 1)).kind == "해당 없음"    # 기준점 24일 전 — 칸 -7일도 horizon 밖
 
 
+def _pest(pest, level=None, text=None, proxy=True):
+    return {"observed_at": "20260915", "source": "external:ncpms_svc51", "resolution": "region:충청북도|proxy_crop:파",
+            "region": "충청북도", "crop_code_crop": "파", "proxy_reason": "쪽파 코드 미확정" if proxy else None,
+            "values": {"pest": pest, "level": level, "text": text}}
+
+
+def test_pest_forecast_raises_unrecoverable_to_alert_with_proxy_note():
+    env = A.judge(SUBJ, today=T24, pest=[_pest("고자리파리", level="주의")])
+    lv = _levels(env)
+    assert lv["고자리파리 유충"] == "경보" and "대리 작물" in [a for a in env.result["alerts"] if a["risk"] == "고자리파리 유충"][0]["basis"]
+    assert [i.axis for i in env.inputs] == ["anchor", "pest_regional"]
+    assert any("대리 작물" in n for n in env.notes)
+
+
+def test_pest_forecast_fires_recoverable_only_with_signal_word():
+    quiet = [_pest("파총채벌레")]                                       # 수준·본문 없음 → 신호 아님
+    assert "파총채벌레 · 파좀나방" not in _levels(A.judge(SUBJ, today=T24, pest=quiet))
+    loud = [_pest("파총채벌레", text="발생 증가")]
+    assert _levels(A.judge(SUBJ, today=T24, pest=loud))["파총채벌레 · 파좀나방"] == "경보"
+
+
+def test_pest_forecast_other_pest_does_not_match():
+    assert _levels(A.judge(SUBJ, today=T24, pest=[_pest("배추좀나방", level="경보")]))["고자리파리 유충"] == "주의"
+
+
 def test_envelope_has_no_raw_forecast_values():
     fc = [_fc("2026-09-19", tmin=3.0, rain=60.0, pop=90)]
     dumped = json.dumps(A.judge(SUBJ, forecast=fc, today=T24).to_dict(), ensure_ascii=False)

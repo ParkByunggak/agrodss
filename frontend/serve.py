@@ -109,7 +109,7 @@ def judge_page() -> tuple[int, str]:
         for env in envs:
             e = env.to_dict()
             _render_env(out, e, {"harvest_timing": "수확 시기", "risk_alert": "위험 경보"}.get(e["decision_id"], e["decision_id"]))
-        out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])}</p>")
+        out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 예찰: {_e(info.get('pest', ''))}</p>")
     footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
     return 200, render.page("agrodss — 판단", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)
 

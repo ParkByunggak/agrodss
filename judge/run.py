@@ -7,9 +7,22 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from ingest import kma, media
+from ingest import kma, media, ncpms
 from judge import harvest_timing, risk_alert
 from judge.envelope import Envelope
+
+
+def gather_pest(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:
+    """작목의 NCPMS 예찰(올해). 키·코드 없으면 (None, 이유)."""
+    crop = subject.get("crop")
+    if not crop:
+        return None, "재배 단위에 작목이 없다"
+    if not ncpms.api_key():
+        return None, "예찰 키 없음(.env NCPMS_API_KEY)"
+    r = ncpms.fetch_forecast(crop, year=date.today().year)
+    if r.get("status") != "success":
+        return None, f"예찰 원천 {r.get('status')}: {r.get('message', '')}"
+    return r["records"], ("대리 작물 " + r["proxy"] if r.get("proxy") else "")
 
 
 def gather_forecast(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:
@@ -44,7 +57,8 @@ def all_judgments(today: date | None = None) -> list[tuple[dict[str, Any], list[
     out = []
     for s in media.load_subjects():
         forecast, why = gather_forecast(s)
+        pest, pwhy = gather_pest(s)
         envs = [harvest_timing.judge(s, forecast=forecast, today=today),
-                risk_alert.judge(s, forecast=forecast, today=today)]
-        out.append((s, envs, {"forecast": why or "예보 사용"}))
+                risk_alert.judge(s, forecast=forecast, today=today, pest=pest)]
+        out.append((s, envs, {"forecast": why or "예보 사용", "pest": pwhy or "예찰 사용"}))
     return out
