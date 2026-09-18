@@ -67,9 +67,43 @@ def build(rows: list[dict[str, str]]) -> str:
     return "\n".join(out) + "\n"
 
 
+NAMES_CSV_PATH = ROOT / "data" / "crop_names.csv"
+NAMES_DOC_PATH = ROOT / "docs" / "crop_names.md"
+
+
+def load_names(path: Path = NAMES_CSV_PATH) -> list[dict[str, str]]:
+    return load_rows(path)
+
+
+def build_names(rows: list[dict[str, str]]) -> str:
+    out: list[str] = []
+    out.append("# 작목 이름 사전 — 정본명 · 이명 · 관계 (정본: `data/crop_names.csv`)\n")
+    out.append("**이 문서는 생성물이다.** 고치려면 CSV 를 고치고 `python scripts/build_crop_axes_doc.py` 를 돌린다.\n")
+    out.append("**원칙 (발행자 2026-09-18)**: 이름 혼동은 격자보다 먼저 정리한다. 현장은 사투리를 쓴다 — 사전은 "
+               "열린 목록이고, 모르는 이름은 추측하지 않는다(`names/resolve.py` 가 `unknown` 을 돌려주고 채집 대상이 된다).\n")
+    out.append("| 관계 | 뜻 | 정규화 |\n|---|---|---|")
+    out.append("| 동일 | 같은 식물, 이름만 다름 | 이명 → 정본명. **격자 단위 하나** |")
+    out.append("| 용도구분 | 같은 종, 용도(찰성·사료·잎/종실)가 달라 구분 | 각자 정본 — 격자 단위 별개 |")
+    out.append("| 품종군 | 같은 종의 품종군 | 각자 정본(또는 품종 보정) |")
+    out.append("| 부산물 | 작목의 잎·순·수피 등 | 격자는 모체 작목 |")
+    out.append("| 다른종(혼동주의) | 다른 종인데 현장에서 섞어 부름 | 둘 다 정본 — 되묻기 문구에 상대를 붙인다 |")
+    out.append("| 모호 | 통칭 — 하나로 정할 수 없음 | **되묻기** (대표값 강제 금지) |\n")
+    out.append(f"- 전체 {len(rows)} · " + dist(rows, "관계") + "\n- 출처: " + dist(rows, "출처") + "\n")
+    out.append("## 전수 표\n")
+    cols = ["정본명", "이명", "관계", "이명종류", "출처", "비고"]
+    out.append("| " + " | ".join(cols) + " |")
+    out.append("|" + "---|" * len(cols))
+    for r in rows:
+        out.append("| " + " | ".join(r[c].replace("|", "/") for c in cols) + " |")
+    return "\n".join(out) + "\n"
+
+
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     rows = load_rows()
     DOC_PATH.write_text(build(rows), encoding="utf-8")
     print(f"written {DOC_PATH} ({len(rows)} rows)")
+    names = load_names()
+    NAMES_DOC_PATH.write_text(build_names(names), encoding="utf-8")
+    print(f"written {NAMES_DOC_PATH} ({len(names)} rows)")
