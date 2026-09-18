@@ -9,6 +9,7 @@
       "season": "2026 가을",
       "anchor": "2026-08-25",
       "anchor_kind": "파종(종구)",
+      "grid_unit": "jjokpa-autumn",
       "cert": "유기",
       "source": "d1_first_farm.md (발행자 2026-09-18)"
     }

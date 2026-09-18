@@ -11,6 +11,7 @@ import html
 import subprocess
 import sys
 import webbrowser
+from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -21,6 +22,7 @@ if __package__ in (None, ""):
 
 from frontend import config, render  # noqa: E402
 from ingest import media  # noqa: E402  — 입력 화면은 ingest 를 통해서만 1층에 쓴다(원장 파일을 직접 열지 않는다)
+from grid import capture as grid_capture  # noqa: E402  — 촬영 시점 알림(격자 지식, 원장 아님)
 
 
 def git_head_short() -> str:
@@ -66,6 +68,18 @@ def media_page(message: str = "", error: str = "") -> tuple[int, str]:
         out.append(f'<p class="err"><b>등록 안 됨</b> — {_e(error)}</p>')
     if message:
         out.append(f'<p class="ok">{_e(message)}</p>')
+    out.append("<h2>지금 찍을 장면 (격자 촬영 칸)</h2><ul>")
+    for s in subjects:
+        h = grid_capture.hint_for(s, date.today())
+        if h is None:
+            out.append(f"<li><b>{_e(s['label'])}</b> — 격자 또는 기준점 없음</li>")
+        elif h["stage"] is None:
+            out.append(f"<li><b>{_e(s['label'])}</b> — 기준점 후 {h['day']}일: 격자 창 밖(단계 없음)</li>")
+        else:
+            what = f"<b>찍는다</b> — {_e(h['scene'])}" if h["shoot"] else "이 단계는 촬영 칸이 아니다"
+            out.append(f"<li><b>{_e(s['label'])}</b> — 기준점 후 <b>{h['day']}일</b> · 단계 {_e(h['stage'])} "
+                       f"({h['window'][0]}~{h['window'][1]}일) · {what}</li>")
+    out.append("</ul>")
     out.append("<h2>어디서 들어오나</h2><ul>")
     out.append(f"<li>기본 inbox: <code>{_e(media.inbox_dir())}</code> — 여기 넣은 파일은 등록 시 <b>옮겨진다</b></li>")
     if watch:

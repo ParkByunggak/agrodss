@@ -104,6 +104,7 @@ _ALLOWED_TOPLEVEL = {
     "__future__", "os", "re", "sys", "html", "subprocess", "webbrowser", "threading",
     "http", "urllib", "pathlib", "typing", "markdown", "frontend",
     "ingest",  # 입력 화면(I-7)은 ingest 를 통해서만 1층에 쓴다 — 아래 검사가 원장 직접 접근을 막는다
+    "datetime", "grid",  # 촬영 시점 알림 — 격자 지식(원장 아님)
 }
 
 
@@ -125,7 +126,9 @@ def test_media_page_get_and_bad_register(monkeypatch):
         conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
         conn.request("GET", "/media")
         resp = conn.getresponse()
-        assert resp.status == 200 and "영상 반입" in resp.read().decode("utf-8")
+        page = resp.read().decode("utf-8")
+        assert resp.status == 200 and "영상 반입" in page
+        assert "지금 찍을 장면" in page and "기준점 후" in page   # 격자 촬영 칸이 화면에 실린다
         body = "key=inbox%3Anope.mp4&subject=p001-jjokpa-2026f&observed_at=&note="
         conn.request("POST", "/media/register", body=body,
                      headers={"Content-Type": "application/x-www-form-urlencoded", "Content-Length": str(len(body))})

@@ -70,6 +70,17 @@ def test_doc_in_sync(unit):
     assert bg.build(unit) == (ROOT / "docs" / "grid_jjokpa_autumn.md").read_text(encoding="utf-8")
 
 
+def test_capture_hint_for_first_subject():
+    from datetime import date
+    from grid import capture
+    from ingest import media
+    subj = [s for s in media.load_subjects() if s["id"] == "p001-jjokpa-2026f"][0]
+    h = capture.hint_for(subj, date(2026, 9, 18))
+    assert h["day"] == 24 and h["stage"].startswith("3.") and h["shoot"] is True and "잎" in h["scene"]
+    assert capture.hint_for(subj, date(2027, 1, 1))["stage"] is None      # 창 밖 — 단정하지 않는다
+    assert capture.hint_for({"id": "x"}, date(2026, 9, 18)) is None        # 격자·기준점 없음
+
+
 # ── 거부 ──────────────────────────────────────────────────────────────────────
 def _mut(unit, fn):
     u = copy.deepcopy(unit)
