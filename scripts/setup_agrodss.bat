@@ -32,18 +32,25 @@ if exist "%TARGET%\.git" (
   goto :verify
 )
 
-REM Directory exists but is not a git repo
-dir /a /b "%TARGET%" | findstr . >nul
+REM Directory exists but is not a git repo (empty or not) - init in place.
+REM Existing items (e.g. .claude, desktop.ini) are kept; checkout only fails
+REM if a name collides with a tracked file (CLAUDE.md, docs\, scripts\, .gitignore).
+echo [1/3] %TARGET% exists but is not a git repo. Current contents:
+dir /a "%TARGET%"
+echo       Initializing git in place and pulling origin/main...
+cd /d "%TARGET%"
+git init
+if errorlevel 1 goto :fail
+git remote add origin "%REMOTE%"
+git fetch origin
+if errorlevel 1 goto :fail
+git checkout -B main origin/main
 if errorlevel 1 (
-  echo [1/3] %TARGET% is empty - cloning into it...
-  git clone "%REMOTE%" "%TARGET%"
-  if errorlevel 1 goto :fail
-  goto :verify
-) else (
-  echo [ERROR] %TARGET% exists, is not a git repo, and is not empty.
-  echo         Move its contents elsewhere and run this script again.
+  echo [ERROR] checkout failed - a local file collides with a tracked one.
+  echo         Rename the colliding file shown above and run again.
   goto :fail
 )
+goto :verify
 
 :verify
 cd /d "%TARGET%"
