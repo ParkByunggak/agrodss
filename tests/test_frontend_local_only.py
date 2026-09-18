@@ -103,7 +103,37 @@ def test_server_serves_on_loopback(monkeypatch):
 _ALLOWED_TOPLEVEL = {
     "__future__", "os", "re", "sys", "html", "subprocess", "webbrowser", "threading",
     "http", "urllib", "pathlib", "typing", "markdown", "frontend",
+    "ingest",  # 입력 화면(I-7)은 ingest 를 통해서만 1층에 쓴다 — 아래 검사가 원장 직접 접근을 막는다
 }
+
+
+def test_frontend_never_opens_ledger_files_directly():
+    # I-5 §5: 화면 코드가 data/ 아래 원장(index.jsonl · subjects.json)을 직접 열지 않는다
+    for py in (ROOT / "frontend").glob("*.py"):
+        src = py.read_text(encoding="utf-8")
+        assert "index.jsonl" not in src and "subjects.json" not in src, py.name
+        assert 'open("data' not in src and "/ \"data\"" not in src, py.name
+
+
+def test_media_page_get_and_bad_register(monkeypatch):
+    monkeypatch.setattr(config, "PORT", 0)
+    srv = serve.make_server()
+    port = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        conn.request("GET", "/media")
+        resp = conn.getresponse()
+        assert resp.status == 200 and "영상 반입" in resp.read().decode("utf-8")
+        body = "key=inbox%3Anope.mp4&subject=p001-jjokpa-2026f&observed_at=&note="
+        conn.request("POST", "/media/register", body=body,
+                     headers={"Content-Type": "application/x-www-form-urlencoded", "Content-Length": str(len(body))})
+        resp = conn.getresponse()
+        assert resp.status == 400 and "등록 안 됨" in resp.read().decode("utf-8")
+    finally:
+        srv.shutdown()
+        srv.server_close()
 
 
 def test_frontend_imports_are_only_stdlib_markdown_and_frontend():
