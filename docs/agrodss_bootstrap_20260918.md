@@ -1,34 +1,22 @@
 # agrodss 부트스트랩 — `D:\agrodss` 로컬 세션 첫 작업
 
 작성 2026-09-18. 발행자 결정: 로컬 Claude Code 세션을 `D:\agrodss` 에서 시작한다.
-이 문서는 그 세션의 **첫 지시 한 장**이다. vela 브랜치 `claude/gracious-lamport-xum2d0`
-에 있는 문서 다섯을 꺼내고, CLAUDE.md 를 심고, 단계 0 을 시작한다.
+이 문서는 그 세션의 **첫 지시 한 장**이다. 원격 저장소를 clone 하고 단계 0 을 시작한다.
 
-## 1. 문서 꺼내기 (PowerShell 또는 cmd — 리다이렉트 금지)
+## 1. 로컬 준비 (2026-09-18 갱신 — 원격이 생겼다)
 
-PowerShell 5.1 의 `>` 는 UTF-16 으로 쓴다 — 한글 문서가 깨진다. 그래서 `git show … >`
-가 아니라 **`git checkout <ref> -- <경로>`** 로 꺼낸다(git 이 바이트 그대로 쓴다).
+원격 `https://github.com/ParkByunggak/agrodss` 에 첫 커밋(1110d16)이 있다. 로컬은 한 줄이다.
 
 ```
-cd D:\agrodss
-git init
-git remote add vela https://github.com/ParkByunggak/vela.git
-git fetch --depth 1 vela claude/gracious-lamport-xum2d0
-git checkout FETCH_HEAD -- docs/design_tree_review_20260918.md docs/agrodss_milestones_20260918.md docs/agrodss_port_inventory_20260918.md docs/agrodss_mall_tree_20260918.md docs/agrodss_bootstrap_20260918.md docs/agrodss_CLAUDE_seed.md docs/agrodss_backlog.md
-git remote remove vela
-copy docs\agrodss_CLAUDE_seed.md CLAUDE.md
-git add -A
-git commit -m "docs: agrodss 착수 — vela 설계 문서 7건 이식(문서만) + CLAUDE.md + 작업대장"
+git clone https://github.com/ParkByunggak/agrodss.git D:\agrodss
 ```
 
-커밋 뒤 `docs/agrodss_backlog.md` 의 **M-0 을 완료**로 바꾸고 해시를 적는다 — 대장 갱신의
-첫 연습이다.
+vela 원격은 **추가하지 않는다**. vela 는 경험이지 원격이 아니다 — 남겨 두면 다음 사람이
+코드를 당겨 온다(이식 폐기 결정). 필요한 문서는 전부 이 저장소 `docs/` 에 있다.
 
-```
-```
-
-`git remote remove vela` 가 중요하다. vela 는 **경험**이지 원격이 아니다 — 남겨 두면
-다음 사람이 코드를 당겨 온다(이식 폐기 결정).
+PowerShell 5.1 의 `>` 는 UTF-16 으로 쓴다 — 한글 파일을 리다이렉트로 만들지 않는다.
+대장을 화면에 띄우려면 `python docs\render_backlog.py docs\agrodss_backlog.md backlog.html`
+(`python -m pip install markdown` 1회 필요).
 
 ## 2. 세션 시작 시 확인 1회
 
