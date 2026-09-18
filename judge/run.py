@@ -8,7 +8,7 @@ from datetime import date
 from typing import Any
 
 from ingest import kma, media, ncpms
-from judge import harvest_timing, risk_alert
+from judge import harvest_timing, material_citation, risk_alert
 from judge.envelope import Envelope
 
 
@@ -59,6 +59,7 @@ def all_judgments(today: date | None = None) -> list[tuple[dict[str, Any], list[
         forecast, why = gather_forecast(s)
         pest, pwhy = gather_pest(s)
         envs = [harvest_timing.judge(s, forecast=forecast, today=today),
-                risk_alert.judge(s, forecast=forecast, today=today, pest=pest)]
+                risk_alert.judge(s, forecast=forecast, today=today, pest=pest),
+                material_citation.judge(s, today=today)]
         out.append((s, envs, {"forecast": why or "예보 사용", "pest": pwhy or "예찰 사용"}))
     return out

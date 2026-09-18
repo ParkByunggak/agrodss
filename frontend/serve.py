@@ -90,6 +90,16 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         out.append(f"<p class=\"meta\">근거: {_e(r['basis'])} · {_e(r['final_say'])}</p>")
         if e["caps"]:
             out.append("<ul>" + "".join(f"<li><b>상한 제약</b> {_e(c['name'])} — {_e(c['basis'])}</li>" for c in e["caps"]) + "</ul>")
+    elif e["kind"] == "사실 인용":
+        c = r["citation"]
+        out.append(f"<p>칸 {_e(r['stage'])} · 인용 계열 {r['cited_families']}/{len(r['groups'])} · 출처 {_e(c['source'])} · 목록 시점 {_e(c['observed_at'])} · 재판정 {_e(e['revisit_at'])}</p>")
+        for g in r["groups"]:
+            if g["status"] == "success":
+                out.append(f"<p><b>{_e(g['family'])}</b> <span class=\"meta\">(검색어 '{_e(g['keyword'])}' · 유효 {g['total']}건 중 {len(g['items'])})</span></p><ul>" + "".join(
+                    f"<li><b>{_e(i['product'])}</b>({_e(i['material'])}) · {_e(i['company'])} · {_e(i['price'])} · 공시 {_e(i['notice_no'])} (~{_e(i['valid_until'])})</li>" for i in g["items"]) + "</ul>")
+            else:
+                out.append(f"<p><b>{_e(g['family'])}</b> — <span class=\"st st-보류\">{_e(g['status'])}</span> {_e(g.get('note', ''))}</p>")
+        out.append(f"<p class=\"meta\">{_e(c['note'])}</p>")
     elif e["kind"] == "판단 불가(데이터)":
         out.append("<ul>" + "".join(f"<li>없는 축 <code>{_e(m['axis'])}</code> — 채울 수 있는 자: {_e(m['who_can_fill'])}</li>" for m in e["missing"]) + "</ul>")
     else:
@@ -108,7 +118,7 @@ def judge_page() -> tuple[int, str]:
         out.append(f"<h1 style=\"font-size:17px;margin-top:24px\">{_e(s['label'])}</h1>")
         for env in envs:
             e = env.to_dict()
-            _render_env(out, e, {"harvest_timing": "수확 시기", "risk_alert": "위험 경보"}.get(e["decision_id"], e["decision_id"]))
+            _render_env(out, e, {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용(유기 공시)"}.get(e["decision_id"], e["decision_id"]))
         out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 예찰: {_e(info.get('pest', ''))}</p>")
     footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
     return 200, render.page("agrodss — 판단", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)

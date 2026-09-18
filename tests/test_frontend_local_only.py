@@ -129,6 +129,7 @@ def test_judge_page_shows_kind_first(monkeypatch):
         assert resp.status == 200
         assert "판단함" in page and "수확 창 2026-10-14 ~ 2026-11-03" in page and "신뢰 등급" in page
         assert "위험 경보" in page and "회복 가능 위험" in page      # M-10 ② 도 같은 화면에
+        assert "사실 인용" in page and "공시" in page                 # M-15 ④ 자재 인용
         assert "hourly_tmp" not in page
     finally:
         srv.shutdown()
