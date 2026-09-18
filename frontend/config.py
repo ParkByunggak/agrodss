@@ -44,6 +44,8 @@ NAV_ORDER: tuple[str, ...] = (
     "design_tree_review_20260918.md",
     "agrodss_mall_tree_20260918.md",
     "d1_first_farm.md",
+    "grid_jjokpa_autumn.md",
+    "m4_grid_schema.md",
     "crop_names.md",
     "crop_axes.md",
     "i1_outputs.md",
