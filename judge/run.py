@@ -8,7 +8,7 @@ from datetime import date
 from typing import Any
 
 from ingest import kma, media
-from judge import harvest_timing
+from judge import harvest_timing, risk_alert
 from judge.envelope import Envelope
 
 
@@ -36,4 +36,15 @@ def all_harvest(today: date | None = None) -> list[tuple[dict[str, Any], Envelop
     for s in media.load_subjects():
         env, info = harvest_for_subject(s, today=today)
         out.append((s, env, info))
+    return out
+
+
+def all_judgments(today: date | None = None) -> list[tuple[dict[str, Any], list[Envelope], dict[str, str]]]:
+    """재배 단위마다 [수확 시기, 위험 경보] 봉투 — 원천은 한 번만 모은다."""
+    out = []
+    for s in media.load_subjects():
+        forecast, why = gather_forecast(s)
+        envs = [harvest_timing.judge(s, forecast=forecast, today=today),
+                risk_alert.judge(s, forecast=forecast, today=today)]
+        out.append((s, envs, {"forecast": why or "예보 사용"}))
     return out

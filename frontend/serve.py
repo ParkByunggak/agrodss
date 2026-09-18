@@ -46,7 +46,7 @@ def doc_list() -> list[str]:
 def nav_html(current: str) -> str:
     parts = ['<div class="grp">판단</div>']
     cls = ' class="on"' if current == "/judge" else ""
-    parts.append(f'<a href="/judge"{cls}>수확 시기 (M-10 ①)</a>')
+    parts.append(f'<a href="/judge"{cls}>수확 시기 · 위험 경보 (M-10)</a>')
     parts.append('<div class="grp">입력</div>')
     cls = ' class="on"' if current == "/media" else ""
     parts.append(f'<a href="/media"{cls}>영상 반입 (I-7)</a>')
@@ -67,32 +67,51 @@ KIND_CLASS = {"판단함": "완료", "선택지+대가": "진행", "사실 인�
               "예측 불가": "폐기", "답하지 않음": "폐기"}
 
 
-def judge_page() -> tuple[int, str]:
-    out = ["<h1>수확 시기 — 3층 산출 봉투</h1>",
-           "<p class=\"meta\">화면은 봉투만 받는다(4층). 종류(kind)가 먼저 보이고, 값은 그 다음이다. 소비자 노출은 D-2 전까지 전부 아니오.</p>"]
-    for s, env, info in judge_run.all_harvest():
-        e = env.to_dict()
-        badge = f'<span class="st st-{KIND_CLASS.get(e["kind"], "대기")}">{_e(e["kind"])}</span>'
-        out.append(f"<h2>{_e(s['label'])} {badge}</h2>")
-        r = e["result"]
-        if e["kind"] == "판단함":
-            out.append(f"<p><b>수확 창 {_e(r['window_start'])} ~ {_e(r['window_end'])}</b> (중심 {_e(r['center'])}, ±{r['error_days']}일) · "
-                       f"신뢰 등급 <b>{_e(e['grade'])}</b> · 기준점 후 {r['days_since_anchor']}일 · {_e(r['position'])} · 재판정 {_e(e['revisit_at'])}</p>")
-            out.append(f"<p class=\"meta\">근거: {_e(r['basis'])} · {_e(r['final_say'])}</p>")
-            if e["caps"]:
-                out.append("<ul>" + "".join(f"<li><b>상한 제약</b> {_e(c['name'])} — {_e(c['basis'])}</li>" for c in e["caps"]) + "</ul>")
-        elif e["kind"] == "판단 불가(데이터)":
-            out.append("<ul>" + "".join(f"<li>없는 축 <code>{_e(m['axis'])}</code> — 채울 수 있는 자: {_e(m['who_can_fill'])}</li>" for m in e["missing"]) + "</ul>")
+LEVEL_CLASS = {"경보": "폐기", "주의": "진행", "예고": "대기"}
+
+
+def _render_env(out: list[str], e: dict, title: str) -> None:
+    badge = f'<span class="st st-{KIND_CLASS.get(e["kind"], "대기")}">{_e(e["kind"])}</span>'
+    out.append(f"<h2>{_e(title)} {badge}</h2>")
+    r = e["result"]
+    if e["kind"] == "판단함" and e["decision_id"] == "risk_alert":
+        out.append(f"<p>기준점 후 {r['days_since_anchor']}일 · 보는 칸: {_e(' / '.join(r['stages']))} · {r['horizon_days']}일 앞까지 · "
+                   f"신뢰 등급 <b>{_e(e['grade'])}</b> · 재판정 {_e(e['revisit_at'])}</p>")
+        if r["alerts"]:
+            out.append("<table><tr><th>수준</th><th>위험</th><th>칸</th><th>회복</th><th>근거</th></tr>" + "".join(
+                f'<tr><td><span class="st st-{LEVEL_CLASS.get(a["level"], "대기")}">{_e(a["level"])}</span></td><td><b>{_e(a["risk"])}</b></td>'
+                f'<td>{_e(a["stage"])}</td><td>{"가능" if a["recoverable"] else "불가"}</td><td>{_e(a["basis"])}</td></tr>' for a in r["alerts"]) + "</table>")
         else:
-            out.append(f"<p>{_e(r.get('why', ''))} {_e(r.get('who', ''))}</p>")
-        if e["inputs"]:
-            out.append("<table><tr><th>쓴 축</th><th>관측 시각</th><th>출처</th><th>해상도</th><th>등급</th></tr>" +
-                       "".join(f"<tr><td>{_e(i['axis'])}</td><td>{_e(i['observed_at'])}</td><td>{_e(i['source'])}</td><td>{_e(i['resolution'])}</td><td>{_e(i['grade'])}</td></tr>" for i in e["inputs"]) + "</table>")
-        if e["notes"]:
-            out.append("<ul>" + "".join(f"<li class=\"meta\">{_e(n)}</li>" for n in e["notes"]) + "</ul>")
+            out.append("<p>지금 낼 경보가 없다.</p>")
+        out.append(f"<p class=\"meta\">회복 가능 위험 {r['watched_recoverable']}건은 신호가 임계를 넘을 때만 나온다(확률 충분할 때만).</p>")
+    elif e["kind"] == "판단함":
+        out.append(f"<p><b>수확 창 {_e(r['window_start'])} ~ {_e(r['window_end'])}</b> (중심 {_e(r['center'])}, ±{r['error_days']}일) · "
+                   f"신뢰 등급 <b>{_e(e['grade'])}</b> · 기준점 후 {r['days_since_anchor']}일 · {_e(r['position'])} · 재판정 {_e(e['revisit_at'])}</p>")
+        out.append(f"<p class=\"meta\">근거: {_e(r['basis'])} · {_e(r['final_say'])}</p>")
+        if e["caps"]:
+            out.append("<ul>" + "".join(f"<li><b>상한 제약</b> {_e(c['name'])} — {_e(c['basis'])}</li>" for c in e["caps"]) + "</ul>")
+    elif e["kind"] == "판단 불가(데이터)":
+        out.append("<ul>" + "".join(f"<li>없는 축 <code>{_e(m['axis'])}</code> — 채울 수 있는 자: {_e(m['who_can_fill'])}</li>" for m in e["missing"]) + "</ul>")
+    else:
+        out.append(f"<p>{_e(r.get('why', ''))} {_e(r.get('who', ''))}</p>")
+    if e["inputs"]:
+        out.append("<table><tr><th>쓴 축</th><th>관측 시각</th><th>출처</th><th>해상도</th><th>등급</th></tr>" +
+                   "".join(f"<tr><td>{_e(i['axis'])}</td><td>{_e(i['observed_at'])}</td><td>{_e(i['source'])}</td><td>{_e(i['resolution'])}</td><td>{_e(i['grade'])}</td></tr>" for i in e["inputs"]) + "</table>")
+    if e["notes"]:
+        out.append("<ul>" + "".join(f"<li class=\"meta\">{_e(n)}</li>" for n in e["notes"]) + "</ul>")
+
+
+def judge_page() -> tuple[int, str]:
+    out = ["<h1>판단 — 3층 산출 봉투</h1>",
+           "<p class=\"meta\">화면은 봉투만 받는다(4층). 종류(kind)가 먼저 보이고, 값은 그 다음이다. 소비자 노출은 D-2 전까지 전부 아니오.</p>"]
+    for s, envs, info in judge_run.all_judgments():
+        out.append(f"<h1 style=\"font-size:17px;margin-top:24px\">{_e(s['label'])}</h1>")
+        for env in envs:
+            e = env.to_dict()
+            _render_env(out, e, {"harvest_timing": "수확 시기", "risk_alert": "위험 경보"}.get(e["decision_id"], e["decision_id"]))
         out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])}</p>")
     footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
-    return 200, render.page("agrodss — 수확 시기", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)
+    return 200, render.page("agrodss — 판단", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)
 
 
 def media_page(message: str = "", error: str = "") -> tuple[int, str]:
