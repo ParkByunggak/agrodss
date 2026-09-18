@@ -105,7 +105,33 @@ _ALLOWED_TOPLEVEL = {
     "http", "urllib", "pathlib", "typing", "markdown", "frontend",
     "ingest",  # 입력 화면(I-7)은 ingest 를 통해서만 1층에 쓴다 — 아래 검사가 원장 직접 접근을 막는다
     "datetime", "grid",  # 촬영 시점 알림 — 격자 지식(원장 아님)
+    "judge",  # 3층 봉투만 받는다
 }
+
+
+def test_frontend_does_not_touch_layer1_sources_directly():
+    # 4층은 판단(judge.run)을 통해서만 산출을 받는다 — 기상 원천을 직접 부르지 않는다
+    src = (ROOT / "frontend" / "serve.py").read_text(encoding="utf-8")
+    assert "from ingest import kma" not in src and "kma." not in src
+
+
+def test_judge_page_shows_kind_first(monkeypatch):
+    monkeypatch.setattr(config, "PORT", 0)
+    srv = serve.make_server()
+    port = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        conn.request("GET", "/judge")
+        resp = conn.getresponse()
+        page = resp.read().decode("utf-8")
+        assert resp.status == 200
+        assert "판단함" in page and "수확 창 2026-10-14 ~ 2026-11-03" in page and "신뢰 등급" in page
+        assert "hourly_tmp" not in page
+    finally:
+        srv.shutdown()
+        srv.server_close()
 
 
 def test_frontend_never_opens_ledger_files_directly():

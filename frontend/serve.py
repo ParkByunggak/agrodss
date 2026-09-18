@@ -23,6 +23,7 @@ if __package__ in (None, ""):
 from frontend import config, render  # noqa: E402
 from ingest import media  # noqa: E402  — 입력 화면은 ingest 를 통해서만 1층에 쓴다(원장 파일을 직접 열지 않는다)
 from grid import capture as grid_capture  # noqa: E402  — 촬영 시점 알림(격자 지식, 원장 아님)
+from judge import run as judge_run  # noqa: E402  — 4층은 3층 봉투만 받는다
 
 
 def git_head_short() -> str:
@@ -43,7 +44,10 @@ def doc_list() -> list[str]:
 
 
 def nav_html(current: str) -> str:
-    parts = ['<div class="grp">입력</div>']
+    parts = ['<div class="grp">판단</div>']
+    cls = ' class="on"' if current == "/judge" else ""
+    parts.append(f'<a href="/judge"{cls}>수확 시기 (M-10 ①)</a>')
+    parts.append('<div class="grp">입력</div>')
     cls = ' class="on"' if current == "/media" else ""
     parts.append(f'<a href="/media"{cls}>영상 반입 (I-7)</a>')
     parts.append('<div class="grp">문서</div>')
@@ -56,6 +60,39 @@ def nav_html(current: str) -> str:
 
 def _e(v) -> str:
     return html.escape("" if v is None else str(v))
+
+
+KIND_CLASS = {"판단함": "완료", "선택지+대가": "진행", "사실 인용": "진행",
+              "판단 불가(데이터)": "대기", "판단 불가(지식)": "보류", "해당 없음": "보류",
+              "예측 불가": "폐기", "답하지 않음": "폐기"}
+
+
+def judge_page() -> tuple[int, str]:
+    out = ["<h1>수확 시기 — 3층 산출 봉투</h1>",
+           "<p class=\"meta\">화면은 봉투만 받는다(4층). 종류(kind)가 먼저 보이고, 값은 그 다음이다. 소비자 노출은 D-2 전까지 전부 아니오.</p>"]
+    for s, env, info in judge_run.all_harvest():
+        e = env.to_dict()
+        badge = f'<span class="st st-{KIND_CLASS.get(e["kind"], "대기")}">{_e(e["kind"])}</span>'
+        out.append(f"<h2>{_e(s['label'])} {badge}</h2>")
+        r = e["result"]
+        if e["kind"] == "판단함":
+            out.append(f"<p><b>수확 창 {_e(r['window_start'])} ~ {_e(r['window_end'])}</b> (중심 {_e(r['center'])}, ±{r['error_days']}일) · "
+                       f"신뢰 등급 <b>{_e(e['grade'])}</b> · 기준점 후 {r['days_since_anchor']}일 · {_e(r['position'])} · 재판정 {_e(e['revisit_at'])}</p>")
+            out.append(f"<p class=\"meta\">근거: {_e(r['basis'])} · {_e(r['final_say'])}</p>")
+            if e["caps"]:
+                out.append("<ul>" + "".join(f"<li><b>상한 제약</b> {_e(c['name'])} — {_e(c['basis'])}</li>" for c in e["caps"]) + "</ul>")
+        elif e["kind"] == "판단 불가(데이터)":
+            out.append("<ul>" + "".join(f"<li>없는 축 <code>{_e(m['axis'])}</code> — 채울 수 있는 자: {_e(m['who_can_fill'])}</li>" for m in e["missing"]) + "</ul>")
+        else:
+            out.append(f"<p>{_e(r.get('why', ''))} {_e(r.get('who', ''))}</p>")
+        if e["inputs"]:
+            out.append("<table><tr><th>쓴 축</th><th>관측 시각</th><th>출처</th><th>해상도</th><th>등급</th></tr>" +
+                       "".join(f"<tr><td>{_e(i['axis'])}</td><td>{_e(i['observed_at'])}</td><td>{_e(i['source'])}</td><td>{_e(i['resolution'])}</td><td>{_e(i['grade'])}</td></tr>" for i in e["inputs"]) + "</table>")
+        if e["notes"]:
+            out.append("<ul>" + "".join(f"<li class=\"meta\">{_e(n)}</li>" for n in e["notes"]) + "</ul>")
+        out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])}</p>")
+    footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
+    return 200, render.page("agrodss — 수확 시기", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)
 
 
 def media_page(message: str = "", error: str = "") -> tuple[int, str]:
@@ -156,6 +193,8 @@ class Handler(BaseHTTPRequestHandler):
             status, body = render_page(config.LEDGER_DOC)
         elif p == "/media":
             status, body = media_page()
+        elif p == "/judge":
+            status, body = judge_page()
         elif p.startswith("/doc/"):
             status, body = render_page(unquote(p[len("/doc/"):]))
         else:
