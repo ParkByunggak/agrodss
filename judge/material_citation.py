@@ -87,19 +87,31 @@ def _conventional(subject: dict[str, Any], stage: dict[str, Any], today: date, a
     groups: list[dict[str, Any]] = []
     for risk, term in terms:
         rec = (psis_search or psis.search)(crop, term, today=today)
-        groups.append({"risk": risk, "pest": term, "status": rec.get("status"), "total": rec.get("total", 0),
-                       "items": rec.get("items", []), "queried_as": rec.get("queried_as"), "note": rec.get("message")})
+        g = {"risk": risk, "pest": term, "status": rec.get("status"), "total": rec.get("total", 0),
+             "items": rec.get("items", []), "queried_as": rec.get("queried_as"), "note": rec.get("message")}
+        if rec.get("queried_as") and rec.get("queried_as") != crop:
+            # [코드 평가 C3 표기] 대체 조회(쪽파 0건 → '파')는 **그 사실을 말한다** — 농약 등록은 작물별(PLS)이라 '파' 등록분을 쪽파에 쓸 수
+            # 있다고 단정하지 않는다. 대체 조회 자체를 남길지는 발행자 결정(법규) — 여기서는 표기만 강제한다.
+            g["proxy"] = True
+            g["proxy_label"] = f"{crop} 미등록 · {rec['queried_as']} 등록분(대체 조회 — PLS 작물별 확인 필요)"
+        groups.append(g)
     seen = [g for g in groups if g["status"] == "success"]
+    proxied = [g for g in groups if g.get("proxy")]
     inputs = [AxisUse("cert", None, subject.get("source", "farmer"), "cultivation_unit", "관측"),
               AxisUse("anchor", anchor, subject.get("source", "farmer"), "cultivation_unit", "관측")]
+    citation: dict[str, Any] = {"source": "농촌진흥청 농약안전정보시스템(PSIS) 농약등록정보 검색 SVC01",
+                                "observed_at": today.isoformat(), "resolution": "national",
+                                "note": "등록 = 그 작물·병해충에 쓸 수 있음(PLS). 희석배수 · 안전사용시기 · 사용횟수를 지킨다. 효능 보증 아님. "
+                                        "유기·무농약 인증 필지에는 쓸 수 없다(H 자재 분리)"}
+    if proxied:
+        others = ", ".join(sorted({g["queried_as"] for g in proxied}))
+        citation["proxy_notice"] = (f"대체 조회 {len(proxied)}건 — {crop} 등록 0건이라 {others} 등록분을 보였다. 농약 등록은 작물별(PLS)이라 "
+                                    f"{crop}에 쓸 수 있다는 뜻이 아니다 — 발행자 확인 대상")
     return Envelope(
         "사실 인용", DECISION_ID, sid, as_of, inputs=inputs,
         revisit_at=(today + __import__("datetime").timedelta(days=d.revisit_days)).isoformat(),
         result={"stage": f"{stage['order']}. {stage['name']}", "groups": groups, "cited_families": len(seen),
-                "citation": {"source": "농촌진흥청 농약안전정보시스템(PSIS) 농약등록정보 검색 SVC01",
-                             "observed_at": today.isoformat(), "resolution": "national",
-                             "note": "등록 = 그 작물·병해충에 쓸 수 있음(PLS). 희석배수 · 안전사용시기 · 사용횟수를 지킨다. 효능 보증 아님. "
-                                     "유기·무농약 인증 필지에는 쓸 수 없다(H 자재 분리)"}},
+                "cited_direct": len([g for g in seen if not g.get("proxy")]), "citation": citation},
         notes=["작용기작(indictSymbl)이 다른 약제를 앞세운다(VELA W-20 — 같은 기작만 나열되던 실사례)", "0건은 0건으로 둔다 — 범주명으로 메우지 않는다"],
     )
 

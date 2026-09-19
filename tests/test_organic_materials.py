@@ -118,6 +118,29 @@ def test_citation_conventional_without_psis_key_is_data_gap(monkeypatch):
     assert env.kind == "해당 없음"
 
 
+def test_conventional_proxy_query_is_labelled_not_asserted():
+    # [코드 평가 C3 표기] 쪽파 0건 → '파' 대체 조회는 그 사실을 말한다 — 등록은 작물별(PLS). 대체 조회 자체의 존폐는 발행자 결정(법규)
+    def fake(crop, pest, today=None):
+        if "고자리" in pest:
+            return {"status": "success", "total": 2, "items": [{"상표명": "A", "품목명": "B"}], "queried_as": "파"}
+        return {"status": "success", "total": 1, "items": [{"상표명": "C"}]}                       # 직접 등록 — 대체 아님
+    env = MC.judge({**SUBJ, "cert": "관행"}, today=T24, psis_search=fake)
+    assert env.kind == "사실 인용"
+    prox = [g for g in env.result["groups"] if g.get("proxy")]
+    direct = [g for g in env.result["groups"] if g["status"] == "success" and not g.get("proxy")]
+    assert prox and all("미등록" in g["proxy_label"] and "파 등록분" in g["proxy_label"] for g in prox)
+    assert direct and all("proxy_label" not in g for g in direct)
+    c = env.result["citation"]
+    assert "대체 조회" in c["proxy_notice"] and "PLS" in c["proxy_notice"] and "발행자 확인" in c["proxy_notice"]
+    assert env.result["cited_direct"] == len(direct) and env.result["cited_families"] == len(direct) + len(prox)
+    # 화면(/judge)이 관행 그룹 모양을 안다 — family 가 없어도 KeyError 없이 표기가 붙는다
+    from frontend import serve
+    out: list[str] = []
+    serve._render_env(out, env.to_dict(), "자재 인용")
+    html = "".join(out)
+    assert "대체 조회" in html and "파 등록분" in html and "상표명 A" in html
+
+
 def test_citation_missing_cert_is_data_gap():
     s = {k: v for k, v in SUBJ.items() if k != "cert"}
     env = MC.judge(s, today=T24)
