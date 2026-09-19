@@ -4,16 +4,24 @@
 #       docs/render_backlog.py(CLI)도 여기를 부른다(어휘·규칙 두 벌 금지).
 from __future__ import annotations
 
+import html
 import re
 from pathlib import Path
 
-import markdown
+try:
+    import markdown
+except ImportError:                     # [2026-09-19 발행자 PC] markdown 이 없어 채팅 화면까지 못 떴다 — 문서 렌더만 원문으로 대체
+    markdown = None
 
 STATES: tuple[str, ...] = ("대기", "진행", "완료", "보류", "폐기")
 _STATE_CELL = re.compile(r"<td>(대기|진행|완료|보류|폐기)([^<]*)</td>")
+MISSING_MARKDOWN_NOTE = ("<p class=\"meta\">markdown 모듈이 없어 원문으로 보여 준다 — "
+                         "<code>python -m pip install markdown</code> 뒤 재시작하면 표·제목이 렌더된다</p>")
 
 
 def md_to_html(text: str) -> str:
+    if markdown is None:
+        return MISSING_MARKDOWN_NOTE + "<pre>" + html.escape(text) + "</pre>"
     body = markdown.markdown(text, extensions=["tables", "fenced_code"])
     return _STATE_CELL.sub(
         lambda m: f'<td><span class="st st-{m.group(1)}">{m.group(1)}{m.group(2)}</span></td>',
