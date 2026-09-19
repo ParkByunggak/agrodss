@@ -153,6 +153,7 @@ def add_noncompliance(subject: str, planned_task: str, reason: str, planned_day:
     reason = (reason or "").strip()
     if not reason:
         raise EventError("사유가 비어 있다")
+    planned_day = _need_day(planned_day, "계획일")[:10]   # [코드 평가 C13] 다른 add_* 넷과 같은 규율 — 날짜가 아닌 문자열이 observed_at 으로 들어갔다
     now = now or datetime.now(timezone.utc)
     return _append({
         "id": f"dec_{uuid.uuid4().hex[:12]}", "kind": "decision.noncompliance", "subject": subject,

@@ -145,26 +145,31 @@ def probe_mp4(path: Path, max_bytes: int = 64 * 1024 * 1024) -> Probe:
     if b"moov" not in found:
         p.error = "moov 없음(파일 뒤쪽에 있을 수 있음) — 촬영 시각·해상도 자동 판독 불가"
         return p
-    for a, b in found.get(b"mvhd", []):
-        v = buf[a]
-        if v == 1:
-            ct, _mt, ts, du = struct.unpack(">QQIQ", buf[a + 4:a + 32])
-        else:
-            ct, _mt, ts, du = struct.unpack(">IIII", buf[a + 4:a + 20])
-        if ct:
-            p.creation_time = (_QT_EPOCH + timedelta(seconds=ct)).isoformat(timespec="seconds")
-        if ts:
-            p.duration_sec = round(du / ts, 2)
-        break
-    for a, b in found.get(b"tkhd", []):
-        v = buf[a]
-        off = a + (96 if v == 1 else 84)
-        if off + 8 <= b:
-            w, h = struct.unpack(">II", buf[off:off + 8])
-            w, h = w >> 16, h >> 16
-            if w and h:
-                p.width, p.height = w, h
-                break
+    # [코드 평가 C9] 잘린 mvhd/tkhd 페이로드 — buf[a] IndexError 가 try 밖이라 파일 하나가 list_inbox 전체(/media 화면)를 죽였다
+    try:
+        for a, b in found.get(b"mvhd", []):
+            v = buf[a]
+            if v == 1:
+                ct, _mt, ts, du = struct.unpack(">QQIQ", buf[a + 4:a + 32])
+            else:
+                ct, _mt, ts, du = struct.unpack(">IIII", buf[a + 4:a + 20])
+            if ct:
+                p.creation_time = (_QT_EPOCH + timedelta(seconds=ct)).isoformat(timespec="seconds")
+            if ts:
+                p.duration_sec = round(du / ts, 2)
+            break
+        for a, b in found.get(b"tkhd", []):
+            v = buf[a]
+            off = a + (96 if v == 1 else 84)
+            if off + 8 <= b:
+                w, h = struct.unpack(">II", buf[off:off + 8])
+                w, h = w >> 16, h >> 16
+                if w and h:
+                    p.width, p.height = w, h
+                    break
+    except (IndexError, struct.error, ZeroDivisionError) as e:
+        p.error = f"mvhd/tkhd 판독 실패(잘린 페이로드): {type(e).__name__}"
+        return p
     for key in (b"\xa9xyz", b"loci"):
         for a, b in found.get(key, []):
             text = buf[a:b].decode("latin-1", errors="ignore")
@@ -379,13 +384,8 @@ def register(key: str, subject: str, observed_at: str | None = None, note: str =
     dest_dir.mkdir(parents=True, exist_ok=True)
     stamp = re.sub(r"[^0-9T]", "", observed)[:15]
     dest = dest_dir / f"{stamp}_{digest[:8]}{src.suffix.lower()}"
-    if origin == "watch":
-        fp = _fingerprint(src)
-        shutil.copy2(str(src), str(dest))      # 동기화 폴더는 건드리지 않는다 — 옮기면 폰에서도 지워진다
-        _mark_seen(key, fp)
-        _mark_seen(fp, digest)
-    else:
-        shutil.move(str(src), str(dest))
+    # [코드 평가 C8] 레코드 조립 · stamp(스키마 검증) → 파일 이동 → 원장 append. 전에는 옮긴 뒤 stamp 라 검증이 실패하면 파일은 media/ 로
+    # 옮겨졌는데 원장 줄이 없는 고아가 남았다(inbox 후보에서도 사라짐). 바이트 수는 이동 전 원본에서 잰다(같은 바이트).
     rec = {
         "id": f"{'img' if src.suffix.lower() in IMAGE_EXT else 'vid'}_{digest[:12]}",
         "kind": KIND_IMAGE if src.suffix.lower() in IMAGE_EXT else KIND,
@@ -398,12 +398,19 @@ def register(key: str, subject: str, observed_at: str | None = None, note: str =
         "origin": origin,
         "file": str(dest.relative_to(media_dir())).replace("\\", "/"),
         "sha256": digest,
-        "bytes": dest.stat().st_size,
+        "bytes": src.stat().st_size,
         "width": pr.width, "height": pr.height, "duration_sec": pr.duration_sec,
         "gps": list(pr.gps) if pr.gps else None,
         "note": note.strip()[:500],
     }
-    rec = sch.stamp(rec)                      # [M-6] 원장에 쓰는 직전 한 번 — 스키마 밖 레코드는 여기서 죽는다
+    rec = sch.stamp(rec)                      # [M-6] 원장에 쓰는 직전 한 번 — 스키마 밖 레코드는 여기서 죽는다(파일은 아직 제자리)
+    if origin == "watch":
+        fp = _fingerprint(src)
+        shutil.copy2(str(src), str(dest))      # 동기화 폴더는 건드리지 않는다 — 옮기면 폰에서도 지워진다
+        _mark_seen(key, fp)
+        _mark_seen(fp, digest)
+    else:
+        shutil.move(str(src), str(dest))
     with index_path().open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     return rec

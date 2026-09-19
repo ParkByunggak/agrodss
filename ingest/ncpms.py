@@ -112,6 +112,9 @@ def parse_forecast(text: str, canonical_crop: str, fetched_at: str | None = None
         date_ = _pick(it, "date")
         year = _pick(it, "year")
         observed = date_ or (f"{year}" if year else None)
+        if not observed:
+            # [코드 평가 C12] 관측일이 없는 예찰 항목은 1층에 못 들어간다(3요건) — soil_exam 과 같은 규율. None 으로 레코드화하지 않는다
+            continue
         region = _pick(it, "region") or "전국"
         out.append({
             "kind": "observation.pest_forecast", "axis": ["pest_regional"],

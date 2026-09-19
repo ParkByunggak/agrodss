@@ -62,6 +62,13 @@ _C_TM, _C_STN, _C_TA_AVG, _C_TA_MAX, _C_TA_MIN, _C_SS, _C_RN = 0, 1, 10, 11, 13,
 _MIN_COLS = 14
 
 
+def _float_or_none(s: Any) -> float | None:
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return None
+
+
 def _num(parts: list[str], idx: int) -> float | None:
     try:
         v = float(parts[idx])
@@ -248,18 +255,22 @@ def parse_vilage(payload: dict[str, Any], nx: int, ny: int, fetched_at: str | No
         base_date, base_time = it.get("baseDate", base_date), it.get("baseTime", base_time)
         rec = days.setdefault(d, {"tmax": None, "tmin": None, "pop_max": None, "rain_mm": 0.0, "tmp": {}, "sky": {}, "pty": {}})
         cat, val, t = it.get("category"), str(it.get("fcstValue", "")), it.get("fcstTime", "")
+        # [코드 평가 C10] 값이 숫자가 아니면(빈 문자열 · '-') 그 항목만 결측(None) — float() 이 그날 예보 전부를 죽이지 않게
+        fv = _float_or_none(val)
         if cat == "TMX":
-            rec["tmax"] = float(val)
+            rec["tmax"] = fv
         elif cat == "TMN":
-            rec["tmin"] = float(val)
+            rec["tmin"] = fv
         elif cat == "POP":
-            rec["pop_max"] = max(rec["pop_max"] or 0, int(float(val)))
+            if fv is not None:
+                rec["pop_max"] = max(rec["pop_max"] or 0, int(fv))
         elif cat == "PCP":
             mm = _pcp_mm(val)
             if mm is not None and rec["rain_mm"] is not None:
                 rec["rain_mm"] += mm
         elif cat == "TMP":
-            rec["tmp"][t] = float(val)
+            if fv is not None:
+                rec["tmp"][t] = fv
         elif cat == "SKY":
             rec["sky"][t] = val
         elif cat == "PTY":

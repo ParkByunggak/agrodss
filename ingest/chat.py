@@ -141,7 +141,9 @@ _AGO = re.compile(r"(\d+)\s*일\s*전")
 _REL = {"오늘": 0, "어제": -1, "그저께": -2, "엊그제": -2, "내일": 1, "모레": 2, "글피": 3}
 
 
-def parse_day(text: str, today: date) -> str | None:
+def parse_day(text: str, today: date, past: bool = False) -> str | None:
+    """텍스트의 날짜. past=True(사건 · 관찰 — 이미 일어난 것)면 연도 없는 월/일이 오늘보다 뒤일 때 **지난해**로 읽는다.
+    [코드 평가 C6] 1월에 "12월 20일에 심었다"가 올해 12월(미래 사건)이 되던 경로. 계획은 past=False(앞날이 맞다)."""
     m = _ISO.search(text)
     if m:
         try:
@@ -151,7 +153,10 @@ def parse_day(text: str, today: date) -> str | None:
     m = _MD.search(text)
     if m:
         try:
-            return date(today.year, int(m.group(1)), int(m.group(2))).isoformat()
+            d = date(today.year, int(m.group(1)), int(m.group(2)))
+            if past and d > today:
+                d = date(today.year - 1, d.month, d.day)
+            return d.isoformat()
         except ValueError:
             return None
     m = _AGO.search(text)
@@ -183,7 +188,8 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
     t = text.strip()
     if not t:
         return []
-    day = parse_day(t, today)
+    day = parse_day(t, today)                      # 계획 — 앞날이 맞다
+    day_past = parse_day(t, today, past=True)      # 사건 · 관찰 · 피해 — 이미 일어난 것(C6: 연도 없는 월/일이 오늘보다 뒤면 지난해)
     # [발행자 2026-09-19] "질문을 분석하고 그 성격을 분류해서 내부 로직으로" — 사람에게 종류를 고르라고 넘기지 않는다.
     # 순서: 교정 요구(시스템을 향한 동사) → 질문(물음표 · 의문 · 요청형) → 계획 → 피해 → 사건 → 관찰 어휘 → 서술문은 관찰 메모.
     # 종류는 규칙이 정하고 내용(날짜 · 사건 종류)은 지어내지 않는다 — 없으면 needs 로 남긴다. 확인에서 사람이 종류를 바꿀 수 있다.
@@ -202,16 +208,16 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
     if dmg:
         # [U-16] 피해는 사건이되 무엇의 피해인지(risk)가 있어야 경보와 대조된다. '피해'만 있고 갈래가 없으면 확인 화면이 묻는다
         risk = None if dmg == "피해" else dmg
-        return [{"kind": "event", "type": ev.DAMAGE_TYPE, "observed_at": day or today.isoformat(), "risk": risk, "note": t,
+        return [{"kind": "event", "type": ev.DAMAGE_TYPE, "observed_at": day_past or today.isoformat(), "risk": risk, "note": t,
                  "why": f"피해 어휘 → {risk or '갈래 미상'}", "needs": [] if risk else ["risk"]}]
     if et:
-        return [{"kind": "event", "type": et, "observed_at": day, "note": t, "why": f"사건 어휘 → {et}",
-                 "needs": [] if day else ["observed_at"]}]
+        return [{"kind": "event", "type": et, "observed_at": day_past, "note": t, "why": f"사건 어휘 → {et}",
+                 "needs": [] if day_past else ["observed_at"]}]
     if any(w in t for w in OBS_WORDS):
-        return [{"kind": "observation.note", "text": t, "observed_at": day or today.isoformat(),
+        return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
                  "why": "관찰 어휘(날짜 없으면 오늘 본 것으로 제안 — 확인에서 고친다)", "needs": []}]
     # 아무 어휘도 안 걸린 서술문 — 농가가 밭에서 한 말은 관찰 메모(원문 그대로)로 제안한다. 내용을 지어내지 않고 종류만 정한다
-    return [{"kind": "observation.note", "text": t, "observed_at": day or today.isoformat(),
+    return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
              "why": "서술문 — 사건·계획·질문 어휘가 없어 관찰 메모로 제안(원문 그대로 · 종류는 확인에서 바꾼다)", "needs": []}]
 
 
@@ -358,7 +364,7 @@ def choose_kind(msg_id: str, kind: str, today: date | None = None) -> dict[str, 
     if kind == "event":
         d = {"kind": "event", "type": _event_type(t) or "기타", "observed_at": day, "note": t, "why": "사람이 고름", "needs": [] if day else ["observed_at"]}
     elif kind == "observation.note":
-        d = {"kind": "observation.note", "text": t, "observed_at": day or today.isoformat(), "why": "사람이 고름", "needs": []}
+        d = {"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(), "why": "사람이 고름", "needs": []}
     elif kind == "plan.farmer":
         d = {"kind": "plan.farmer", "task": t[:60], "planned_day": day, "note": t, "why": "사람이 고름", "needs": [] if day else ["planned_day"]}
     elif kind == "feedback.request":
@@ -380,6 +386,9 @@ def confirm(msg_id: str, draft_index: int = 0, day: str | None = None, event_typ
     drafts = m.get("drafts") or []
     if draft_index >= len(drafts):
         raise ChatError("없는 초안")
+    if m.get("confirmed_refs"):
+        # [코드 평가 C7] 재확인 방지 — 브라우저 POST 재전송이 같은 사건을 두 번 원장에 썼다. 확인은 발화당 한 번
+        raise ChatError(f"이미 확인된 발화 — 원장 {', '.join(m['confirmed_refs'])}")
     d = dict(drafts[draft_index])
     sid, ref = m["subject"], m["id"]
     k = d["kind"]
