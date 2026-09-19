@@ -72,6 +72,9 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
        ("id", "parcel", "label", "crop", "season", "source"),
        ("anchor", "anchor_kind", "grid_unit", "cert", "status", "recorded_at", "note"),
        sources=("farmer", "publisher", "d1_first_farm.md (발행자 2026-09-18)"), layer3_input=True),
+    _k("user", "등록부",     # 사용자 정보 탭(M-13) — 표시명 · 역할 · 필지 id 목록. 연락처·주소는 두지 않는다(PII)
+       ("id", "name", "role", "parcels", "source", "recorded_at"), ("note",),
+       sources=("farmer", "publisher"), subject_bound=False),
     _k("parcel", "등록부",   # I-3 §1 필지 고정 정보 — I-6 값의 자리. 값이 없으면 키를 두지 않는다.
        ("id", "source", "recorded_at", "observed_at", "resolution"),
        ("address", "pnu", "lat", "lon", "area_m2", "area_source", "use", "mall_supply", "environment", "soil_texture",
@@ -80,6 +83,9 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
        sources=("farmer", "publisher"), subject_bound=False, pii=("address", "pnu", "lat", "lon")),
     # ── 1층 사실(농가) ──────────────────────────────────────────────────────────────
     _k("observation.video", "1층 사실",
+       ("id", "subject", "observed_at", "observed_at_source", "recorded_at", "source", "resolution", "origin", "file", "sha256", "bytes"),
+       ("width", "height", "duration_sec", "gps", "note"), sources=("farmer",), layer3_input=True, pii=("gps",)),
+    _k("observation.image", "1층 사실",   # 사진 — 영상과 같은 3요건. 촬영 시각은 EXIF 또는 입력(M-13 채팅 반입)
        ("id", "subject", "observed_at", "observed_at_source", "recorded_at", "source", "resolution", "origin", "file", "sha256", "bytes"),
        ("width", "height", "duration_sec", "gps", "note"), sources=("farmer",), layer3_input=True, pii=("gps",)),
     _k("event", "1층 사실",
@@ -124,7 +130,8 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
     # ── 1층 사실(농가 발화 — I-3 §3 "질의 자체가 관찰", M-13 채팅) ─────────────────────────
     _k("chat.message", "1층 사실",   # 채팅 한 줄. 분류(2층)는 drafts 에 제안으로만 — 확인(confirm)해야 원장에 들어간다
        ("id", "subject", "role", "text", "observed_at", "recorded_at", "source", "resolution"),
-       ("drafts", "confirmed_refs", "reply_ref"), sources=("farmer", "publisher", "computed:chat")),
+       ("drafts", "confirmed_refs", "reply_ref", "retry_of", "edit_of", "request_ref", "input_mode", "media_refs"),
+       sources=("farmer", "publisher", "computed:chat")),
     # ── 되먹임(J) ─────────────────────────────────────────────────────────────────────
     _k("feedback.request", "되먹임",     # 사용자 개선 요구 — 농가·발행자가 직접 말한 것(오탐일 수 없다, 다리 B)
        ("id", "text", "target", "status", "observed_at", "recorded_at", "source", "resolution"),

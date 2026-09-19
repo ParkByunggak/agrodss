@@ -7,11 +7,13 @@
 # 데이터를 받되, 1·2층 원장을 직접 읽는 import 는 두지 않는다(I-5 §5 — 검사로 고정).
 from __future__ import annotations
 
+import email.policy
 import html
 import subprocess
 import sys
 import webbrowser
 from datetime import date
+from email.parser import BytesParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
@@ -21,7 +23,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from frontend import chat_pages, config, render  # noqa: E402
-from ingest import chat, feedback as fb, subjects  # noqa: E402  — [M-13] 채팅 원장 · 되먹임 · 재배 단위 등록부도 ingest 를 통해서만
+from ingest import chat, feedback as fb, profile, subjects  # noqa: E402  — [M-13] 채팅 원장 · 되먹임 · 재배 단위·사용자 등록부도 ingest 를 통해서만
 from ingest import events as ev  # noqa: E402  — 사건 원장도 ingest 를 통해서만
 from ingest import media  # noqa: E402  — 입력 화면은 ingest 를 통해서만 1층에 쓴다(원장 파일을 직접 열지 않는다)
 from grid import capture as grid_capture  # noqa: E402  — 촬영 시점 알림(격자 지식, 원장 아님)
@@ -303,23 +305,76 @@ def new_page(error: str = "", form: dict[str, str] | None = None) -> tuple[int, 
     return (400 if error else 200), _shell("/c/new", chat_pages.new_main(error, form), None, "새 채팅")
 
 
+def me_page(message: str = "", error: str = "", form: dict[str, str] | None = None) -> tuple[int, str]:
+    return (400 if error else 200), _shell("/me", chat_pages.me_main(message, error, form), None, "사용자 정보")
+
+
 def improve_page(message: str = "", error: str = "", cycle=None) -> tuple[int, str]:
     return (400 if error else 200), _shell("/improve", chat_pages.improve_main(date.today(), message, error, cycle), None, "개선 · 자율진화")
 
 
+def parse_body(content_type: str, raw: bytes) -> tuple[dict[str, str], list[tuple[str, bytes]]]:
+    """urlencoded 또는 multipart/form-data → (필드, [(파일명, 바이트)]). 표준 라이브러리 email 파서로 multipart 를 읽는다."""
+    ct = content_type or ""
+    if ct.startswith("multipart/form-data"):
+        msg = BytesParser(policy=email.policy.HTTP).parsebytes(b"Content-Type: " + ct.encode("latin-1") + b"\r\nMIME-Version: 1.0\r\n\r\n" + raw)
+        fields: dict[str, str] = {}
+        files: list[tuple[str, bytes]] = []
+        if msg.is_multipart():
+            for part in msg.iter_parts():
+                name = part.get_param("name", header="content-disposition")
+                fn = part.get_filename()
+                payload = part.get_payload(decode=True) or b""
+                if fn:
+                    files.append((fn, payload))
+                elif name:
+                    fields[name] = payload.decode("utf-8", errors="replace").strip()
+        return fields, files
+    return {k: v[0] for k, v in parse_qs(raw.decode("utf-8", errors="replace"), keep_blank_values=True).items()}, []
+
+
+def ingest_uploads(sid: str, fields: dict[str, str], files: list[tuple[str, bytes]]) -> tuple[list[dict], list[str]]:
+    """[M-13 채팅 반입] 파일마다 inbox 저장 → 등록. 시각 없는 파일은 등록되지 않고 inbox 에 남는다(/media 에서 날짜를 넣어 등록)."""
+    ok, errs = [], []
+    for fn, data in files:
+        try:
+            key = media.save_upload(fn, data)
+            ok.append(media.register(key, sid, fields.get("observed_at") or None, note=fields.get("text", "")))
+        except media.RegisterError as e:
+            errs.append(f"{fn}: {e}")
+    return ok, errs
+
+
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, status: int, body: str, location: str | None = None) -> None:
+    def _send(self, status: int, body: str, location: str | None = None, set_cookie: str | None = None) -> None:
         data = body.encode("utf-8")
         self.send_response(status)
         if location:
             self.send_header("Location", location)
+        if set_cookie:
+            self.send_header("Set-Cookie", set_cookie)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
+    def _authorized(self) -> tuple[bool, str | None]:
+        """[D-16] LAN 토큰이 설정돼 있으면 ?t=<token> 또는 쿠키가 있어야 한다. 루프백 기본 설정(토큰 없음)에서는 항상 통과."""
+        tok = config.LAN_TOKEN
+        if not tok:
+            return True, None
+        q = parse_qs(urlparse(self.path).query).get("t", [""])[0]
+        if q == tok:
+            return True, f"{config.COOKIE_NAME}={tok}; Path=/; HttpOnly; SameSite=Lax"
+        cookie = self.headers.get("Cookie") or ""
+        return (f"{config.COOKIE_NAME}={tok}" in cookie), None
+
     def do_GET(self) -> None:  # noqa: N802
         p = urlparse(self.path).path
+        ok, cookie = self._authorized()
+        if not ok:
+            self._send(401, render.page("접근 불가", "", "<h1>토큰이 필요하다</h1><p>같은 Wi-Fi 동기화(D-16)는 첫 접속을 <code>?t=&lt;토큰&gt;</code> 으로 한다.</p>", "", ""))
+            return
         loc = None
         if p == "/":
             status, body, loc = chat_home()
@@ -331,6 +386,8 @@ class Handler(BaseHTTPRequestHandler):
             status, body = diary_page(unquote(p[len("/diary/"):]))
         elif p == "/improve":
             status, body = improve_page()
+        elif p == "/me":
+            status, body = me_page()
         elif p == "/media":
             status, body = media_page()
         elif p == "/judge":
@@ -341,13 +398,17 @@ class Handler(BaseHTTPRequestHandler):
             status, body = render_page(unquote(p[len("/doc/"):]))
         else:
             status, body = 404, render.page("없음", nav_html(""), "<h1>없는 경로</h1>", "", "")
-        self._send(status, body, loc)
+        self._send(status, body, loc, set_cookie=cookie)
 
     def do_POST(self) -> None:  # noqa: N802
         p = urlparse(self.path).path
+        ok, _ = self._authorized()
+        if not ok:
+            self._send(401, render.page("접근 불가", "", "<h1>토큰이 필요하다</h1>", "", ""))
+            return
         length = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(min(length, 1 << 20)).decode("utf-8", errors="replace")
-        form = {k: v[0] for k, v in parse_qs(raw, keep_blank_values=True).items()}
+        raw = self.rfile.read(min(length, config.MAX_UPLOAD_MB << 20))
+        form, files = parse_body(self.headers.get("Content-Type") or "", raw)
         if p == "/c/new":
             try:
                 s = subjects.add(form.get("crop", ""), form.get("season", ""), status=form.get("status") or "계획",
@@ -360,10 +421,25 @@ class Handler(BaseHTTPRequestHandler):
         elif p.startswith("/c/") and p.endswith("/send"):
             sid = unquote(p[len("/c/"):-len("/send")])
             try:
-                chat.send(sid, form.get("text", ""))
-                self._send(302, "", f"/c/{quote(sid)}")
-                return
+                recs, errs = ingest_uploads(sid, form, files) if files else ([], [])
+                if not files and not (form.get("text") or "").strip():
+                    raise chat.ChatError("빈 발화 — 글이나 파일이 있어야 보낸다")
+                if recs or (form.get("text") or "").strip():
+                    chat.send(sid, form.get("text", ""), retry_of=form.get("retry_of") or None, edit_of=form.get("edit_of") or None,
+                              input_mode=form.get("input_mode") or "text", media_refs=recs)
+                if errs:
+                    status, body = chat_page(sid, error="; ".join(errs) + " — 파일은 반입 대기함(inbox)에 남았다. 촬영일을 넣어 다시 올리거나 /media 에서 등록한다")
+                else:
+                    self._send(302, "", f"/c/{quote(sid)}")
+                    return
             except chat.ChatError as e:
+                status, body = chat_page(sid, error=str(e))
+        elif p.startswith("/c/") and p.endswith("/request"):
+            sid = unquote(p[len("/c/"):-len("/request")])
+            try:
+                req, _ = chat.request_improvement(form.get("reply", ""), form.get("text", ""))
+                status, body = chat_page(sid, message=f"개선 요구 접수 {req['id']} — /improve 에서 개선 항목으로 이어진다")
+            except (chat.ChatError, fb.FeedbackError) as e:
                 status, body = chat_page(sid, error=str(e))
         elif p.startswith("/c/") and p.endswith("/confirm"):
             sid = unquote(p[len("/c/"):-len("/confirm")])
@@ -381,6 +457,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             except chat.ChatError as e:
                 status, body = chat_page(sid, error=str(e))
+        elif p == "/me":
+            try:
+                u = profile.save(form.get("name", ""), form.get("role", "farmer"), note=form.get("note", ""))
+                status, body = me_page(message=f"저장됨 — {u['name']} ({u['role']})")
+            except profile.ProfileError as e:
+                status, body = me_page(error=str(e), form=form)
         elif p == "/improve/request":
             try:
                 r = fb.add_request(form.get("text", ""), target=form.get("target") or "other", subject=form.get("subject") or None, source="publisher")
@@ -424,7 +506,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def make_server() -> ThreadingHTTPServer:
-    host = config.assert_local(config.HOST)  # [D-6] 루프백 검증이 서버 생성보다 앞에 있다
+    host = config.assert_local(config.BIND)  # [D-6] 루프백 검증이 서버 생성보다 앞에 있다 (D-16 옵트인만 0.0.0.0 + 토큰)
     return ThreadingHTTPServer((host, config.PORT), Handler)
 
 

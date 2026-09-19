@@ -131,15 +131,16 @@ def test_watch_dir_copies_and_marks_seen(tmp_path, monkeypatch):
     phone = tmp_path / "OneDrive_camera"
     phone.mkdir()
     (phone / "VID_0001.mp4").write_bytes(make_mp4(datetime(2026, 9, 18, 7, 0, tzinfo=timezone.utc)))
-    (phone / "IMG_0001.jpg").write_bytes(b"jpeg")            # 사진은 목록에 안 뜬다
+    (phone / "IMG_0001.jpg").write_bytes(b"jpeg")            # [M-13 2026-09-19] 사진도 목록에 뜬다(채팅 반입) — 문서는 안 뜬다
+    (phone / "memo.txt").write_bytes(b"x")
     monkeypatch.setenv("AGRODSS_WATCH_DIRS", str(phone))
     items = media.list_inbox()
-    assert [i["key"] for i in items] == ["watch:0:VID_0001.mp4"]
+    assert {i["key"] for i in items} == {"watch:0:VID_0001.mp4", "watch:0:IMG_0001.jpg"}
     rec = media.register("watch:0:VID_0001.mp4", SUBJ)
     assert rec["origin"] == "watch"
     assert (phone / "VID_0001.mp4").exists()                  # 원본 유지 — 폰에서 지워지지 않는다
     assert (media.media_dir() / rec["file"]).exists()
-    assert media.list_inbox() == []                            # 등록된 것은 다시 안 뜬다
+    assert [i["key"] for i in media.list_inbox()] == ["watch:0:IMG_0001.jpg"]   # 등록된 것은 다시 안 뜬다
 
 
 def test_watch_dir_missing_is_ignored(monkeypatch):

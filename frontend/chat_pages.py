@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 from frontend import config
 from grid import capture as grid_capture
-from ingest import chat, events as ev, feedback as fb, parcels, subjects
+from ingest import chat, events as ev, feedback as fb, media, parcels, profile, subjects
 from judge import evolve, registry, run as judge_run
 
 DECISION_LABEL = {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용", "plan_vs_actual": "계획 대 실제"}
@@ -50,6 +50,7 @@ aside.side { background:var(--side); border-right:1px solid var(--line); padding
 .pill { display:inline-block; font-size:11px; padding:0 7px; border-radius:9px; background:var(--chip); color:var(--muted); margin-left:4px; }
 .pill.run { background:var(--ok); color:var(--ok-fg); } .pill.plan { background:var(--warn); color:var(--warn-fg); }
 .side .lnk { display:block; padding:5px 10px; font-size:13px; color:var(--muted); text-decoration:none; } .side .lnk:hover { color:var(--fg); }
+aside.side { display:flex; flex-direction:column; } .chat.user { margin-top:auto; border-top:1px solid var(--line); border-radius:0; padding-top:12px; }
 main.thread { display:flex; flex-direction:column; min-height:100vh; }
 .thead { position:sticky; top:0; background:var(--bg); border-bottom:1px solid var(--line); padding:12px 24px; display:flex; justify-content:space-between; align-items:center; z-index:2; }
 .thead h1 { font-size:16px; margin:0; font-weight:600; } .thead .meta { color:var(--muted); font-size:12px; }
@@ -60,6 +61,10 @@ main.thread { display:flex; flex-direction:column; min-height:100vh; }
 .msg.sys .bub { max-width:88%; white-space:pre-wrap; padding:2px 0; }
 .msg.sys .av { width:26px; height:26px; border-radius:50%; background:var(--accent); color:var(--accent-ink); font-size:12px; display:flex; align-items:center; justify-content:center; flex:none; margin-top:2px; }
 .ts { color:var(--muted); font-size:11px; margin-top:4px; }
+.acts { display:flex; gap:2px; margin-top:2px; opacity:.55; } .acts.right { justify-content:flex-end; } .msg:hover .acts { opacity:1; }
+.acts .inline { display:inline; margin:0; }
+.act { display:inline-flex; align-items:center; gap:4px; border:0; background:transparent; color:var(--muted); font-size:11.5px; padding:3px 6px; border-radius:6px; cursor:pointer; }
+.act:hover { background:var(--chip); color:var(--fg); }
 .draft { margin:6px 0 0 36px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; }
 .draft b { font-weight:600; } .draft form { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px; }
 .draft input, .draft select { padding:4px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font-size:13px; }
@@ -71,6 +76,8 @@ main.thread { display:flex; flex-direction:column; min-height:100vh; }
 .composer textarea { width:100%; border:0; background:transparent; color:var(--fg); resize:none; font:inherit; min-height:52px; outline:none; }
 .composer .row { display:flex; justify-content:space-between; align-items:center; margin-top:4px; }
 .composer .hint { color:var(--muted); font-size:12px; }
+.composer .files { font-size:12px; color:var(--muted); margin:4px 0; } .composer .files input { padding:3px 6px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
+@media (max-width:720px) { .composer .row { flex-wrap:wrap; gap:6px; } .composer .hint { display:none; } .msg.me .bub { max-width:92%; } .thead { padding:10px 14px; } }
 aside.panel { border-left:1px solid var(--line); background:var(--panel); padding:16px 16px 40px; position:sticky; top:0; height:100vh; overflow:auto; }
 .panel h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:14px 0 6px; }
 .panel h2:first-child { margin-top:0; }
@@ -115,6 +122,42 @@ def sidebar(current: str, docs: list[str], today: date) -> str:
     out.append('<div class="grp">문서</div>')
     for name in docs:
         out.append(f'<a class="lnk" href="/doc/{_e(name)}">{_e(name.removesuffix(".md"))}</a>')
+    # [발행자 2026-09-19] 채팅 목록 최하단 — 사용자 정보 탭
+    u = profile.load()
+    cls = ' on' if current == "/me" else ""
+    out.append(f'<a class="chat user{cls}" href="/me" id="user-tab"><b>{_e(u.get("name") or "사용자 정보")}<span class="pill">{_e(u.get("role"))}</span></b>'
+               f'<span>필지 {len(u.get("parcels") or [])} · 설정 · 동기화</span></a>')
+    return "".join(out)
+
+
+def me_main(message: str = "", error: str = "", form: dict[str, str] | None = None) -> str:
+    u = profile.load()
+    f = form or {}
+    out = ['<div class="thead"><div><h1>사용자 정보</h1><div class="meta">이름·역할·필지·설정. 연락처와 주소는 두지 않는다(PII).</div></div></div><div class="msgs">']
+    if error:
+        out.append(f'<p class="err">{_e(error)}</p>')
+    if message:
+        out.append(f'<p class="ok">{_e(message)}</p>')
+    roles = "".join(f'<option value="{r}"{" selected" if (f.get("role") or u.get("role")) == r else ""}>{r}</option>' for r in profile.ROLES)
+    out.append('<div class="form" style="margin-top:8px"><form method="post" action="/me">'
+               f'<label>표시명</label><input name="name" value="{_e(f.get("name") or u.get("name") or "")}" required>'
+               f'<label>역할</label><select name="role">{roles}</select>'
+               f'<label>메모(연락처 금지)</label><input name="note" value="{_e(f.get("note") or u.get("note") or "")}">'
+               '<div style="margin-top:12px"><button class="btn pri" type="submit">저장</button></div></form></div>')
+    out.append('<h2 style="font-size:14px">필지</h2>')
+    for p in parcels.load():
+        v = parcels.public_view(p)
+        miss = parcels.missing_inputs(p)
+        out.append(f'<div class="card"><b>{_e(p["id"])}</b> · 용도 {_e(v.get("use") or "미기재")} · 위치 {_e(v["location"])} · 인증 주장 {_e(v.get("cert_claimed") or "없음")}'
+                   f'<div style="color:var(--muted)">입력 대기 {len(miss)}: {_e(", ".join(miss))}</div></div>')
+    out.append('<h2 style="font-size:14px">설정 · 동기화</h2>')
+    lan = "켜짐(같은 Wi-Fi, 토큰 필요)" if config.BIND == config.LAN_BIND and config.LAN_TOKEN else "꺼짐(이 PC 에서만 — D-6)"
+    out.append(f'<div class="card"><b>휴대폰 동기화(D-16)</b> {_e(lan)}<div style="color:var(--muted)">켜려면 <code>.env</code> 에 <code>AGRODSS_BIND=0.0.0.0</code> 과 <code>AGRODSS_LAN_TOKEN=(16자 이상)</code> 을 넣고 재시작, 휴대폰은 같은 Wi-Fi 에서 <code>http://&lt;PC IP&gt;:{config.PORT}/?t=&lt;토큰&gt;</code>. '
+               '휴대폰 마이크·음성은 https 또는 localhost 에서만 열린다(브라우저 보안 규칙) — 휴대폰에서는 글·사진·영상 입력이 먼저다</div></div>')
+    out.append(f'<div class="card"><b>음성 질문(D-15)</b> 크롬 내장 인식(구글 서버 경유) · 무신호 {config.VOICE_SILENCE_MS // 1000}초면 종료 · 최대 {config.VOICE_MAX_MS // 1000}초</div>')
+    out.append(f'<div class="card"><b>반입</b> 사진(EXIF 시각) · 영상(mvhd 시각) · 한 번에 {config.MAX_UPLOAD_MB}MB 까지 · 시각 없으면 촬영일 입력</div>')
+    out.append(f'<div class="card"><b>원장</b> 영상·사진 {len(media.list_records())} · 반입 대기 {len(media.list_inbox())} · 개선 요구 {len(fb.latest_by_id("feedback.request"))} · 개선 항목 {len(fb.latest_by_id("improvement.item"))}</div>')
+    out.append("</div>")
     return "".join(out)
 
 
@@ -159,9 +202,20 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
         out.append('<div class="msg sys"><div class="av">a</div><div class="bub">이 목록의 첫 대화다. 무엇을 했는지(사건) · 무엇이 보이는지(관찰) · 무엇을 할지(계획) · 고칠 것(개선 요구) · 물음(질문)을 적으면 분류해 초안을 만든다. 확인해야 원장에 들어간다 — 시스템이 대신 적지 않는다.</div></div>')
     for m in msgs:
         if m.get("role") == "system":
-            out.append(f'<div class="msg sys"><div class="av">a</div><div><div class="bub">{_e(m["text"])}</div><div class="ts">{_e(m.get("recorded_at", "")[:16])}</div></div></div>')
+            out.append(f'<div class="msg sys"><div class="av">a</div><div><div class="bub" id="t-{_e(m["id"])}">{_e(m["text"])}</div>'
+                       f'<div class="ts">{_e(m.get("recorded_at", "")[:16])}{" · 개선 요구 " + _e(m["request_ref"]) if m.get("request_ref") else ""}</div>'
+                       f'{_answer_actions(m)}</div></div>')
         else:
-            out.append(f'<div class="msg me"><div><div class="bub">{_e(m["text"])}</div><div class="ts" style="text-align:right">{_e(m.get("recorded_at", "")[:16])}</div></div></div>')
+            tags = []
+            if m.get("input_mode") == "voice":
+                tags.append("음성")
+            if m.get("retry_of"):
+                tags.append("다시 시도")
+            if m.get("edit_of"):
+                tags.append("편집")
+            tag = (" · " + " · ".join(tags)) if tags else ""
+            out.append(f'<div class="msg me"><div><div class="bub" id="t-{_e(m["id"])}">{_e(m["text"])}</div>'
+                       f'<div class="ts" style="text-align:right">{_e(m.get("recorded_at", "")[:16])}{_e(tag)}</div>{_question_actions(m)}</div></div>')
             drafts = m.get("drafts") or []
             if drafts:
                 for i, d in enumerate(drafts):
@@ -169,9 +223,89 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
             elif not m.get("confirmed_refs"):
                 out.append(_choose_html(m))
     out.append("</div>")
-    out.append(f'<div class="composer"><form method="post" action="/c/{quote(s["id"])}/send"><textarea name="text" placeholder="예) 오늘 물 줬다 / 잎 끝이 누렇다 / 9월 25일에 웃거름 주려고 한다 / 수확 창이 너무 넓다 / 언제 캐면 되나?" required></textarea>'
-               f'<div class="row"><span class="hint">사건 · 관찰 · 계획 · 개선 요구 · 질문 — 날짜는 "9월 20일" · "어제" · "2026-09-20"</span><button class="btn pri" type="submit">보내기</button></div></form></div>')
+    out.append(f'<div class="composer"><form method="post" action="/c/{quote(s["id"])}/send" id="composer" enctype="multipart/form-data">'
+               '<input type="hidden" name="input_mode" id="input_mode" value="text"><input type="hidden" name="edit_of" id="edit_of" value="">'
+               '<textarea name="text" id="text" placeholder="예) 오늘 물 줬다 / 잎 끝이 누렇다 / 9월 25일에 웃거름 주려고 한다 / 수확 창이 너무 넓다 / 언제 캐면 되나?"></textarea>'
+               '<div class="files" id="files" hidden><span id="filenames"></span> <label>촬영일 <input name="observed_at" id="observed_at" placeholder="메타에 없으면 필요 (2026-09-19)" size="24"></label></div>'
+               '<div class="row"><span class="hint" id="hint">사건 · 관찰 · 계획 · 개선 요구 · 질문 — 날짜는 "9월 20일" · "어제" · "2026-09-20"</span>'
+               '<span><input type="file" name="file" id="file" accept="image/*,video/*" multiple hidden>'
+               '<button class="btn" type="button" id="attach" title="사진 · 영상 올리기 — 촬영 시각은 메타(EXIF · mvhd)에서 읽고 없으면 촬영일을 묻는다">📎 사진·영상</button> '
+               '<button class="btn" type="button" id="mic" title="음성으로 질문 — 말이 끝나거나 5초 조용하면 글로 바꿔 보낸다(D-15: 크롬 내장 인식, 구글 서버 경유)">🎤 음성</button> '
+               '<button class="btn pri" type="submit">보내기</button></span></div></form></div>')
+    out.append(ACTION_JS.replace("__SILENCE_MS__", str(config.VOICE_SILENCE_MS)).replace("__MAX_MS__", str(config.VOICE_MAX_MS)))
     return "".join(out)
+
+
+ICONS = {
+    "copy": '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+    "edit": '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    "retry": '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>',
+    "request": '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-6 0v4"/><path d="M4 9h16l-1.5 11H5.5Z"/></svg>',
+    "speak": '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>',
+}
+
+
+def _question_actions(m: dict[str, Any]) -> str:
+    mid = _e(m["id"])
+    return (f'<div class="acts right" data-msg="{mid}">'
+            f'<button type="button" class="act" data-act="copy" data-target="t-{mid}" title="복사">{ICONS["copy"]}<span>복사</span></button>'
+            f'<button type="button" class="act" data-act="edit" data-target="t-{mid}" title="편집 — 입력창에 올려 고쳐 보낸다">{ICONS["edit"]}<span>편집</span></button>'
+            f'<form method="post" action="/c/{quote(m["subject"])}/send" class="inline"><input type="hidden" name="text" value="{_e(m["text"])}">'
+            f'<input type="hidden" name="retry_of" value="{mid}"><button type="submit" class="act" data-act="retry" title="다시 시도 — 같은 질문을 다시 보낸다">{ICONS["retry"]}<span>다시 시도</span></button></form></div>')
+
+
+def _answer_actions(m: dict[str, Any]) -> str:
+    mid = _e(m["id"])
+    return (f'<div class="acts" data-msg="{mid}">'
+            f'<button type="button" class="act" data-act="copy" data-target="t-{mid}" title="복사">{ICONS["copy"]}<span>복사</span></button>'
+            f'<form method="post" action="/c/{quote(m["subject"])}/request" class="inline"><input type="hidden" name="reply" value="{mid}">'
+            f'<button type="submit" class="act" data-act="request" title="개선 요구 — 이 답이 틀리거나 부족하다고 접수한다">{ICONS["request"]}<span>개선 요구</span></button></form>'
+            f'<button type="button" class="act" data-act="speak" data-target="t-{mid}" title="소리 내어 읽기">{ICONS["speak"]}<span>소리 내어 읽기</span></button></div>')
+
+
+ACTION_JS = """<script>
+(function(){
+  const $ = (s, r) => (r || document).querySelector(s);
+  const text = (id) => { const el = document.getElementById(id); return el ? el.textContent : ""; };
+  document.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("button.act"); if (!b) return;
+    const act = b.dataset.act, t = text(b.dataset.target || "");
+    if (act === "copy") { try { await navigator.clipboard.writeText(t); flash(b, "복사됨"); } catch (e) { flash(b, "복사 실패"); } }
+    else if (act === "edit") { const ta = $("#text"); ta.value = t; $("#edit_of").value = b.closest(".acts").dataset.msg; $("#input_mode").value = "text"; ta.focus(); $("#hint").textContent = "편집 중 — 고쳐서 보내면 새 발화로 이어진다(원문은 남는다)"; }
+    else if (act === "speak") { if (!("speechSynthesis" in window)) { flash(b, "이 브라우저는 읽기를 지원하지 않는다"); return; }
+      window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "ko-KR"; window.speechSynthesis.speak(u); flash(b, "읽는 중"); }
+  });
+  function flash(b, msg) { const s = b.querySelector("span"); if (!s) return; const o = s.textContent; s.textContent = msg; setTimeout(() => { s.textContent = o; }, 1500); }
+  // 사진·영상 반입 — 파일을 고르면 이름과 촬영일 칸이 보인다. 촬영 시각은 서버가 메타에서 읽고, 없으면 여기 넣은 날짜를 쓴다.
+  const attach = $("#attach"), file = $("#file");
+  if (attach && file) {
+    attach.addEventListener("click", () => file.click());
+    file.addEventListener("change", () => { const n = Array.from(file.files).map(f => f.name + " (" + Math.round(f.size / 1048576) + "MB)").join(", ");
+      $("#files").hidden = !n; $("#filenames").textContent = n; $("#hint").textContent = n ? "보내기를 누르면 반입된다 — 설명을 함께 적으면 사건·관찰로도 분류한다" : ""; });
+  }
+  $("#composer").addEventListener("submit", (e) => { if (!$("#text").value.trim() && !(file && file.files.length)) { e.preventDefault(); $("#hint").textContent = "글이나 파일이 있어야 보낸다"; } });
+  // 음성 질문 — 브라우저 내장 인식(D-15). 입력 신호가 SILENCE_MS 동안 없으면 질문이 끝난 것으로 보고 글로 바꿔 보낸다. 오인식은 '편집'으로.
+  const SILENCE_MS = __SILENCE_MS__, MAX_MS = __MAX_MS__;
+  const mic = $("#mic"); if (!mic) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { mic.disabled = true; mic.title = "이 브라우저는 음성 인식을 지원하지 않는다(크롬 · 엣지에서 된다)"; return; }
+  let rec = null, finalText = "", listening = false, silence = null, hardStop = null;
+  const armSilence = () => { clearTimeout(silence); silence = setTimeout(() => { $("#hint").textContent = "입력 신호가 " + (SILENCE_MS / 1000) + "초 없어 질문을 끝낸다"; rec && rec.stop(); }, SILENCE_MS); };
+  mic.addEventListener("click", () => {
+    if (listening) { rec && rec.stop(); return; }
+    rec = new SR(); rec.lang = "ko-KR"; rec.interimResults = true; rec.continuous = true; finalText = "";
+    rec.onstart = () => { listening = true; mic.textContent = "⏹ 듣는 중…"; $("#hint").textContent = "말하세요 — " + (SILENCE_MS / 1000) + "초 조용하면 끝난 것으로 본다"; armSilence();
+      hardStop = setTimeout(() => rec && rec.stop(), MAX_MS); };
+    rec.onaudiostart = armSilence; rec.onsoundstart = armSilence; rec.onspeechstart = armSilence;
+    rec.onresult = (e) => { let interim = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript; }
+      $("#text").value = (finalText + interim).trim(); armSilence(); };
+    rec.onerror = (e) => { $("#hint").textContent = "음성 인식 오류: " + e.error + " — 마이크 권한 · 네트워크 · 보안 컨텍스트(https 또는 localhost)"; };
+    rec.onend = () => { listening = false; clearTimeout(silence); clearTimeout(hardStop); mic.textContent = "🎤 음성"; const v = $("#text").value.trim();
+      if (v) { $("#input_mode").value = "voice"; $("#composer").submit(); } else { $("#hint").textContent = "인식된 말이 없다 — 다시 눌러 말한다"; } };
+    rec.start();
+  });
+})();
+</script>"""
 
 
 def _env_card(e: Any) -> str:
@@ -189,6 +323,9 @@ def thread_panel(s: dict[str, Any], today: date) -> str:
     pend = chat.pending_drafts(s["id"])
     if pend:
         out.append(f'<div class="card"><b>미확인 초안 {len(pend)}</b> — 대화에서 확인하면 원장에 들어간다</div>')
+    inbox = media.list_inbox()
+    if inbox:
+        out.append(f'<div class="card"><b>반입 대기 파일 {len(inbox)}</b> — 촬영 시각이 없어 등록되지 않았다. <a href="/media">/media</a> 에서 날짜를 넣어 등록</div>')
     miss = parcels.missing_inputs(parcels.by_id(s.get("parcel", "")))
     if miss:
         out.append(f'<div class="card"><b>필지 입력 대기 {len(miss)}</b> <span style="color:var(--muted)">{_e(", ".join(miss[:6]))}{" …" if len(miss) > 6 else ""}</span></div>')

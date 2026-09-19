@@ -20,4 +20,5 @@ def _isolate_media_dir(tmp_path, monkeypatch):
     reg = tmp_path / "subjects.json"
     reg.write_text(_REAL_SUBJECTS.read_text(encoding="utf-8"), encoding="utf-8")   # 운영 등록부의 사본 — 읽기는 같고 쓰기는 tmp
     monkeypatch.setenv("AGRODSS_SUBJECTS_PATH", str(reg))
+    monkeypatch.setenv("AGRODSS_PROFILE_PATH", str(tmp_path / "profile.json"))   # 사용자 등록부도 쓰기 대상 — 격리 짝(R-4)
     yield

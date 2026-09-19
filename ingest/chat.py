@@ -254,22 +254,49 @@ def summarize_envelope(e: Any) -> str:
 
 
 # ── 보내기 · 확인 ───────────────────────────────────────────────────────────────────
+INPUT_MODES = ("text", "voice", "file")
+
+
 def send(subject_id: str, text: str, today: date | None = None, now: datetime | None = None,
-         role: str = "farmer") -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """발화 1건 → (내 메시지, 시스템 답) . 분류 초안은 메시지에 붙고 답은 별도 메시지."""
+         role: str = "farmer", retry_of: str | None = None, edit_of: str | None = None,
+         input_mode: str = "text", media_refs: list[dict[str, Any]] | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """발화 1건 → (내 메시지, 시스템 답) . 분류 초안은 메시지에 붙고 답은 별도 메시지.
+    retry_of / edit_of 는 '다시 시도' · '편집' 의 출처 메시지 — 원문은 지우지 않고 새 줄로 잇는다(원장은 append-only).
+    input_mode=voice 는 브라우저 음성 인식에서 온 텍스트(D-15) — 오인식 교정은 '편집'으로."""
     s = subjects.by_id(subject_id)
     if not s:
         raise ChatError(f"없는 목록: {subject_id}")
     text = (text or "").strip()
+    media_refs = media_refs or []
+    if not text and media_refs:
+        text = "[반입] " + " · ".join(f"{r.get('id')} {r.get('file', '')}" for r in media_refs)
+        input_mode = "file"
     if not text:
         raise ChatError("빈 발화")
+    if input_mode not in INPUT_MODES:
+        raise ChatError(f"입력 방식은 {' · '.join(INPUT_MODES)} 중 하나")
+    for ref in (retry_of, edit_of):
+        if ref and not get_message(ref):
+            raise ChatError(f"없는 메시지를 잇는다: {ref}")
     today = today or date.today()
     ts = _now(now).isoformat(timespec="seconds")
     drafts = classify(text, today)
-    msg = _append({"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": role, "text": text[:2000],
-                   "observed_at": today.isoformat(), "recorded_at": ts, "source": role, "resolution": RESOLUTION,
-                   "drafts": drafts, "confirmed_refs": []})
-    if drafts and drafts[0]["kind"] == "question":
+    rec: dict[str, Any] = {"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": role, "text": text[:2000],
+                           "observed_at": today.isoformat(), "recorded_at": ts, "source": role, "resolution": RESOLUTION,
+                           "drafts": drafts, "confirmed_refs": [], "input_mode": input_mode}
+    if retry_of:
+        rec["retry_of"] = retry_of
+    if edit_of:
+        rec["edit_of"] = edit_of
+    if media_refs:
+        rec["media_refs"] = [r.get("id") for r in media_refs]
+    msg = _append(rec)
+    media_line = ""
+    if media_refs:
+        media_line = "반입됨 " + " · ".join(f"{r.get('id')}(관측 {str(r.get('observed_at', ''))[:16]})" for r in media_refs) + " — 영상·사진 원장에 들어갔다. "
+    if media_refs and not drafts:
+        reply_text = media_line + "설명을 함께 적으면 사건·관찰로도 분류한다."
+    elif drafts and drafts[0]["kind"] == "question":
         reply_text = answer(s, text, today)
     elif drafts:
         d = drafts[0]
@@ -277,10 +304,28 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         reply_text = f"{KIND_LABEL[d['kind']]}(으)로 읽었다 — {d['why']}. " + ("날짜를 넣고 " if need else "") + "확인하면 원장에 들어간다. 아니면 다른 종류를 고른다."
     else:
         reply_text = "분류 안 됨 — 사건 · 관찰 · 계획 · 개선 요구 중 골라 주면 그 종류로 초안을 만든다. (추측으로 적지 않는다)"
+    if media_refs and drafts:
+        reply_text = media_line + reply_text
     reply = _append({"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": "system", "text": reply_text,
                      "observed_at": today.isoformat(), "recorded_at": ts, "source": "computed:chat", "resolution": RESOLUTION,
                      "drafts": [], "confirmed_refs": [], "reply_ref": msg["id"]})
     return msg, reply
+
+
+def request_improvement(reply_id: str, text: str = "", now: datetime | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """답변 아래 '개선 요구' — 그 답(시스템 메시지)을 겨냥한 feedback.request 를 바로 접수하고, 접수 사실을 대화에 남긴다.
+    사람이 버튼을 눌러 낸 요구라 초안·확인 단계가 없다(다리 B: 사용자가 직접 말한 교정은 오탐일 수 없다)."""
+    m = get_message(reply_id)
+    if not m or m.get("role") != "system":
+        raise ChatError("개선 요구는 시스템 답변에 대해 낸다")
+    body = (text or "").strip() or f"이 답변이 틀리거나 부족하다: {m['text'][:200]}"
+    req = fb.add_request(body, target="decision", target_ref=reply_id, subject=m.get("subject"), source="farmer", now=now)
+    ts = _now(now).isoformat(timespec="seconds")
+    note = _append({"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": m["subject"], "role": "system",
+                    "text": f"개선 요구 접수 {req['id']} — 개선 항목이 되면 /improve 에 보인다. 채택은 사람이 한다(D-14).",
+                    "observed_at": ts[:10], "recorded_at": ts, "source": "computed:chat", "resolution": RESOLUTION,
+                    "drafts": [], "confirmed_refs": [], "reply_ref": reply_id, "request_ref": req["id"]})
+    return req, note
 
 
 def choose_kind(msg_id: str, kind: str, today: date | None = None) -> dict[str, Any]:

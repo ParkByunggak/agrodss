@@ -27,9 +27,12 @@ from schema import records as sch
 ROOT = Path(__file__).resolve().parent.parent
 SUBJECTS_PATH = ROOT / "data" / "subjects.json"
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".3gp"}
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".heic"}     # [M-13 2026-09-19] 채팅 입력창 사진 반입 — 촬영 시각은 EXIF(JPEG)에서
+MEDIA_EXT = VIDEO_EXT | IMAGE_EXT
 SOURCE = "farmer"
 RESOLUTION = "parcel"
 KIND = "observation.video"
+KIND_IMAGE = "observation.image"
 _QT_EPOCH = datetime(1904, 1, 1, tzinfo=timezone.utc)
 _CONTAINERS = {b"moov", b"trak", b"mdia", b"udta", b"meta", b"ilst"}
 
@@ -174,6 +177,83 @@ def probe_mp4(path: Path, max_bytes: int = 64 * 1024 * 1024) -> Probe:
     return p
 
 
+_EXIF_TAGS = {0x9003: "DateTimeOriginal", 0x0132: "DateTime"}
+
+
+def probe_image(path: Path) -> Probe:
+    """JPEG EXIF 에서 촬영 시각(DateTimeOriginal)만 읽는다 — 표준 라이브러리로 TIFF IFD 를 걷는다. 없으면 None(메우지 않는다).
+    PNG·WEBP·HEIC 는 시각을 안 읽는다(입력 필요)."""
+    p = Probe()
+    try:
+        with path.open("rb") as f:
+            buf = f.read(1 << 20)
+    except OSError as e:
+        p.error = str(e)
+        return p
+    if buf[:2] != b"\xff\xd8":
+        p.error = "JPEG 아님 — 촬영 시각 자동 판독 불가(입력 필요)"
+        return p
+    i = 2
+    while i + 4 <= len(buf) and buf[i] == 0xFF:
+        marker, seg_len = buf[i + 1], struct.unpack(">H", buf[i + 2:i + 4])[0]
+        if marker == 0xE1 and buf[i + 4:i + 10] == b"Exif\x00\x00":
+            tiff = i + 10
+            endian = "<" if buf[tiff:tiff + 2] == b"II" else ">"
+            found: dict[str, str] = {}
+
+            def walk(ifd_off: int, depth: int = 0) -> None:
+                if depth > 2 or tiff + ifd_off + 2 > len(buf):
+                    return
+                n = struct.unpack(endian + "H", buf[tiff + ifd_off:tiff + ifd_off + 2])[0]
+                for k in range(min(n, 200)):
+                    e = tiff + ifd_off + 2 + 12 * k
+                    if e + 12 > len(buf):
+                        return
+                    tag, typ, cnt, val = struct.unpack(endian + "HHII", buf[e:e + 12])
+                    if tag == 0x8769:                      # Exif IFD 포인터
+                        walk(val, depth + 1)
+                    elif tag in _EXIF_TAGS and typ == 2 and cnt >= 19:
+                        s = buf[tiff + val:tiff + val + cnt].split(b"\x00")[0].decode("ascii", errors="ignore")
+                        found[_EXIF_TAGS[tag]] = s
+
+            first = struct.unpack(endian + "I", buf[tiff + 4:tiff + 8])[0]
+            walk(first)
+            raw = found.get("DateTimeOriginal") or found.get("DateTime")
+            if raw and len(raw) >= 19:
+                try:
+                    p.creation_time = datetime.strptime(raw[:19], "%Y:%m:%d %H:%M:%S").isoformat(timespec="seconds")
+                except ValueError:
+                    p.error = f"EXIF 시각 형식 아님: {raw!r}"
+            break
+        i += 2 + seg_len
+    if not p.creation_time and not p.error:
+        p.error = "EXIF 촬영 시각 없음 — 입력 필요"
+    return p
+
+
+def probe(path: Path) -> Probe:
+    return probe_image(path) if path.suffix.lower() in IMAGE_EXT else probe_mp4(path)
+
+
+def save_upload(filename: str, data: bytes) -> str:
+    """[M-13 채팅 반입] 업로드된 바이트를 inbox 에 둔다 → 'inbox:<name>' 키. 등록(register)은 따로 — 시각 없으면 거기서 거부된다."""
+    name = _safe(Path(filename or "upload").name)
+    ext = Path(name).suffix.lower()
+    if ext not in MEDIA_EXT:
+        raise RegisterError(f"영상·사진 파일이 아니다: {ext!r} ({', '.join(sorted(MEDIA_EXT))})")
+    if not data:
+        raise RegisterError("빈 파일")
+    d = inbox_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    dest = d / name
+    k = 1
+    while dest.exists():
+        dest = d / f"{Path(name).stem}_{k}{ext}"
+        k += 1
+    dest.write_bytes(data)
+    return f"inbox:{dest.name}"
+
+
 def sha256_of(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -229,12 +309,12 @@ def _candidates() -> list[tuple[str, str, Path]]:
     d = inbox_dir()
     d.mkdir(parents=True, exist_ok=True)
     for f in sorted(d.iterdir()):
-        if f.is_file() and f.suffix.lower() in VIDEO_EXT:
+        if f.is_file() and f.suffix.lower() in MEDIA_EXT:
             out.append((f"inbox:{f.name}", "inbox", f))
     for i, w in enumerate(watch_dirs()):
         if not w.is_dir():
             continue
-        files = [f for f in w.iterdir() if f.is_file() and f.suffix.lower() in VIDEO_EXT]
+        files = [f for f in w.iterdir() if f.is_file() and f.suffix.lower() in MEDIA_EXT]
         files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
         for f in files[:WATCH_LIST_LIMIT]:
             key = f"watch:{i}:{f.name}"
@@ -264,7 +344,7 @@ def _resolve_key(key: str) -> tuple[str, Path]:
 def list_inbox() -> list[dict[str, Any]]:
     items = []
     for key, origin, f in _candidates():
-        pr = probe_mp4(f)
+        pr = probe(f)
         items.append({"key": key, "name": f.name, "origin": origin, "bytes": f.stat().st_size, "probe": asdict(pr)})
     return items
 
@@ -281,7 +361,9 @@ def register(key: str, subject: str, observed_at: str | None = None, note: str =
         raise RegisterError(f"그런 파일이 없다: {key!r}")
     if subject not in subject_ids():
         raise RegisterError(f"등록되지 않은 재배 단위: {subject!r} (data/subjects.json)")
-    pr = probe_mp4(src)
+    if src.suffix.lower() not in MEDIA_EXT:
+        raise RegisterError(f"영상·사진 파일이 아니다: {src.suffix!r} ({', '.join(sorted(MEDIA_EXT))})")
+    pr = probe(src)
     observed = (observed_at or "").strip() or pr.creation_time
     if not observed:
         raise RegisterError("촬영 시각이 없다 — 메타에서 못 읽었고 입력도 없다. 시각 없는 영상은 1층에 들어가지 않는다")
@@ -305,8 +387,8 @@ def register(key: str, subject: str, observed_at: str | None = None, note: str =
     else:
         shutil.move(str(src), str(dest))
     rec = {
-        "id": f"vid_{digest[:12]}",
-        "kind": KIND,
+        "id": f"{'img' if src.suffix.lower() in IMAGE_EXT else 'vid'}_{digest[:12]}",
+        "kind": KIND_IMAGE if src.suffix.lower() in IMAGE_EXT else KIND,
         "subject": subject,
         "observed_at": observed,
         "observed_at_source": "manual" if (observed_at or "").strip() else "file_meta",

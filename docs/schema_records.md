@@ -7,8 +7,10 @@
 | 종류 | 층 | 3층 입력 | 출처 | 필수 | 선택 | PII |
 |---|---|---|---|---|---|---|
 | `subject` | 등록부 | 예 | `d1_first_farm.md (발행자 2026-09-18)`, `farmer`, `publisher` | id, parcel, label, crop, season, source | anchor, anchor_kind, grid_unit, cert, status, recorded_at, note | — |
+| `user` | 등록부 | — | `farmer`, `publisher` | id, name, role, parcels, source, recorded_at | note | — |
 | `parcel` | 등록부 | — | `farmer`, `publisher` | id, source, recorded_at, observed_at, resolution | address, pnu, lat, lon, area_m2, area_source, use, mall_supply, environment, soil_texture, slope, drainage, irrigation, microclimate, night_light, cert_claimed, cert_legal, cert_since, seed_source, variety, soil_exam_ref, note | address, pnu, lat, lon |
 | `observation.video` | 1층 사실 | 예 | `farmer` | id, subject, observed_at, observed_at_source, recorded_at, source, resolution, origin, file, sha256, bytes | width, height, duration_sec, gps, note | gps |
+| `observation.image` | 1층 사실 | 예 | `farmer` | id, subject, observed_at, observed_at_source, recorded_at, source, resolution, origin, file, sha256, bytes | width, height, duration_sec, gps, note | gps |
 | `event` | 1층 사실 | 예 | `farmer`, `mall:settlement` | id, type, subject, observed_at, recorded_at, source, resolution | advice_ref, materials, quantity, quality_grade, return_reason, note, chat_ref, risk, severity | — |
 | `observation.note` | 1층 사실 | 예 | `farmer` | id, subject, text, observed_at, recorded_at, source, resolution | tags, chat_ref | — |
 | `plan.farmer` | 1층 계획 | 예 | `farmer` | id, subject, task, planned_day, recorded_at, observed_at, source, resolution | note, chat_ref, done_ref | — |
@@ -22,7 +24,7 @@
 | `plan.task` | 1층 계획 | 예 | `computed:grid` | source, resolution, stage, task, work_day, work_date, prep_date_own, prep_date_rental, tools, materials, retry_possible, deadline_day, deadline_date, source_note | — | — |
 | `plan.capture` | 1층 계획 | 예 | `computed:grid` | source, resolution, stage, task, work_day, work_date, prep_date_own, prep_date_rental, tools, materials, retry_possible, deadline_day, deadline_date, source_note | — | — |
 | `plan.target_date` | 1층 계획 | 예 | `farmer` | subject, target_date, source, resolution | id, recorded_at, observed_at, note, chat_ref | — |
-| `chat.message` | 1층 사실 | — | `computed:chat`, `farmer`, `publisher` | id, subject, role, text, observed_at, recorded_at, source, resolution | drafts, confirmed_refs, reply_ref | — |
+| `chat.message` | 1층 사실 | — | `computed:chat`, `farmer`, `publisher` | id, subject, role, text, observed_at, recorded_at, source, resolution | drafts, confirmed_refs, reply_ref, retry_of, edit_of, request_ref, input_mode, media_refs | — |
 | `feedback.request` | 되먹임 | — | `farmer`, `publisher` | id, text, target, status, observed_at, recorded_at, source, resolution | subject, target_ref, response, item_ref | — |
 | `feedback.prediction` | 되먹임 | — | `computed:judge` | id, subject, decision_id, envelope_kind, payload, payload_hash, observed_at, recorded_at, source, resolution | grade, code_head | — |
 | `feedback.outcome` | 되먹임 | — | `computed:evolve` | id, subject, decision_id, prediction_id, verdict, detail, observed_at, recorded_at, source, resolution | actual_ref | — |

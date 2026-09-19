@@ -59,11 +59,26 @@ NAV_ORDER: tuple[str, ...] = (
 
 _LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 
+# [M-13 음성 · 반입 · 동기화 — 발행자 2026-09-19]
+VOICE_SILENCE_MS: int = int(os.environ.get("AGRODSS_VOICE_SILENCE_MS", "5000"))   # 이만큼 입력 신호가 없으면 질문 종료
+VOICE_MAX_MS: int = int(os.environ.get("AGRODSS_VOICE_MAX_MS", "90000"))          # 한 질문의 최대 녹음 길이
+MAX_UPLOAD_MB: int = int(os.environ.get("AGRODSS_MAX_UPLOAD_MB", "300"))          # 채팅 반입 한 번의 본문 상한
+# [D-16 대기] 휴대폰 동기화 — 같은 Wi-Fi 안에서만 · 토큰 없이는 절대 열리지 않는다. 기본은 루프백(D-6).
+BIND: str = os.environ.get("AGRODSS_BIND") or HOST
+LAN_TOKEN: str = os.environ.get("AGRODSS_LAN_TOKEN", "").strip()
+LAN_TOKEN_MIN: int = 16
+LAN_BIND = "0.0.0.0"
+COOKIE_NAME = "agrodss_t"
+
 
 def assert_local(host: str) -> str:
-    """루프백이 아니면 기동 자체를 거부한다. 반환값은 검증된 host."""
-    if host not in _LOOPBACK:
-        raise RuntimeError(
-            f"[D-6] 외부 배포 금지 — 루프백이 아닌 host 에 묶을 수 없다: {host!r}"
-        )
-    return host
+    """루프백이 아니면 기동 자체를 거부한다. 반환값은 검증된 host.
+    예외 하나(D-16 옵트인): host=0.0.0.0 이고 AGRODSS_LAN_TOKEN(16자 이상)이 있을 때만 — 그때도 토큰 없는 요청은 401."""
+    if host in _LOOPBACK:
+        return host
+    if host == LAN_BIND and len(LAN_TOKEN) >= LAN_TOKEN_MIN:
+        return host
+    raise RuntimeError(
+        f"[D-6] 외부 배포 금지 — 루프백이 아닌 host 에 묶을 수 없다: {host!r} "
+        f"(같은 Wi-Fi 동기화는 AGRODSS_BIND=0.0.0.0 + AGRODSS_LAN_TOKEN {LAN_TOKEN_MIN}자 이상 — D-16)"
+    )
