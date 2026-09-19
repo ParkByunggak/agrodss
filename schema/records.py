@@ -84,7 +84,7 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
        ("width", "height", "duration_sec", "gps", "note"), sources=("farmer",), layer3_input=True, pii=("gps",)),
     _k("event", "1층 사실",
        ("id", "type", "subject", "observed_at", "recorded_at", "source", "resolution"),
-       ("advice_ref", "materials", "quantity", "quality_grade", "return_reason", "note", "chat_ref"),
+       ("advice_ref", "materials", "quantity", "quality_grade", "return_reason", "note", "chat_ref", "risk", "severity"),
        sources=("farmer", "mall:settlement"), layer3_input=True),
     _k("observation.note", "1층 사실",   # I-3 §3 직접 관찰값 — 농가가 본 것(최종 심급). 채팅에서 분류돼 확인 뒤 들어온다
        ("id", "subject", "text", "observed_at", "recorded_at", "source", "resolution"),

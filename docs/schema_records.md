@@ -9,7 +9,7 @@
 | `subject` | 등록부 | 예 | `d1_first_farm.md (발행자 2026-09-18)`, `farmer`, `publisher` | id, parcel, label, crop, season, source | anchor, anchor_kind, grid_unit, cert, status, recorded_at, note | — |
 | `parcel` | 등록부 | — | `farmer`, `publisher` | id, source, recorded_at, observed_at, resolution | address, pnu, lat, lon, area_m2, area_source, use, mall_supply, environment, soil_texture, slope, drainage, irrigation, microclimate, night_light, cert_claimed, cert_legal, cert_since, seed_source, variety, soil_exam_ref, note | address, pnu, lat, lon |
 | `observation.video` | 1층 사실 | 예 | `farmer` | id, subject, observed_at, observed_at_source, recorded_at, source, resolution, origin, file, sha256, bytes | width, height, duration_sec, gps, note | gps |
-| `event` | 1층 사실 | 예 | `farmer`, `mall:settlement` | id, type, subject, observed_at, recorded_at, source, resolution | advice_ref, materials, quantity, quality_grade, return_reason, note, chat_ref | — |
+| `event` | 1층 사실 | 예 | `farmer`, `mall:settlement` | id, type, subject, observed_at, recorded_at, source, resolution | advice_ref, materials, quantity, quality_grade, return_reason, note, chat_ref, risk, severity | — |
 | `observation.note` | 1층 사실 | 예 | `farmer` | id, subject, text, observed_at, recorded_at, source, resolution | tags, chat_ref | — |
 | `plan.farmer` | 1층 계획 | 예 | `farmer` | id, subject, task, planned_day, recorded_at, observed_at, source, resolution | note, chat_ref, done_ref | — |
 | `decision.noncompliance` | 1층 사실 | 예 | `farmer` | id, subject, planned_task, planned_day, reason, observed_at, recorded_at, source, resolution | — | — |

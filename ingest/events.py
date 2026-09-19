@@ -15,8 +15,11 @@ from typing import Any
 from schema import records as sch
 
 ROOT = Path(__file__).resolve().parent.parent
-EVENT_TYPES = ("파종", "정식", "방제", "시비", "관수", "제초", "예찰", "보식", "배수", "수확", "납품", "저장", "소독", "정리", "기타")
+EVENT_TYPES = ("파종", "정식", "방제", "시비", "관수", "제초", "예찰", "보식", "배수", "수확", "납품", "저장", "소독", "정리", "피해", "기타")
 SOURCE = "farmer"
+# [U-16] 피해 사건 — 경보(risk_alert)의 예측을 대조할 실제. risk 는 격자 위험 이름과 대조되는 말(서리 · 부패 · 해충 · 병 …)
+SEVERITIES = ("경미", "보통", "심함")
+DAMAGE_TYPE = "피해"
 
 
 def events_dir() -> Path:
@@ -69,13 +72,19 @@ def _need_day(observed_at: str | None, what: str = "사건") -> str:
 
 def add_event(subject: str, event_type: str, observed_at: str, note: str = "", advice_ref: str | None = None,
               materials: list[str] | None = None, quantity: str | None = None, now: datetime | None = None,
-              chat_ref: str | None = None) -> dict[str, Any]:
-    """사건 1건. observed_at(대상 시각) 필수 — 없으면 거부(지금 시각으로 메우지 않는다)."""
+              chat_ref: str | None = None, risk: str | None = None, severity: str | None = None) -> dict[str, Any]:
+    """사건 1건. observed_at(대상 시각) 필수 — 없으면 거부(지금 시각으로 메우지 않는다).
+    피해(U-16)는 무엇의 피해인지(risk) 없이는 들어가지 않는다 — 경보와 대조할 수 없는 피해는 되먹임이 아니다."""
     if event_type not in EVENT_TYPES:
         raise EventError(f"사건 종류가 아니다: {event_type!r} ({', '.join(EVENT_TYPES)})")
     if not subject:
         raise EventError("재배 단위(subject) 필수")
     observed_at = _need_day(observed_at)
+    risk = (risk or "").strip() or None
+    if event_type == DAMAGE_TYPE and not risk:
+        raise EventError("피해 사건은 무엇의 피해인지(risk — 서리 · 부패 · 해충 · 병 …)가 있어야 한다")
+    if severity is not None and severity not in SEVERITIES:
+        raise EventError(f"피해 정도는 {' · '.join(SEVERITIES)} 중 하나")
     now = now or datetime.now(timezone.utc)
     rec = {
         "id": f"evt_{uuid.uuid4().hex[:12]}", "kind": "event", "type": event_type, "subject": subject,
@@ -85,6 +94,10 @@ def add_event(subject: str, event_type: str, observed_at: str, note: str = "", a
     }
     if chat_ref:
         rec["chat_ref"] = chat_ref
+    if risk:
+        rec["risk"] = risk[:100]
+    if severity:
+        rec["severity"] = severity
     return _append(rec)
 
 

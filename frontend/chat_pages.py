@@ -129,6 +129,8 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
     if k == "event":
         opts = "".join(f'<option value="{_e(t)}"{" selected" if t == d.get("type") else ""}>{_e(t)}</option>' for t in ev.EVENT_TYPES)
         parts.append(f'<select name="type">{opts}</select>')
+        if d.get("type") == ev.DAMAGE_TYPE:
+            parts.append(f'<input name="risk" value="{_e(d.get("risk") or "")}" placeholder="무엇의 피해(서리 · 부패 · 해충 · 병){" (필요)" if "risk" in need else ""}" size="16">')
     day = d.get("observed_at") or d.get("planned_day") or d.get("target_date") or ""
     if k != "feedback.request":
         parts.append(f'<input name="day" value="{_e(day)}" placeholder="YYYY-MM-DD{" (필요)" if need else ""}" size="12">')

@@ -50,6 +50,13 @@ TOPIC: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("material_citation", ("약", "자재", "비료", "공시", "뿌려도", "써도", "쳐도")),
     ("plan_vs_actual", ("해야", "할 일", "계획", "뭐", "무엇", "다음")),
 )
+# [U-16] 피해 어휘 — 갈래는 judge.evolve.RISK_FAMILIES 와 같은 이름(대조가 갈래로 잇는다)
+DAMAGE_WORDS: dict[str, tuple[str, ...]] = {
+    "서리": ("서리 맞", "서리에", "얼었", "얼어", "냉해", "동해", "서리 피해"),
+    "부패": ("썩었", "썩어", "물러졌", "무름", "부패", "녹았"),
+    "해충": ("벌레 먹", "벌레가 먹", "파리 유충", "구더기", "갉아", "유충이", "진딧물이", "나방이", "굼벵이가"),
+    "병": ("병 걸", "병에 걸", "병이 났", "반점이", "곰팡이", "잎마름", "노균", "탄저"),
+}
 KIND_LABEL = {"event": "사건", "observation.note": "관찰", "plan.farmer": "계획", "plan.target_date": "납품 계획일",
               "feedback.request": "개선 요구", "decision.noncompliance": "불이행 사유", "observation.video": "영상",
               "question": "질문", "subject.new": "새 목록"}
@@ -149,6 +156,13 @@ def _event_type(text: str) -> str | None:
     return None
 
 
+def _damage_risk(text: str) -> str | None:
+    for fam, words in DAMAGE_WORDS.items():
+        if any(w in text for w in words):
+            return fam
+    return "피해" if "피해" in text else None
+
+
 def classify(text: str, today: date) -> list[dict[str, Any]]:
     """발화 → 초안 목록. 하나도 못 나누면 [] (되묻는다). 초안은 확인 전까지 아무 원장에도 안 들어간다."""
     t = text.strip()
@@ -166,6 +180,12 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
                      "needs": [] if day else ["target_date"]}]
         return [{"kind": "plan.farmer", "task": et or t[:60], "planned_day": day, "note": t, "why": "계획 어휘",
                  "needs": [] if day else ["planned_day"]}]
+    dmg = _damage_risk(t)
+    if dmg:
+        # [U-16] 피해는 사건이되 무엇의 피해인지(risk)가 있어야 경보와 대조된다. '피해'만 있고 갈래가 없으면 확인 화면이 묻는다
+        risk = None if dmg == "피해" else dmg
+        return [{"kind": "event", "type": ev.DAMAGE_TYPE, "observed_at": day or today.isoformat(), "risk": risk, "note": t,
+                 "why": f"피해 어휘 → {risk or '갈래 미상'}", "needs": [] if risk else ["risk"]}]
     if et:
         return [{"kind": "event", "type": et, "observed_at": day, "note": t, "why": f"사건 어휘 → {et}",
                  "needs": [] if day else ["observed_at"]}]
@@ -277,7 +297,7 @@ def choose_kind(msg_id: str, kind: str, today: date | None = None) -> dict[str, 
 
 
 def confirm(msg_id: str, draft_index: int = 0, day: str | None = None, event_type: str | None = None,
-            now: datetime | None = None) -> dict[str, Any]:
+            now: datetime | None = None, risk: str | None = None) -> dict[str, Any]:
     """초안 → 원장. 날짜가 없으면 여기서 받은 day 가 필요하다. 확인된 레코드 id 가 메시지에 붙는다."""
     m = get_message(msg_id)
     if not m:
@@ -291,7 +311,8 @@ def confirm(msg_id: str, draft_index: int = 0, day: str | None = None, event_typ
     try:
         if k == "event":
             et = event_type or d.get("type")
-            rec = ev.add_event(sid, et, day or d.get("observed_at") or "", note=d.get("note", ""), chat_ref=ref, now=now)
+            rec = ev.add_event(sid, et, day or d.get("observed_at") or "", note=d.get("note", ""), chat_ref=ref, now=now,
+                               risk=(risk or d.get("risk")) if et == ev.DAMAGE_TYPE else None)
             if et in ("파종", "정식"):
                 s = subjects.by_id(sid)
                 if s and not s.get("anchor"):
@@ -334,7 +355,8 @@ def diary(subject_id: str) -> list[dict[str, Any]]:
     for r in ev.list_records(subject_id):
         k = r.get("kind")
         if k == "event":
-            txt = f"{r.get('type')} — {r.get('note') or ''} {', '.join(r.get('materials') or [])}".strip(" —")
+            head = f"{r.get('type')}({r.get('risk')})" if r.get("risk") else str(r.get("type"))
+            txt = f"{head} — {r.get('note') or ''} {', '.join(r.get('materials') or [])}".strip(" —")
         elif k == "observation.note":
             txt = r.get("text", "")
         elif k == "plan.farmer":

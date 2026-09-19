@@ -368,7 +368,8 @@ class Handler(BaseHTTPRequestHandler):
         elif p.startswith("/c/") and p.endswith("/confirm"):
             sid = unquote(p[len("/c/"):-len("/confirm")])
             try:
-                rec = chat.confirm(form.get("msg", ""), int(form.get("i") or 0), day=form.get("day") or None, event_type=form.get("type") or None)
+                rec = chat.confirm(form.get("msg", ""), int(form.get("i") or 0), day=form.get("day") or None, event_type=form.get("type") or None,
+                                   risk=form.get("risk") or None)
                 status, body = chat_page(sid, message=f"원장에 들어감 {rec['id']} · {chat.KIND_LABEL.get(rec['kind'], rec['kind'])} {rec.get('observed_at', '')}")
             except (chat.ChatError, ValueError) as e:
                 status, body = chat_page(sid, error=str(e))

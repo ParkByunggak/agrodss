@@ -20,6 +20,32 @@ from judge.envelope import Envelope, weakest
 
 CAP_GRADE = "추정"
 HARVEST_TOLERANCE_DAYS_KEY = "error_days"
+DAMAGE_TYPE = "피해"
+ALERT_LEVELS_COUNT = ("경보", "주의")          # 예고는 아직 창이 안 열린 것 — 대조에 안 센다
+# [U-16] 피해 사건의 risk 와 격자 위험 이름을 잇는 갈래 — 양쪽을 갈래로 바꿔 비교하고, 갈래가 없으면 부분 일치
+RISK_FAMILIES: dict[str, tuple[str, ...]] = {
+    "서리": ("서리", "동해", "냉해", "얼었", "얼어", "결빙"),
+    "부패": ("부패", "썩", "무름", "습해", "물러", "장마"),
+    "해충": ("해충", "벌레", "파리", "유충", "구더기", "나방", "진딧물", "굼벵이", "응애", "총채"),
+    "병": ("병", "반점", "곰팡이", "잎마름", "노균", "탄저"),
+    "수확 지연": ("수확 지연", "지연", "추대", "웃자"),
+}
+
+
+def risk_family(text: str | None) -> str | None:
+    t = (text or "").replace(" ", "")
+    for fam, words in RISK_FAMILIES.items():
+        if any(w.replace(" ", "") in t for w in words):
+            return fam
+    return None
+
+
+def match_risk(event_risk: str | None, alert_risk: str | None) -> bool:
+    a, b = risk_family(event_risk), risk_family(alert_risk)
+    if a and b:
+        return a == b
+    x, y = (event_risk or "").replace(" ", ""), (alert_risk or "").replace(" ", "")
+    return bool(x and y) and (x in y or y in x)
 
 
 # ── 예측 원장에 실을 주장(대조 가능한 것만) ──────────────────────────────────────────
@@ -30,7 +56,9 @@ def payload_of(env: Envelope) -> dict[str, Any] | None:
     if env.decision_id == "harvest_timing":
         return {"window_start": r.get("window_start"), "window_end": r.get("window_end"), "error_days": r.get("error_days")}
     if env.decision_id == "risk_alert":
-        return {"alerts": sorted(f"{a.get('level')}:{a.get('risk') or a.get('name')}" for a in r.get("alerts", []))}
+        alerts = sorted(({"level": a.get("level"), "risk": a.get("risk") or a.get("name"), "recoverable": bool(a.get("recoverable"))}
+                         for a in r.get("alerts", [])), key=lambda a: (str(a["risk"]), str(a["level"])))
+        return {"alerts": alerts, "horizon_days": int(r.get("horizon_days") or 0)}
     if env.decision_id == "plan_vs_actual":
         return {"missed": sorted(row["task"] for row in r.get("rows", []) if row.get("status") == "놓침")}
     return None            # 사실 인용은 주장이 아니다 — 대조할 것이 없다
@@ -69,11 +97,58 @@ def measure(subject: str, today: date, events: list[dict[str, Any]] | None = Non
             else:
                 o = None
         elif did == "risk_alert":
-            o = fb.add_outcome(pred, "대조 불가", "피해·발생 사건의 입력형이 아직 없다(U-16) — 경보는 대조 못 한다", observed_at=today.isoformat()) if p.get("alerts") else None
+            out += _measure_risk(subject, today, events)
+            o = None
         else:
             o = None
         if o:
             out.append(o)
+    return out
+
+
+def _pred_window(pred: dict[str, Any]) -> tuple[date, date]:
+    as_of = date.fromisoformat(pred["observed_at"][:10])
+    return as_of, as_of + timedelta(days=int(pred["payload"].get("horizon_days") or 0))
+
+
+def _measure_risk(subject: str, today: date, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """[U-16] 경보 ↔ 피해 사건.
+    (a) 피해가 있으면: 그 날을 창(as_of ~ as_of+horizon)에 품는 예측 중 같은 갈래를 경보·주의한 것이 있나 → 적중 / 없으면 빗나감(놓친 경보)
+    (b) 창이 지난 경보에 피해가 없으면: 회복 불가 위험은 과경보 허용(H 비대칭) → 대조 불가 · 회복 가능 위험은 빗나감(과경보)
+    사건이 아예 없으면 값을 메우지 않는다 — (b)는 예측 창이 지난 뒤에만."""
+    preds = [r for r in fb.list_records("feedback.prediction", subject) if r.get("decision_id") == "risk_alert"]
+    if not preds:
+        return []
+    out: list[dict[str, Any]] = []
+    damages = sorted((e for e in events if e.get("type") == DAMAGE_TYPE and e.get("observed_at")), key=lambda e: e["observed_at"])
+    for dmg in damages:
+        d = date.fromisoformat(dmg["observed_at"][:10])
+        covering = [p for p in preds if _pred_window(p)[0] <= d <= _pred_window(p)[1]]
+        hit = next((p for p in covering if any(a.get("level") in ALERT_LEVELS_COUNT and match_risk(dmg.get("risk"), a.get("risk"))
+                                               for a in p["payload"].get("alerts", []))), None)
+        if hit:
+            o = fb.add_outcome(hit, "적중", f"피해 {dmg.get('risk')} {d} — 창 안에 같은 갈래 경보가 있었다", actual_ref=dmg.get("id"), observed_at=d.isoformat())
+        else:
+            base = (covering or [p for p in preds if _pred_window(p)[0] <= d] or preds)[-1]
+            o = fb.add_outcome(base, "빗나감", f"피해 {dmg.get('risk')} {d} — 앞선 경보 없음(놓친 경보)", actual_ref=dmg.get("id"), observed_at=d.isoformat())
+        if o:
+            out.append(o)
+    latest = preds[-1]
+    start, end = _pred_window(latest)
+    if today > end:
+        for a in latest["payload"].get("alerts", []):
+            if a.get("level") not in ALERT_LEVELS_COUNT:
+                continue
+            if any(start <= date.fromisoformat(e["observed_at"][:10]) <= end and match_risk(e.get("risk"), a.get("risk")) for e in damages):
+                continue
+            if a.get("recoverable"):
+                o = fb.add_outcome(latest, "빗나감", f"{a.get('level')} {a.get('risk')} — 창({start}~{end}) 안 피해 없음(과경보 · 회복 가능 위험은 신호 있을 때만)",
+                                   actual_ref=f"alert:{a.get('risk')}", observed_at=today.isoformat())
+            else:
+                o = fb.add_outcome(latest, "대조 불가", f"{a.get('level')} {a.get('risk')} — 창 안 피해 없음. 회복 불가 위험은 과경보 허용(H) — 빗나감으로 세지 않는다",
+                                   actual_ref=f"alert:{a.get('risk')}", observed_at=today.isoformat())
+            if o:
+                out.append(o)
     return out
 
 
@@ -89,7 +164,8 @@ def propose(subject: str, today: date, reasons: list[dict[str, Any]] | None = No
                             "보수", subject=subject, target_ref=o["decision_id"], auto_apply=True, applied_ref="grade_cap")
             if it:
                 made.append(it)
-            it = fb.propose("feedback.outcome", o["id"] + ":grid", "grid", f"{o['decision_id']}: {o['detail']} — 격자 창(window) 재검토. 사람이 채택한다",
+            what = "격자 창(window) 재검토" if o["decision_id"] == "harvest_timing" else "신호 임계 · 경보 규칙(달력 창 · 회복 가능 여부) 재검토"
+            it = fb.propose("feedback.outcome", o["id"] + ":grid", "grid", f"{o['decision_id']}: {o['detail']} — {what}. 사람이 채택한다",
                             "확장", subject=subject, target_ref=o["decision_id"])
             if it:
                 made.append(it)
