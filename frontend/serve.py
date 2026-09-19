@@ -171,6 +171,14 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         out.append(f"<p class=\"meta\">{_e(c['note'])}</p>")
     elif e["kind"] == "판단 불가(데이터)":
         out.append("<ul>" + "".join(f"<li>없는 축 <code>{_e(m['axis'])}</code> — 채울 수 있는 자: {_e(m['who_can_fill'])}</li>" for m in e["missing"]) + "</ul>")
+    elif e["kind"] == "판단함" and r.get("summary"):
+        # [2026-09-20 실측 — 표현 층 왜곡] M-10 단계 결정(웃거름 · 병해충 · 배수)의 '판단함' 봉투가 이 화면에서 배지와 입력 축 표만 보였다 —
+        # 요약(상태 · 작업일 · 양 · 사유 · 경보)이 result 에 있는데 화면이 안 실었다. 발행자에게 "/judge 에서 양을 보라"고 해 놓고 화면엔 없었다
+        out.append(f"<p><b>{_e(r['summary'])}</b> · 신뢰 등급 <b>{_e(e['grade'])}</b> · 재판정 {_e(e['revisit_at'])}</p>")
+        if r.get("alerts"):
+            out.append("<table><tr><th>수준</th><th>위험</th><th>칸</th><th>회복</th><th>근거</th></tr>" + "".join(
+                f'<tr><td><span class="st st-{LEVEL_CLASS.get(a["level"], "대기")}">{_e(a["level"])}</span></td><td><b>{_e(a["risk"])}</b></td>'
+                f'<td>{_e(a["stage"])}</td><td>{"가능" if a.get("recoverable") else "불가"}</td><td>{_e(a["basis"])}</td></tr>' for a in r["alerts"]) + "</table>")
     else:
         out.append(f"<p>{_e(r.get('why', ''))} {_e(r.get('who', ''))}</p>")
     if e["inputs"]:
@@ -188,7 +196,7 @@ def judge_page() -> tuple[int, str]:
         for env in envs:
             e = env.to_dict()
             _render_env(out, e, {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용(유기 공시)",
-                                 "plan_vs_actual": "계획 대 실제"}.get(e["decision_id"], e["decision_id"]))
+                                 "plan_vs_actual": "계획 대 실제"}.get(e["decision_id"], chat_pages.DECISION_LABEL.get(e["decision_id"], e["decision_id"])))   # M-10 은 등록부 이름
         out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 예찰: {_e(info.get('pest', ''))}</p>")
     footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
     return 200, render.page("AGRODSS —판단", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)

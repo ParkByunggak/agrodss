@@ -1,0 +1,72 @@
+# -*- coding: utf-8 -*-
+# [2026-09-20] 발행자에게 지시한 경로를 **HTTP 로 그대로** 걷는다 — 채팅에 문장을 넣고 → 초안 둘 → 각각 확인 → /judge 사유 기록됨 → /changes 반영됨 →
+# 메뉴. 조각 검사(분류 · 확인 · 판정 · 화면)는 다 있었지만 그 조각들을 발행자 순서로 이은 검사는 없었다(배선 래칫 — "검증 대상은 함수가 아니라 배선").
+from __future__ import annotations
+
+import http.client
+from urllib.parse import quote, urlencode
+
+from frontend import chat_pages, serve
+from ingest import chat, events as ev
+from tests.test_brand_home import srv  # noqa: F401
+
+SID = "p001-jjokpa-2026f"
+SENTENCE = "쪽파 포장에는 웃거름 주지 않고 수분공급만 표면이 마르지 않게 해 줌. 그 근거는 토양검증 상태를 기준으로 함"
+
+
+def _get(port, path):
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c.request("GET", path)
+    r = c.getresponse()
+    return r.status, r.getheader("Location"), r.read().decode("utf-8")
+
+
+def _post(port, path, form):
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c.request("POST", path, body=urlencode(form), headers={"Content-Type": "application/x-www-form-urlencoded"})
+    r = c.getresponse()
+    return r.status, r.getheader("Location"), r.read().decode("utf-8")
+
+
+def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv):
+    # 1. 채팅 화면 — 메뉴가 있고 항목이 전부 실린다
+    st, _, body = _get(srv, f"/c/{quote(SID)}")
+    assert st == 200 and 'id="user-tab"' in body and all(f'href="{h}"' in body for h, _, _ in (i for i in chat_pages.USER_MENU if i))
+    # 2. 문장 그대로 보내기 → 초안 둘(불이행 사유 · 관찰), 계획 작업명이 계획표에서 채워져 있다
+    st, loc, _ = _post(srv, f"/c/{quote(SID)}/send", {"text": SENTENCE})
+    assert st == 302
+    st, _, body = _get(srv, loc)
+    assert body.count("확인 → 원장") == 2 and 'name="planned_task" value="웃거름 1회"' in body and 'value="2026-09-16"' in body
+    assert "불이행 사유" in body and "각각 따로 확인한다" in body
+    m = chat.list_messages(SID)[0]
+    assert m["text"] == SENTENCE and [d["kind"] for d in m["drafts"]] == ["decision.noncompliance", "observation.note"]
+    # 3. 초안 0 확인(폼이 보내는 그대로: planned_task · day) → 원장. 같은 초안 재확인은 거부, 초안 1 은 따로 확인
+    st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m["id"], "i": "0", "planned_task": "웃거름 1회", "day": "2026-09-16"})
+    assert st == 200 and "원장에 들어감" in body and "불이행 사유" in body
+    st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m["id"], "i": "0", "planned_task": "웃거름 1회", "day": "2026-09-16"})
+    assert st == 400 and "이미 확인된 초안" in body
+    st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m["id"], "i": "1", "day": ""})
+    assert st == 200 and "원장에 들어감" in body
+    recs = ev.list_records(SID)
+    assert [r["kind"] for r in recs] == ["decision.noncompliance", "observation.note"]
+    assert recs[0]["planned_task"] == "웃거름 1회" and recs[0]["planned_day"] == "2026-09-16" and recs[0]["reason"] == SENTENCE
+    # 3b. 계획표에 없는 종류("약 안 쳤다" → 방제) — 사람이 폼에서 계획 작업명·계획일을 채워 확인한다(폼 값이 원장에 실린다)
+    st, loc, _ = _post(srv, f"/c/{quote(SID)}/send", {"text": "약 안 쳤다"})
+    m2 = [x for x in chat.list_messages(SID) if x.get("role") == "farmer"][-1]     # 순서는 첫 등장 순 — 마지막 농가 발화
+    assert m2["text"] == "약 안 쳤다" and m2["drafts"][0]["needs"] == ["planned_day"] and m2["drafts"][0]["planned_task"] == "방제"
+    st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m2["id"], "i": "0", "planned_task": "방제(예찰 뒤 필요 시)", "day": "2026-09-10"})
+    assert st == 200 and "원장에 들어감" in body
+    assert ev.list_records(SID)[-1]["planned_task"] == "방제(예찰 뒤 필요 시)" and ev.list_records(SID)[-1]["planned_day"] == "2026-09-10"
+    # 4. 판단 화면 — 웃거름 1회 카드(등록부 이름)가 '사유 기록됨'을 요약으로 보이고 사유가 붙는다(전에는 M-10 카드가 배지와 축 표뿐이었다 — 2026-09-20 실측).
+    #    계획 대 실제 표의 근거 칸에도 같은 문장이 있으므로 카드 요약의 변별 표지 '사유: ' 로 본다(§7.1 4번 겹침)
+    st, _, body = _get(srv, "/judge")
+    assert st == 200 and "<h2>웃거름 1회 " in body and "top_dressing_1" not in body
+    assert "사유 기록됨 — 작업일 2026-09-16 · 마감 2026-09-24" in body and "· 사유: 쪽파 포장에는 웃거름 주지 않고" in body
+    assert "<h2>병해충 경보(칸 3) " in body and "<h2>배수 경보(칸 4) " in body
+    st, _, body = _get(srv, f"/c/{quote(SID)}")
+    assert body.count("원장에 들어감") >= 2 and "확인 → 원장" not in body
+    # 5. 영농일지에 불이행 사유 줄 · 변경 로그에 실행 중 = HEAD
+    st, _, body = _get(srv, f"/diary/{quote(SID)}")
+    assert st == 200 and "불이행 사유" in body
+    st, _, body = _get(srv, "/changes")
+    assert st == 200 and "반영됨" in body and serve.RUNNING_HEAD in body
