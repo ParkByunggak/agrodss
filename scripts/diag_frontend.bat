@@ -37,6 +37,13 @@ set "VENV=D:\vela\backend_new\venv\Scripts\python.exe"
   echo === import check with py -3 ===
   py -3 -c "import sys; sys.path.insert(0, '.'); import markdown; import frontend.serve; print('import ok')"
   echo.
+  echo === bind check with venv (.env BIND / token / port) ===
+  "%VENV%" -c "import sys; sys.path.insert(0, '.'); from frontend import serve, config; print('BIND', config.BIND, 'PORT', config.PORT, 'token set', bool(config.LAN_TOKEN)); s = serve.make_server(); print('bind ok', s.server_address); s.server_close()"
+  echo.
+  echo === git ===
+  git log --oneline -1
+  git status --short
+  echo.
   echo === port 8765 ===
   netstat -ano | findstr :8765
   echo.
