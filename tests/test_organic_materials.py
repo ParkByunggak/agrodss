@@ -25,16 +25,18 @@ def test_canon_cited_and_types():
 
 
 def test_search_keyword_and_type_and_record_shape():
-    res = om.search(om.TYPE_PEST, "비티", limit=3, today=T24)
+    # [U-15] BT 는 자재명이 '미생물'뿐 — 자재명 조건 위에 제품명 '비티'를 겹친다(제품명만으로는 안 뽑는다)
+    res = om.search(om.TYPE_PEST, "미생물", limit=3, today=T24, product_keyword="비티")
     assert res["status"] == "success" and 1 <= len(res["items"]) <= 3 and res["total"] >= len(res["items"])
     it = res["items"][0]
     assert it["kind"] == "reference.organic_material_notice" and it["source"] == om.SOURCE
     assert it["observed_at"] == "2026-09-07" and it["resolution"] == "national"
-    assert it["values"]["type"] == om.TYPE_PEST and "비티" in (it["values"]["material"] + it["values"]["product"])
+    assert it["values"]["type"] == om.TYPE_PEST and "미생물" in it["values"]["material"] and "비티" in it["values"]["product"]
+    assert it["values"]["match"] == "자재명+제품명"
 
 
 def test_search_expired_rows_are_dropped_at_query_time():
-    assert om.search(om.TYPE_PEST, "비티", today=date(2040, 1, 1))["status"] == "no_data"
+    assert om.search(om.TYPE_PEST, "미생물", today=date(2040, 1, 1), product_keyword="비티")["status"] == "no_data"
 
 
 def test_search_unknown_keyword_is_no_data_not_category():

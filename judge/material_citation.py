@@ -35,11 +35,14 @@ registry.register(registry.Decision(
     revisit_days=7,
     params={
         "per_alias_limit": 3,
-        "aliases": {"BT제": ("비티", om.TYPE_PEST), "BT": ("비티", om.TYPE_PEST), "님": ("님", om.TYPE_PEST),
-                    "유황": ("황", om.TYPE_PEST), "석회보르도액": ("보르도", om.TYPE_PEST), "페로몬": ("페로몬", om.TYPE_PEST),
-                    "천적": ("천적", om.TYPE_PEST), "유기질 비료": ("유기질", om.TYPE_SOIL), "유기질": ("유기질", om.TYPE_SOIL),
-                    "완숙 퇴비": ("퇴비", om.TYPE_SOIL), "퇴비": ("퇴비", om.TYPE_SOIL)},
-        "aliases_source": "격자 자재 칸 문면의 계열명 ↔ 공시 자재명(MTRIL_NM) 부분일치 검색어 — 추론, 발행자 검토 대기",
+        # [U-15 2026-09-19] 계열 → 자재명 성분 검색어(제품명은 안 본다). BT 만 자재명이 '미생물'뿐이라 제품명 '비티'를 **자재명 조건 위에** 겹친다
+        "aliases": {"BT제": {"material": "미생물", "product": "비티", "type": om.TYPE_PEST}, "BT": {"material": "미생물", "product": "비티", "type": om.TYPE_PEST},
+                    "님": {"material": "님", "type": om.TYPE_PEST}, "유황": {"material": "황", "type": om.TYPE_PEST},
+                    "석회보르도액": {"material": "보르도", "type": om.TYPE_PEST}, "페로몬": {"material": "페로몬", "type": om.TYPE_PEST},
+                    "천적": {"material": "천적", "type": om.TYPE_PEST}, "유기질 비료": {"material": "유기질", "type": om.TYPE_SOIL},
+                    "유기질": {"material": "유기질", "type": om.TYPE_SOIL}, "완숙 퇴비": {"material": "퇴비", "type": om.TYPE_SOIL},
+                    "퇴비": {"material": "퇴비", "type": om.TYPE_SOIL}},
+        "aliases_source": "격자 자재 칸 문면의 계열명 ↔ 공시 자재명(MTRIL_NM) 성분 부분일치 검색어(U-15 정밀화) — 추론, 발행자 검토 대기",
     },
 ))
 
@@ -136,10 +139,10 @@ def judge(subject: dict[str, Any], today: date | None = None, psis_search=None) 
         if alias is None:
             groups.append({"family": fam, "status": "no_alias", "items": [], "note": "검색어 대응 없음 — params.aliases 보강 대상"})
             continue
-        kw, mtype = alias
-        res = om.search(mtype, kw, limit=int(d.params["per_alias_limit"]), today=today)
-        groups.append({"family": fam, "keyword": kw, "type": mtype, "status": res["status"], "total": res["total"],
-                       "items": [i["values"] for i in res["items"]]})
+        kw, mtype, pk = alias["material"], alias["type"], alias.get("product")
+        res = om.search(mtype, kw, limit=int(d.params["per_alias_limit"]), today=today, product_keyword=pk)
+        groups.append({"family": fam, "keyword": kw + (f"+{pk}" if pk else ""), "type": mtype, "match": res.get("match"),
+                       "status": res["status"], "total": res["total"], "items": [i["values"] for i in res["items"]]})
     fetched = canon.get("fetched_at")
     fetched_iso = f"{fetched[:4]}-{fetched[4:6]}-{fetched[6:]}" if fetched and len(fetched) == 8 else fetched
     inputs = [AxisUse("cert", None, subject.get("source", "farmer"), "cultivation_unit", "관측"),

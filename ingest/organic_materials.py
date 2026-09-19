@@ -50,17 +50,34 @@ def _valid(rows: list[dict[str, Any]], today: date) -> list[dict[str, Any]]:
     return [r for r in rows if (r.get("PBLNTF_END_DE") or "") >= t]
 
 
+def material_components(material_name: str | None) -> list[str]:
+    """자재명은 성분을 '+' 로 잇는다('규산나트륨+황' · '님추출물+미생물'). 성분 단위로 본다."""
+    return [c.strip() for c in (material_name or "").split("+") if c.strip()]
+
+
+def material_matches(material_name: str | None, keyword: str) -> bool:
+    """[U-15] 자재명 **성분** 안의 부분일치 — 한국어 복합명사('석회유황합제' · '가축분퇴비')는 토큰 경계가 없어 성분 부분일치가 맞다.
+    제품명은 여기서 보지 않는다 — '황금바다골드'(황) · '루트님유박'(님) 같은 상표 오탐의 원인이었다(실측 2026-09-19: 황 17 · 님 4 · 유기질 5건)."""
+    k = keyword.strip()
+    return bool(k) and any(k in c for c in material_components(material_name))
+
+
 def search(material_type: str | None = None, keyword: str | None = None, limit: int = 5,
-           today: date | None = None) -> dict[str, Any]:
-    """공시 자재 검색 → 1층 참조 레코드 목록. 조회 시점 유효분만. 0건이면 no_data."""
+           today: date | None = None, product_keyword: str | None = None) -> dict[str, Any]:
+    """공시 자재 검색 → 1층 참조 레코드 목록. 조회 시점 유효분만. 0건이면 no_data.
+    keyword 는 자재명 성분 부분일치(제품명은 안 본다). product_keyword 는 **자재명 조건 위에** 제품명 부분일치를 겹친다 —
+    BT 처럼 자재명이 '미생물'뿐이라 제품명(비티박사 · 순천비티제)으로만 갈리는 계열용. 제품명만으로 뽑는 길은 없다."""
     today = today or date.today()
     canon = load()
     rows = _valid(canon.get("rows", []), today)
     if material_type:
         rows = [r for r in rows if r.get("MTRIL_TYPE_NM") == material_type]
     if keyword:
-        k = keyword.strip()
-        rows = [r for r in rows if k in (r.get("MTRIL_NM") or "") or k in (r.get("PRODUCT_NM") or "")]
+        rows = [r for r in rows if material_matches(r.get("MTRIL_NM"), keyword)]
+    if product_keyword:
+        pk = product_keyword.strip()
+        rows = [r for r in rows if pk and pk in (r.get("PRODUCT_NM") or "")]
+    match = ("자재명" if keyword else "") + ("+제품명" if product_keyword else "")
     total = len(rows)
     rows.sort(key=lambda r: r.get("PBLNTF_END_DE") or "", reverse=True)
     fetched = canon.get("fetched_at")
@@ -70,9 +87,9 @@ def search(material_type: str | None = None, keyword: str | None = None, limit: 
         "source": SOURCE, "resolution": "national",
         "values": {"notice_no": r.get("PBLNTF_NO"), "type": r.get("MTRIL_TYPE_NM"), "material": r.get("MTRIL_NM"),
                    "product": r.get("PRODUCT_NM"), "price": r.get("PRODUCT_PC"), "company": r.get("CMPNY_NM"),
-                   "valid_until": r.get("PBLNTF_END_DE")},
+                   "valid_until": r.get("PBLNTF_END_DE"), "match": match or "전체"},
     } for r in rows[:limit]]
-    return {"status": "success" if items else "no_data", "items": items, "total": total,
+    return {"status": "success" if items else "no_data", "items": items, "total": total, "match": match or "전체",
             "fetched_at": fetched, "note": "공시 = 유기재배에 쓸 수 있음(인정)이지 효능 보증이 아니다"}
 
 
