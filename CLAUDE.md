@@ -52,6 +52,11 @@
   (VELA 에서 네 번 조용히 실패했다 — `>/dev/null` 이 실패를 삼킨다).
 - Windows: 파이썬 자식은 `encoding="utf-8", errors="replace"`. PowerShell `>` 리다이렉트로
   한글 파일을 쓰지 않는다(UTF-16).
+- **훅(U-13)**: `.claude/settings.json` PreToolUse(Bash|PowerShell) →
+  `scripts/hook_block_shell_authoring.py` 가 heredoc·인라인(-c/-e)·PowerShell 파일 쓰기와
+  큰따옴표 인라인 안 백틱·`$(` 를 막는다(읽기 전용 측정은 통과). 래칫 `tests/test_hook_guard.py`.
+  **가드 창**: 훅은 세션 시작 시 읽혀 만든 회차에는 안 돈다 — 세션 시작 시 스크래치패드에
+  heredoc 파일 쓰기 1회 시도로 활성을 확인한다(차단되면 활성, 통과하면 그 세션은 규율로만 지킨다).
 
 ## 검사 규율
 
