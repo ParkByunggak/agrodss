@@ -35,6 +35,20 @@ def test_search_keyword_and_type_and_record_shape():
     assert it["values"]["match"] == "자재명+제품명"
 
 
+def test_search_items_pass_schema_and_carry_no_price_and_citation_validates_at_exit():
+    # [코드 평가 C1 · 2026-09-19] 검색 항목에 금지 필드 price 가 실려 인용 봉투(사실 인용 예외 경로)로 화면까지 닿았다.
+    # 검색 산출은 스키마를 통과해야 하고, 인용 판정기는 출구에서 sch.validate 를 거친다(게이트 없는 유일한 값 경로의 관문).
+    from schema import records as sch
+    from pathlib import Path
+    res = om.search(om.TYPE_PEST, "미생물", limit=3, today=T24, product_keyword="비티")
+    for it in res["items"]:
+        assert sch.validate(it) and "price" not in it["values"] and not (sch.FORBIDDEN_FIELDS & set(it["values"]))
+    src = Path(MC.__file__).read_text(encoding="utf-8")
+    blk = src[src.index("for fam in fams:"):]
+    blk = blk[:blk.index("fetched = canon.get")]
+    assert "sch.validate(i)" in blk and '"items": [' in blk                      # 출구에서 검증한 값만 싣는다
+
+
 def test_search_expired_rows_are_dropped_at_query_time():
     assert om.search(om.TYPE_PEST, "미생물", today=date(2040, 1, 1), product_keyword="비티")["status"] == "no_data"
 

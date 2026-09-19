@@ -37,7 +37,9 @@ ITEM_MAP: dict[str, tuple[str, str]] = {
 CROP_CODES: dict[str, dict[str, dict[str, str]]] = {
     "쪽파": {"FrtlzrUse": {"노지": "07027", "시설": "07035"}, "FrtlzrStdUse": {"노지": "07014", "시설": "07015"}},
 }
-DEFAULT_ENV = "노지"
+# [코드 평가 C2 · 2026-09-19] 재배환경 기본값(DEFAULT_ENV="노지")을 없앴다 — 미상이면 노지 코드(07027)로 처방을 받아 시설 필지에
+# 노지 처방이 **정본 저장소**에 들어가던 대리값(헌법 "fallback 대표값 강제 금지 — 수령 불명 시 되묻기"). 이제 미상은 CodeError 로 되묻는다.
+ENVIRONMENTS = ("노지", "시설")
 # VELA 명세서 기본값(가축분 혼합비율) — 응답의 퇴비량 산정에 쓰이는 파라미터. 출처: fertilizer_service._ANIMIX_DEFAULTS
 ANIMIX_DEFAULTS = {"animix_Ratio_Cattl": "28", "animix_Ratio_Pig": "22", "animix_Ratio_Chick": "19"}
 
@@ -47,11 +49,15 @@ class CodeError(ValueError):
 
 
 def crop_code(crop: str, api: str, environment: str | None = None) -> str:
-    env = environment or DEFAULT_ENV
+    """작물코드. 재배환경이 없으면 **묻는다**(기본값으로 메우지 않는다) — 노지/시설은 코드가 다르고 처방이 정본으로 저장된다."""
+    if not environment:
+        raise CodeError(f"재배환경 미상: {crop!r} — 필지 등록부 environment(노지|시설)를 채우거나 --env 로 준다. 기본값으로 메우지 않는다")
+    if environment not in ENVIRONMENTS:
+        raise CodeError(f"재배환경 어휘 밖: {environment!r} — {' | '.join(ENVIRONMENTS)}")
     try:
-        return CROP_CODES[crop][api][env]
+        return CROP_CODES[crop][api][environment]
     except KeyError:
-        raise CodeError(f"{api} 작물코드 미등록: {crop!r}/{env!r} — VELA crop_code_crosswalk.json 에서 인용해 CROP_CODES 에 추가(실측 확인 뒤)")
+        raise CodeError(f"{api} 작물코드 미등록: {crop!r}/{environment!r} — VELA crop_code_crosswalk.json 에서 인용해 CROP_CODES 에 추가(실측 확인 뒤)")
 
 
 def _now() -> str:

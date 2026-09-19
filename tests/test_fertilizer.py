@@ -37,11 +37,27 @@ def _soil_isolated(tmp_path, monkeypatch):
 
 # ── 코드 · 파싱 ────────────────────────────────────────────────────────────────
 def test_crop_codes_are_separate_namespaces():
-    assert fz.crop_code("쪽파", "FrtlzrUse") == "07027" and fz.crop_code("쪽파", "FrtlzrStdUse") == "07014"
+    assert fz.crop_code("쪽파", "FrtlzrUse", "노지") == "07027" and fz.crop_code("쪽파", "FrtlzrStdUse", "노지") == "07014"
     assert fz.crop_code("쪽파", "FrtlzrUse", "시설") == "07035" and fz.crop_code("쪽파", "FrtlzrStdUse", "시설") == "07015"
-    assert fz.crop_code("쪽파", "FrtlzrUse") != fz.crop_code("쪽파", "FrtlzrStdUse")          # 혼용 금지의 실체
+    assert fz.crop_code("쪽파", "FrtlzrUse", "노지") != fz.crop_code("쪽파", "FrtlzrStdUse", "노지")   # 혼용 금지의 실체
     with pytest.raises(fz.CodeError, match="미등록"):
-        fz.crop_code("배추", "FrtlzrUse")
+        fz.crop_code("배추", "FrtlzrUse", "노지")
+
+
+def test_environment_is_asked_not_defaulted():
+    # [코드 평가 C2] 재배환경 미상이면 노지(07027)로 메워 시설 필지에 노지 처방이 정본 저장소에 들어갔다 — 이제 되묻는다
+    assert not hasattr(fz, "DEFAULT_ENV")
+    with pytest.raises(fz.CodeError, match="재배환경 미상"):
+        fz.crop_code("쪽파", "FrtlzrUse")
+    with pytest.raises(fz.CodeError, match="어휘 밖"):
+        fz.crop_code("쪽파", "FrtlzrUse", "하우스")
+    # 수집 경로: 환경 없이 부르면 처방·표준은 no_code(되묻는 문장)이고 **저장되지 않는다**, 검정값은 그대로 저장된다
+    soil = {"kind": "observation.soil_exam", "status": "success", "pnu": "4376038025100500000", "axis": "soil_chem", "source": "external:soil_exam",
+            "resolution": "parcel", "observed_at": "2026-03-01", "fetched_at": "2026-09-19T00:00:00", "values": {"ph": 6.1}, "units": {}}
+    res = fz.collect_for_parcel("p001", "x", "쪽파", None, geocode=lambda a: {"pnu": "4376038025100500000"}, fetch_soil=lambda pnu: soil,
+                                fetch_use=lambda pnu, code: {"status": "success", "values": {"n": 1}}, fetch_std=lambda code: {"status": "success"})
+    assert res["prescription"]["status"] == "no_code" and "재배환경 미상" in res["prescription"]["message"]
+    assert res["standard"]["status"] == "no_code" and len(res["saved"]) == 1
 
 
 def test_parse_prescription_and_standard_and_no_data():
@@ -78,7 +94,7 @@ def test_store_saves_only_validated_and_keeps_previous():
 
 def test_collect_pipeline_with_injected_fetchers():
     soil = soil_exam.SoilExamRecord(status="success", pnu=PNU, observed_at="2026-04-10", fetched_at="x", values={"ph": 6.1, "organic_matter": 21.0})
-    res = fz.collect_for_parcel("p001", "충북 괴산군 연풍면 갈금리 50", "쪽파",
+    res = fz.collect_for_parcel("p001", "<지번 주소>", "쪽파", "노지",
                                 geocode=lambda a: {"lat": 36.8, "lon": 128.0, "pnu": PNU},
                                 fetch_soil=lambda pnu: soil,
                                 fetch_use=lambda pnu, code: fz.parse_prescription_xml(USE_XML, pnu, code),
@@ -88,7 +104,7 @@ def test_collect_pipeline_with_injected_fetchers():
     assert soil_store.latest("reference.fertilizer_standard", None, "07014")["values"]["pre_n"] == 12.0
     res2 = fz.collect_for_parcel("p001", "x", "쪽파", geocode=lambda a: None)
     assert res2["pnu"] is None and "PNU" in res2["message"] and res2["saved"] == []
-    res3 = fz.collect_for_parcel("p001", "x", "쪽파", geocode=lambda a: {"pnu": PNU}, fetch_soil=lambda pnu: soil,
+    res3 = fz.collect_for_parcel("p001", "x", "쪽파", "노지", geocode=lambda a: {"pnu": PNU}, fetch_soil=lambda pnu: soil,
                                  fetch_use=lambda pnu, code: fz.parse_prescription_xml(NO_DATA_XML, pnu, code),
                                  fetch_std=lambda code: fz.parse_standard_xml(NO_DATA_XML, code))
     assert res3["prescription"]["status"] == "no_data" and len(res3["saved"]) == 1            # 실패는 정본으로 안 남긴다

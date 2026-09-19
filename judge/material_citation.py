@@ -19,6 +19,7 @@ from ingest import organic_materials as om, psis
 from judge import registry
 from judge.envelope import AxisUse, Envelope
 from judge.harvest_timing import _load_unit
+from schema import records as sch
 
 DECISION_ID = "material_citation"
 
@@ -141,8 +142,10 @@ def judge(subject: dict[str, Any], today: date | None = None, psis_search=None) 
             continue
         kw, mtype, pk = alias["material"], alias["type"], alias.get("product")
         res = om.search(mtype, kw, limit=int(d.params["per_alias_limit"]), today=today, product_keyword=pk)
+        # [코드 평가 C1] 인용 항목은 봉투에 값째 실리는 유일한 경로(사실 인용 예외) — 그래서 여기서 스키마 검증을 한 번 거친다.
+        # 금지 필드(price 등)가 검색 산출에 섞이면 화면에 닿기 전에 여기서 SchemaError 로 선다(조용히 통과하지 않는다).
         groups.append({"family": fam, "keyword": kw + (f"+{pk}" if pk else ""), "type": mtype, "match": res.get("match"),
-                       "status": res["status"], "total": res["total"], "items": [i["values"] for i in res["items"]]})
+                       "status": res["status"], "total": res["total"], "items": [sch.validate(i)["values"] for i in res["items"]]})
     fetched = canon.get("fetched_at")
     fetched_iso = f"{fetched[:4]}-{fetched[4:6]}-{fetched[6:]}" if fetched and len(fetched) == 8 else fetched
     inputs = [AxisUse("cert", None, subject.get("source", "farmer"), "cultivation_unit", "관측"),

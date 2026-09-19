@@ -85,8 +85,10 @@ def search(material_type: str | None = None, keyword: str | None = None, limit: 
         "kind": "reference.organic_material_notice", "axis": ["cert"],
         "observed_at": f"{fetched[:4]}-{fetched[4:6]}-{fetched[6:]}" if fetched and len(fetched) == 8 else fetched,
         "source": SOURCE, "resolution": "national",
+        # [코드 평가 C1 · 2026-09-19] 공시 가격(PRODUCT_PC)은 싣지 않는다 — 스키마 금지 필드 `price`(I-5: 가격·재고는 3층 입력이 아니다).
+        # 인용 판정기가 이 values 를 게이트 없이 봉투에 실어 화면에 닿았다. 원장 rows 에는 남아 있어도 검색 항목에는 안 나간다.
         "values": {"notice_no": r.get("PBLNTF_NO"), "type": r.get("MTRIL_TYPE_NM"), "material": r.get("MTRIL_NM"),
-                   "product": r.get("PRODUCT_NM"), "price": r.get("PRODUCT_PC"), "company": r.get("CMPNY_NM"),
+                   "product": r.get("PRODUCT_NM"), "company": r.get("CMPNY_NM"),
                    "valid_until": r.get("PBLNTF_END_DE"), "match": match or "전체"},
     } for r in rows[:limit]]
     return {"status": "success" if items else "no_data", "items": items, "total": total, "match": match or "전체",

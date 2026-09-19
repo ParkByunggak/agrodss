@@ -116,7 +116,8 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         for g in r["groups"]:
             if g["status"] == "success":
                 out.append(f"<p><b>{_e(g['family'])}</b> <span class=\"meta\">(검색어 '{_e(g['keyword'])}' · 유효 {g['total']}건 중 {len(g['items'])})</span></p><ul>" + "".join(
-                    f"<li><b>{_e(i['product'])}</b>({_e(i['material'])}) · {_e(i['company'])} · {_e(i['price'])} · 공시 {_e(i['notice_no'])} (~{_e(i['valid_until'])})</li>" for i in g["items"]) + "</ul>")
+                    # [코드 평가 C1] 공시 가격은 싣지 않는다(스키마 금지 필드 price) — 화면이 그 값의 마지막 소비자였다
+            f"<li><b>{_e(i['product'])}</b>({_e(i['material'])}) · {_e(i['company'])} · 공시 {_e(i['notice_no'])} (~{_e(i['valid_until'])})</li>" for i in g["items"]) + "</ul>")
             else:
                 out.append(f"<p><b>{_e(g['family'])}</b> — <span class=\"st st-보류\">{_e(g['status'])}</span> {_e(g.get('note', ''))}</p>")
         out.append(f"<p class=\"meta\">{_e(c['note'])}</p>")
