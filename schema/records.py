@@ -270,10 +270,12 @@ def payload_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
 
 
-def public_fields(kind: str) -> frozenset[str]:
-    """화면·봉투에 내도 되는 필드 — PII 를 뺀 것."""
-    k = KINDS[kind]
-    return k.fields - frozenset(k.pii)
+def strip_pii(rec: dict[str, Any]) -> dict[str, Any]:
+    """[코드 평가 §1-1 · 2026-09-19] 화면·몰용 PII 제거의 **정본 하나**. kind 를 알면 그 kind 가 선언한 pii 를, 모르면 전역 PII_FIELDS 를 뺀다.
+    전에는 kind 별 pii 선언의 소비자가 문서 생성기뿐이었고 실제 제거는 parcels/media 의 손코딩 두 벌이었다(세 진실)."""
+    k = KINDS.get(str(rec.get("kind") or ""))
+    drop = frozenset(k.pii) | PII_FIELDS if k else PII_FIELDS
+    return {key: v for key, v in rec.items() if key not in drop}
 
 
 def describe() -> list[dict[str, Any]]:

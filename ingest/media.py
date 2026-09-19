@@ -417,7 +417,7 @@ def register(key: str, subject: str, observed_at: str | None = None, note: str =
 
 
 def public_view(rec: dict[str, Any]) -> dict[str, Any]:
-    """화면·몰용 — 위치 좌표는 '있음/없음'으로만."""
-    v = dict(rec)
+    """화면·몰용 — PII 는 정본 sch.strip_pii(kind 가 선언한 pii)로 빼고, 위치 좌표는 '있음/없음'으로만."""
+    v = sch.strip_pii({**rec, "kind": rec.get("kind") or KIND})
     v["gps"] = "있음" if rec.get("gps") else "없음"
     return v

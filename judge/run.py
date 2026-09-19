@@ -40,18 +40,8 @@ def gather_forecast(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | Non
     return r["records"], ""
 
 
-def harvest_for_subject(subject: dict[str, Any], today: date | None = None) -> tuple[Envelope, dict[str, str]]:
-    forecast, why = gather_forecast(subject)
-    env = harvest_timing.judge(subject, forecast=forecast, today=today)
-    return env, {"forecast": why or "예보 사용"}
-
-
-def all_harvest(today: date | None = None) -> list[tuple[dict[str, Any], Envelope, dict[str, str]]]:
-    out = []
-    for s in media.load_subjects():
-        env, info = harvest_for_subject(s, today=today)
-        out.append((s, env, info))
-    return out
+# [코드 평가 §1-1 · 2026-09-19] 옛 진입점 harvest_for_subject / all_harvest 를 지웠다 — 호출자 0 이면서 필지 병합·boundary.gate·apply_caps 를
+# 전부 우회하는 경로였다. 3층 진입점은 all_judgments 하나다(게이트 위치 래칫이 그것만 보는 이유).
 
 
 def judgments_for(subject_id: str, today: date | None = None) -> list[Envelope]:

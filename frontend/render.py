@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import html
 import re
-from pathlib import Path
 
 try:
     import markdown
@@ -29,8 +28,7 @@ def md_to_html(text: str) -> str:
     )
 
 
-def render_doc(path: Path) -> str:
-    return md_to_html(path.read_text(encoding="utf-8"))
+# [코드 평가 §1-1] render_doc(path) 은 호출자 0 — 지웠다. 문서 화면은 serve.doc_page 가 md_to_html 을 직접 부른다.
 
 
 def ledger_counts(text: str) -> dict[str, int]:

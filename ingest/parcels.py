@@ -36,8 +36,8 @@ def by_id(pid: str, path: Path | None = None) -> dict[str, Any] | None:
 
 
 def public_view(rec: dict[str, Any]) -> dict[str, Any]:
-    """화면용 — PII 를 뺀다. 있음/없음만 남긴다."""
-    out = {k: v for k, v in rec.items() if k not in sch.PII_FIELDS}
+    """화면용 — PII 를 뺀다(정본 sch.strip_pii · kind 가 선언한 pii). 있음/없음만 남긴다."""
+    out = sch.strip_pii({**rec, "kind": rec.get("kind") or "parcel"})
     out["location"] = "있음" if any(rec.get(k) is not None for k in ("address", "pnu", "lat", "lon")) else "없음"
     return out
 
