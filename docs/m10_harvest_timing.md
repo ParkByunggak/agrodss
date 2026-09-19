@@ -107,6 +107,29 @@ cert=유기만 대상, 관행은 해당 없음(PSIS 인용 M-15 ⑤ 전). 목록
 채팅 질문은 구체 결정으로 먼저 간다("웃거름 줘야 하나?" → `top_dressing_1`). 예측 원장에 싣는 주장은
 여전히 넷(수확 창 · 경보 · 놓침)뿐이다 — 새 결정의 대조 규칙은 필요해질 때 붙인다.
 
+### 시비량 처방 정본 (M-15 ⑥, `ingest/fertilizer.py` · `ingest/soil_store.py`, 2026-09-19)
+
+밑거름·웃거름의 **양**이 지식 미비로 남아 있던 것을 D-9 인용으로 채운다. 원천은 둘이고 **작물코드
+체계가 다르다**(VELA 실측: 쪽파 노지 FrtlzrUse=07027 vs FrtlzrStdUse=07014 — 혼용 금지).
+
+| 원천 | 무엇 | 해상도 | 결정이 쓰는가 |
+|---|---|---|---|
+| 흙토람 FrtlzrUse `getSoilFrtlzrExamInfo` | 필지 검정값 기반 기비·추비 N·P₂O₅·K₂O + 퇴비(kg/10a) | parcel | **쓴다** — `base_fertilization` 판단함, `top_dressing_*` 양 |
+| 흙토람 FrtlzrStdUse `getSoilFrtlzrQyList` | 작물 표준 시비량 | national | **안 쓴다** — 필지값이 아니다. 대조·표시용으로만 저장 |
+
+```
+python -m ingest.fertilizer "충청북도 괴산군 연풍면 갈금리 50" --parcel=p001 --crop=쪽파
+  주소 → PNU(VWorld) → 토양검정(SoilExam) + 처방(FrtlzrUse) + 표준(FrtlzrStdUse) → data/soil/ (git 제외 · PII)
+  success 인 것만 저장한다 — 실패를 정본으로 남기지 않는다
+```
+
+실행부는 저장소에서 검정값을 `soil_chem` 으로 붙이고(값은 봉투에 안 실린다) 처방 레코드를 경계
+게이트에 통과시켜 결정에 넘긴다. **유기 갈래**에서 N·P·K 는 화학비료가 아니라 **목표 양분량**이다 —
+공시 유기질 비료·퇴비로 환산하는 규칙은 정본이 없어 지식 미비로 병기한다(사람이 자재 성분표로 환산).
+
+키: `.env` 의 `FERTILIZER_API_KEY` · `FERTILIZER_STD_API_KEY`(VELA 이름), 비면 `DATA_GO_KR_API_KEY`.
+라이브 미확인 — 키 투입 뒤 첫 실측이 발행자 몫이다.
+
 ## 아직 안 하는 것
 
 - GDD 기반 창 이동(basis=gdd) — 격자가 anchor 기준이라 지금은 없다. 관측 온도가 쌓이면 M-10 ①' 로.

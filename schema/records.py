@@ -115,6 +115,12 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
        ("status", "pnu", "axis", "source", "resolution", "observed_at", "fetched_at"),
        ("exam_year", "address_label", "values", "units", "message"),
        sources=("external:",), layer3_input=True, subject_bound=False, pii=("pnu", "address_label")),
+    _k("reference.fertilizer_prescription", "1층 사실",   # 흙토람 FrtlzrUse — 필지 검정값 기반 N·P·K·퇴비(kg/10a). PII: pnu
+       ("axis", "status", "pnu", "crop_code", "observed_at", "fetched_at", "source", "resolution", "values", "units"),
+       ("crop_name", "raw", "message"), sources=("external:",), layer3_input=True, subject_bound=False, pii=("pnu",)),
+    _k("reference.fertilizer_standard", "1층 사실",       # 흙토람 FrtlzrStdUse — 작물 표준 시비량(전국). 필지값이 아니다
+       ("axis", "status", "crop_code", "observed_at", "fetched_at", "source", "resolution", "values", "units"),
+       ("crop_name", "raw", "message"), sources=("external:",), layer3_input=True, subject_bound=False),
     # ── 1층 계획 ─────────────────────────────────────────────────────────────────────
     _k("plan.task", "1층 계획",
        ("source", "resolution", "stage", "task", "work_day", "work_date", "prep_date_own", "prep_date_rental", "tools",
@@ -152,8 +158,10 @@ LAYER3_INPUT_KINDS: frozenset[str] = frozenset(k.name for k in KINDS.values() if
 # 3층이 받는 재배 단위 = 등록부 필드 + 필지에서 붙는 비PII·좌표 필드(경계 허용 목록의 원천)
 PARCEL_FIELDS_TO_LAYER3: tuple[str, ...] = ("lat", "lon", "area_m2", "use", "irrigation", "drainage", "slope",
                                             "microclimate", "night_light", "environment")
+# 실행부(judge.run)가 원천 저장소에서 붙이는 파생 필드 — 토양검정 값(soil_chem)과 검정일. 봉투에는 이름만 실린다(4층 격리)
+SUBJECT_DERIVED_FIELDS: tuple[str, ...] = ("soil_chem", "soil_exam_at")
 LAYER3_SUBJECT_FIELDS: frozenset[str] = (frozenset(KINDS["subject"].required) | frozenset(KINDS["subject"].optional)
-                                         | frozenset(PARCEL_FIELDS_TO_LAYER3))
+                                         | frozenset(PARCEL_FIELDS_TO_LAYER3) | frozenset(SUBJECT_DERIVED_FIELDS))
 SUBJECT_STATUS: tuple[str, ...] = ("계획", "재배 중", "종료")
 
 

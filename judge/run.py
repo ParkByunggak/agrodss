@@ -9,7 +9,7 @@ from typing import Any
 
 from ingest import events as ev
 from ingest import feedback as fb
-from ingest import kma, media, ncpms, parcels
+from ingest import kma, media, ncpms, parcels, soil_store
 from judge import boundary, evolve, harvest_timing, material_citation, plan_vs_actual, risk_alert, stage_decisions
 from judge.envelope import Envelope
 
@@ -70,6 +70,11 @@ def all_judgments(today: date | None = None, only: str | None = None) -> list[tu
             continue
         # [M-6] 필지 등록부에서 3층 허용 필드만 붙인다(주소·PNU 는 안 붙는다) — 입력 병합은 게이트 앞
         s0 = parcels.enrich_subject(s_reg, parcels.by_id(s_reg.get("parcel", "")))
+        # [M-15 ⑥] 필지 토양 원천 저장소 — 검정값은 soil_chem 으로 붙고(값은 봉투에 안 실린다), 처방 레코드는 게이트를 지나 결정으로
+        soil = soil_store.latest("observation.soil_exam", s_reg.get("parcel", ""))
+        if soil and soil.get("status") == "success" and soil.get("values"):
+            s0["soil_chem"], s0["soil_exam_at"] = dict(soil["values"]), soil.get("observed_at")
+        prescriptions = soil_store.prescriptions_for(s_reg.get("parcel", ""))
         forecast, why = gather_forecast(s0)
         pest, pwhy = gather_pest(s0)
         evts = ev.list_records(s0.get("id"), "event")
@@ -78,13 +83,15 @@ def all_judgments(today: date | None = None, only: str | None = None) -> list[tu
         videos = media.list_records(s0.get("id"))
         caps = fb.active_caps(s0.get("id"))
         # [M-3 · I-5 §3-4] 경계 게이트 — 모든 입력을 모은 뒤, 판정 직전, 한 번
-        s, recs = boundary.gate(s0, forecast=forecast, pest=pest, events=evts, ledger=ledger, reasons=reasons, videos=videos, caps=caps)
+        s, recs = boundary.gate(s0, forecast=forecast, pest=pest, events=evts, ledger=ledger, reasons=reasons, videos=videos, caps=caps,
+                                prescriptions=prescriptions)
         envs = [harvest_timing.judge(s, forecast=recs["forecast"], today=today),
                 risk_alert.judge(s, forecast=recs["forecast"], today=today, pest=recs["pest"]),
                 material_citation.judge(s, today=today),
                 plan_vs_actual.judge(s, today=today, evts=recs["events"], videos=recs["videos"], reasons=recs["reasons"])]
         # [M-10 결정 등록] 격자 칸이 선언한 나머지 8 결정 — 같은 입력, 같은 게이트 뒤
-        envs += stage_decisions.judge_all(s, today or date.today(), evts=recs["ledger"], forecast=recs["forecast"], pest=recs["pest"], harvest=envs[0])
+        envs += stage_decisions.judge_all(s, today or date.today(), evts=recs["ledger"], forecast=recs["forecast"], pest=recs["pest"], harvest=envs[0],
+                                          prescriptions=recs["prescriptions"])
         # [M-6 · D-14] 자율진화 보수 상한 — 판정기 뒤, 돌려주기 전, 한 번. 규칙은 안 바꾸고 등급만 낮춘다
         envs = evolve.apply_caps(s["id"], envs, caps=recs["caps"])
         out.append((s, envs, {"forecast": why or "예보 사용", "pest": pwhy or "예찰 사용"}))

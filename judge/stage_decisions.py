@@ -133,7 +133,23 @@ def judge_sowing_window(subject, today: date) -> Envelope:
                     result={"window_start": s.isoformat(), "window_end": e.isoformat(), "summary": f"파종 창 {s} ~ {e}(격자 칸 1)"})
 
 
-def judge_base_fertilization(subject, today: date) -> Envelope:
+def _prescription(prescriptions: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+    """필지 처방 레코드 중 success 인 최신 것. 표준 시비량(national)은 여기 안 온다 — 필지값이 아니라서 처방으로 안 쓴다."""
+    ok = [p for p in (prescriptions or []) if p.get("kind") == "reference.fertilizer_prescription" and p.get("status") == "success" and p.get("values")]
+    return sorted(ok, key=lambda p: p.get("fetched_at") or "")[-1] if ok else None
+
+
+def _prescription_input(p: dict[str, Any]) -> AxisUse:
+    return AxisUse("soil_chem", p.get("observed_at"), p["source"], p["resolution"], "관측")
+
+
+def _amounts(p: dict[str, Any], prefix: str) -> str:
+    v, u = p.get("values", {}), p.get("units", {})
+    parts = [f"{lab} {v[k]}{u.get(k, '')}" for k, lab in ((f"{prefix}_n", "N"), (f"{prefix}_p2o5", "P₂O₅"), (f"{prefix}_k2o", "K₂O")) if k in v]
+    return " · ".join(parts)
+
+
+def judge_base_fertilization(subject, today: date, prescriptions: list[dict[str, Any]] | None = None) -> Envelope:
     ctx, env = _base(subject, "base_fertilization", today)
     if env:
         return env
@@ -150,14 +166,27 @@ def judge_base_fertilization(subject, today: date) -> Envelope:
                         result={"why": f"밑거름 창(파종 마감 {deadline}일)을 지났다 — 이후는 웃거름", "summary": "창 지남 — 웃거름 결정으로"})
     if not subject.get("soil_chem"):
         return Envelope("판단 불가(데이터)", "base_fertilization", sid, as_of,
-                        missing=[{"axis": "soil_chem", "who_can_fill": "농가 — 토양검정(ingest.soil_exam 키 투입) 또는 성적서 값"}],
+                        missing=[{"axis": "soil_chem", "who_can_fill": "농가 — 토양검정(python -m ingest.fertilizer <주소>, 키 투입) 또는 성적서 값"}],
                         result={"why": "토양검정 값이 없다", "summary": "토양검정 값 대기"})
     cert = subject.get("cert")
     mats = (t or {}).get("materials")
     m = mats.get(cert, []) if isinstance(mats, dict) else []
-    return Envelope("판단 불가(지식)", "base_fertilization", sid, as_of,
-                    result={"why": "시비량 처방 정본(토양검정 처방 기준)이 격자에 도착하지 않았다 — 양을 지어내지 않는다",
-                            "materials": m, "summary": f"자재 갈래({cert}): {', '.join(m) or '없음'} · 양은 정본 대기"})
+    p = _prescription(prescriptions)
+    if p is None:
+        return Envelope("판단 불가(지식)", "base_fertilization", sid, as_of,
+                        result={"why": "시비량 처방 정본(흙토람 FrtlzrUse — 검정값 기반)이 아직 이 필지에 없다 — 양을 지어내지 않는다. python -m ingest.fertilizer <주소> 로 받는다",
+                                "materials": m, "summary": f"자재 갈래({cert}): {', '.join(m) or '없음'} · 양은 정본 대기"})
+    # [M-15 ⑥] 처방 정본 도착 — 기비 N·P·K 와 퇴비(kg/10a). 유기 갈래는 화학비료가 아니라 **목표 양분량**으로 읽는다(자재 환산 규칙은 정본 없음)
+    v = p.get("values", {})
+    compost = {k: v[k] for k in ("compost_cattle", "compost_pig", "compost_chicken", "compost_mixed") if k in v}
+    notes = [f"출처: {p['source']} · 조회 {str(p.get('fetched_at', ''))[:10]} · 작물코드 {p.get('crop_code')}"]
+    if cert == "유기":
+        notes.append("유기 갈래: N·P·K 는 목표 양분량 — 공시 유기질 비료·퇴비로 환산하는 규칙은 정본 없음(지식 미비, 자재 성분표로 사람이 환산)")
+    return Envelope("판단함", "base_fertilization", sid, as_of, inputs=_anchor_inputs(subject, anchor) + [_prescription_input(p)],
+                    grade=weakest(["관측", _grid_grade(unit)]),
+                    result={"pre": _amounts(p, "pre"), "compost_kg_10a": compost, "materials": m, "values": v, "units": p.get("units", {}),
+                            "summary": f"기비 {_amounts(p, 'pre') or '값 없음'} · 퇴비 {', '.join(f'{k} {val}' for k, val in compost.items()) or '없음'} (kg/10a) · 자재({cert}) {', '.join(m) or '없음'}"},
+                    notes=notes)
 
 
 def judge_replant(subject, today: date, observations: list[dict[str, Any]] | None = None) -> Envelope:
@@ -214,7 +243,8 @@ def judge_drainage_alert(subject, today: date, forecast=None, pest=None) -> Enve
     return _delegate_risk(subject, "drainage_alert", today, forecast, pest)
 
 
-def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]] | None = None) -> Envelope:
+def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]] | None = None,
+                       prescriptions: list[dict[str, Any]] | None = None) -> Envelope:
     ctx, env = _base(subject, did, today)
     if env:
         return env
@@ -243,12 +273,20 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
     lo = (a + timedelta(days=wd - 7)).isoformat()
     done = [e for e in (evts or []) if e.get("type") == d.params["event_type"] and lo <= (e.get("observed_at") or "")[:10] <= dl]
     status = "이행" if done else ("미이행" if day > wd else "예정")
-    return Envelope("판단함", did, sid, as_of, inputs=_anchor_inputs(subject, anchor), grade=weakest(["관측", _grid_grade(unit)]),
+    p = _prescription(prescriptions)
+    inputs = _anchor_inputs(subject, anchor)
+    if p is not None:
+        amount = _amounts(p, "post") or "처방에 추비 값 없음"
+        amount_note = f"추비 {amount} (kg/10a, {p['source']})" + (" — 유기 갈래는 목표 양분량(자재 환산 규칙 정본 없음)" if cert == "유기" else "")
+        inputs = inputs + [_prescription_input(p)]
+    else:
+        amount_note = "판단 불가(지식) — 처방 정본 미도착(python -m ingest.fertilizer <주소>)"
+    return Envelope("판단함", did, sid, as_of, inputs=inputs, grade=weakest(["관측", _grid_grade(unit)]),
                     revisit_at=(today + timedelta(days=1)).isoformat(),
                     result={"status": status, "work_date": work_date, "deadline": dl, "materials": m, "done_refs": [e.get("id") for e in done],
-                            "amount": "판단 불가(지식) — 처방 정본 미도착",
-                            "summary": f"{status} — 작업일 {work_date} · 마감 {dl} · 자재({cert}) {', '.join(m) or '없음'} · 양은 정본 대기"},
-                    notes=["양(kg/10a)은 지어내지 않는다 — 토양검정 처방 기준 도착 뒤"])
+                            "amount": amount_note,
+                            "summary": f"{status} — 작업일 {work_date} · 마감 {dl} · 자재({cert}) {', '.join(m) or '없음'} · {'양 ' + amount_note if p else '양은 정본 대기'}"},
+                    notes=["양(kg/10a)은 지어내지 않는다 — 처방 정본이 없으면 비운다"])
 
 
 def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | None = None, harvest: Envelope | None = None) -> Envelope:
@@ -281,11 +319,12 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
                     result={"target_date": target.isoformat(), "harvest_window_end": h_end.isoformat(), "store_days": store_days, "summary": f"{verdict} — 계획일 {target}"})
 
 
-def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pest=None, harvest: Envelope | None = None) -> list[Envelope]:
+def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pest=None, harvest: Envelope | None = None,
+              prescriptions: list[dict[str, Any]] | None = None) -> list[Envelope]:
     evts = evts or []
     obs = [e for e in evts if e.get("kind") == "observation.note"]
     targets = [e for e in evts if e.get("kind") == "plan.target_date"]
-    return [judge_sowing_window(subject, today), judge_base_fertilization(subject, today), judge_replant(subject, today, obs),
-            judge_pest_alert(subject, today, forecast, pest), judge_top_dressing(subject, "top_dressing_1", today, evts),
-            judge_top_dressing(subject, "top_dressing_2", today, evts), judge_drainage_alert(subject, today, forecast, pest),
+    return [judge_sowing_window(subject, today), judge_base_fertilization(subject, today, prescriptions), judge_replant(subject, today, obs),
+            judge_pest_alert(subject, today, forecast, pest), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions),
+            judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions), judge_drainage_alert(subject, today, forecast, pest),
             judge_ship_or_store(subject, today, targets, harvest)]
