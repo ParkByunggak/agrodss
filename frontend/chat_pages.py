@@ -129,12 +129,16 @@ def sidebar(current: str, docs: list[str], today: date) -> str:
     out.append('<div class="grp">문서</div>')
     for name in docs:
         out.append(f'<a class="lnk" href="/doc/{_e(name)}">{_e(name.removesuffix(".md"))}</a>')
-    # [발행자 2026-09-19] 채팅 목록 최하단 — 사용자 정보 탭
+    out.append(user_tab_html(current))
+    return "".join(out)
+
+
+def user_tab_html(current: str) -> str:
+    """[발행자 2026-09-19] 채팅 목록 최하단 — 사용자 정보 탭. **매 페이지**에 있다(채팅 셸 · 표 화면 · 404 까지) — 정본은 이 함수 하나."""
     u = profile.load()
     cls = ' on' if current == "/me" else ""
-    out.append(f'<a class="chat user{cls}" href="/me" id="user-tab"><b>{_e(u.get("name") or "사용자 정보")}<span class="pill">{_e(u.get("role"))}</span></b>'
-               f'<span>필지 {len(u.get("parcels") or [])} · 설정 · 동기화</span></a>')
-    return "".join(out)
+    return (f'<a class="chat user{cls}" href="/me" id="user-tab"><b>{_e(u.get("name") or "사용자 정보")}<span class="pill">{_e(u.get("role"))}</span></b>'
+            f'<span>필지 {len(u.get("parcels") or [])} · 설정 · 동기화</span></a>')
 
 
 def me_main(message: str = "", error: str = "", form: dict[str, str] | None = None) -> str:

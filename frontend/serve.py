@@ -61,6 +61,7 @@ def nav_html(current: str) -> str:
         cls = ' class="on"' if name == current else ""
         label = html.escape(name.removesuffix(".md"))
         parts.append(f'<a href="/doc/{html.escape(name)}"{cls}>{label}</a>')
+    parts.append(chat_pages.user_tab_html(current))                       # [발행자 2026-09-19] 사용자 정보 탭은 표 화면에도 — 매 페이지
     return "".join(parts)
 
 

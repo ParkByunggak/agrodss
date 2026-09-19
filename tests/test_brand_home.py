@@ -11,7 +11,8 @@ import pytest
 from frontend import chat_pages, config, serve
 
 SID = "p001-jjokpa-2026f"
-ROUTES = ("/c/new", f"/c/{quote(SID)}", f"/diary/{quote(SID)}", "/improve", "/me", "/judge", "/media", "/events", f"/doc/{config.LEDGER_DOC}", "/nope")
+ROUTES = ("/c/new", f"/c/{quote(SID)}", f"/diary/{quote(SID)}", f"/mall/{quote(SID)}", "/improve", "/me", "/judge", "/media", "/events",
+          f"/doc/{config.LEDGER_DOC}", "/nope")                      # 매 페이지 = 채팅 셸 · 표 화면 · 404 — 사용자 탭 검사도 이 목록을 쓴다
 
 
 @pytest.fixture

@@ -54,7 +54,17 @@ def test_classify_rules_are_proposals_only():
     assert chat.classify("언제 캐면 되나?", TODAY)[0]["kind"] == "question"
     # 발행자 첫 발화(2026-09-19 라이브) — 분류 안 됨이었다. 생육 상태 서술은 관찰이다
     assert chat.classify("오늘 상황은 줄기가 매우 왕성한 모습이다", TODAY)[0]["kind"] == "observation.note"
-    assert chat.classify("날씨가 좋다", TODAY) == []                       # 추측하지 않는다
+    # 발행자 두 번째 발화(2026-09-19 라이브) — 물음표 없는 요청형이 분류 안 됨이었다. 요청형은 질문이고, "관리해야 할 항목"은 계획 대 실제다
+    q = "쪽파를 현재 관리해야 할 항목들을 알려줘요"
+    assert chat.classify(q, TODAY)[0]["kind"] == "question" and chat.topic_of(q) == "plan_vs_actual"
+    assert chat.classify("웃거름은 언제 주나요", TODAY)[0]["kind"] == "question" and chat.topic_of("웃거름은 언제 주나요") == "top_dressing_1"
+    assert chat.classify("9월 25일에 웃거름 해야 할 것 같다", TODAY)[0]["kind"] == "plan.farmer"   # 요청형 확장이 계획을 삼키지 않는다
+    # 발행자 2026-09-19 "질문을 분석하고 그 성격을 분류해서 내부 로직으로" — 서술문은 사람에게 넘기지 않고 관찰 메모로 제안한다(원문 그대로)
+    d = chat.classify("날씨가 좋다", TODAY)[0]
+    assert d["kind"] == "observation.note" and d["text"] == "날씨가 좋다" and d["observed_at"] == "2026-09-19" and "서술문" in d["why"]
+    assert chat.classify("잎이 이상하다", TODAY)[0]["kind"] == "observation.note"    # 작물 서술 '이상하다'는 개선 요구가 아니다
+    assert chat.classify("수확 창이 너무 넓다, 고쳐 달라", TODAY)[0]["kind"] == "feedback.request"   # 교정 요구가 질문보다 앞
+    assert chat.classify("   ", TODAY) == []                               # 빈 발화만 분류 안 됨
     assert ev.list_records(SID) == [] and fb.list_records() == []         # 분류는 아무 원장에도 안 쓴다
 
 
@@ -78,13 +88,14 @@ def test_confirm_without_day_is_refused_until_day_given():
     assert rec["observed_at"] == "2026-09-17" and rec["type"] == "제초"
 
 
-def test_unclassified_then_human_chooses_kind():
+def test_statement_is_proposed_as_note_and_human_may_change_kind():
+    # 발행자 2026-09-19: 종류는 내부 로직이 정한다 — "분류 안 됨 — 종류를 고른다" 를 사람에게 보이지 않는다. 바꾸는 것은 여전히 사람 몫
     m, r = chat.send(SID, "날씨가 좋다", today=TODAY, now=NOW)
-    assert m["drafts"] == [] and "분류 안 됨" in r["text"]
-    m2 = chat.choose_kind(m["id"], "observation.note", today=TODAY)
-    assert m2["drafts"][0]["kind"] == "observation.note"
+    assert m["drafts"][0]["kind"] == "observation.note" and "관찰" in r["text"] and "분류 안 됨" not in r["text"]
+    m2 = chat.choose_kind(m["id"], "feedback.request", today=TODAY)
+    assert m2["drafts"][0]["kind"] == "feedback.request" and m2["drafts"][0]["why"] == "사람이 고름"
     rec = chat.confirm(m["id"], 0, now=NOW)
-    assert rec["kind"] == "observation.note" and rec["text"] == "날씨가 좋다"
+    assert rec["kind"] == "feedback.request" and rec["text"] == "날씨가 좋다"
 
 
 def test_request_from_chat_lands_in_feedback_ledger():
@@ -96,6 +107,11 @@ def test_request_from_chat_lands_in_feedback_ledger():
 def test_question_answered_from_envelope_kind_first():
     m, r = chat.send(SID, "언제 캐면 되나?", today=TODAY, now=NOW)
     assert r["text"].startswith("[") and ("수확 창" in r["text"] or "판단" in r["text"])
+    # 발행자 2026-09-19 "현재 관리해야 할 항목" — 답은 지금 것이 먼저다(마감 안 미이행 → 다음 예정 → 놓침). 옛 놓침만 6건 보이던 표현 층 결함
+    _, r3 = chat.send(SID, "쪽파를 현재 관리해야 할 항목들을 알려줘요", today=TODAY, now=NOW)
+    t = r3["text"]
+    assert t.startswith("[판단함]") and "지금 할 것" in t and "다음 예정" in t and "놓침" in t, t
+    assert t.index("지금 할 것") < t.index("다음 예정") < t.index("놓침") and "웃거름 1회" in t and "예찰" in t, t
     _, r2 = chat.send(SID, "달이 왜 둥근가?", today=TODAY, now=NOW)
     assert "판단 불가(지식)" in r2["text"]                                  # 지어내지 않는다
 

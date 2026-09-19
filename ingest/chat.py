@@ -42,8 +42,12 @@ OBS_WORDS = ("보인다", "보여", "보임", "생겼", "누렇", "누래", "시
              "작다", "웃자", "쓰러", "누웠", "빽빽", "성글", "고르", "듬성")
 PLAN_WORDS = ("예정", "할 것", "하려고", "하려 한다", "계획", "할까 한다", "할 생각", "하겠다", "할게", "해야겠")
 _PLAN_RE = re.compile(r"(려고|려 한다|려한다|할 예정|예정|계획|할 것|겠다|할게|해야겠|할 생각)")
-REQ_WORDS = ("틀렸", "잘못", "고쳐", "바꿔", "개선", "불편", "이상하", "너무 넓", "너무 좁", "안 맞", "맞지 않", "원한다", "해 줬으면", "해줬으면")
-Q_WORDS = ("언제", "얼마나", "할까", "될까", "어떻게", "뭐 해야", "무엇을", "해야 하나", "해야 할까", "괜찮나", "괜찮을까", "되나")
+REQ_WORDS = ("틀렸", "잘못", "고쳐", "바꿔", "개선", "불편", "너무 넓", "너무 좁", "안 맞", "맞지 않", "원한다", "해 줬으면", "해줬으면")
+# '이상하' 는 뺐다 — "잎이 이상하다" 는 작물 상태 서술(관찰)이지 시스템 교정 요구가 아니다 (발행자 2026-09-19 "내부 로직으로 분류")
+Q_WORDS = ("언제", "얼마나", "할까", "될까", "어떻게", "뭐 해야", "무엇을", "해야 하나", "해야 할까", "괜찮나", "괜찮을까", "되나",
+           # [발행자 2026-09-19 라이브 "쪽파를 현재 관리해야 할 항목들을 알려줘요" → 분류 안 됨] 물음표 없는 요청형 — 알려/가르쳐 + 존대 어미
+           "알려", "가르쳐", "궁금", "설명해", "나요", "까요", "할지", "해야 하는", "해야 할 항목", "해야 할 일", "할 일이",
+           "왜 ", "어디", "어느", "몇 ", "인가", "는가", "은가", "을까", "줘요", "주세요", "줄래", "추천해", "제안해")
 TOPIC: tuple[tuple[str, tuple[str, ...]], ...] = (
     # [M-10 결정 등록] 구체 결정이 일반 결정보다 앞 — "웃거름 줘야 하나"가 자재 인용으로 새지 않게
     ("ship_or_store", ("출하", "저장할까", "납품할까", "저장")),
@@ -56,7 +60,8 @@ TOPIC: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("pest_alert", ("벌레", "병", "나방", "파리", "진딧물")),
     ("risk_alert", ("서리", "추위", "얼", "비가", "장마", "위험", "경보", "습")),
     ("material_citation", ("약", "자재", "비료", "공시", "뿌려도", "써도", "쳐도")),
-    ("plan_vs_actual", ("해야", "할 일", "계획", "뭐", "무엇", "다음")),
+    ("plan_vs_actual", ("해야", "할 일", "계획", "뭐", "무엇", "다음", "관리", "항목", "챙겨", "신경", "지금")),   # "현재 관리해야 할 항목" → 계획 대 실제
+
 )
 # [U-16] 피해 어휘 — 갈래는 judge.evolve.RISK_FAMILIES 와 같은 이름(대조가 갈래로 잇는다)
 DAMAGE_WORDS: dict[str, tuple[str, ...]] = {
@@ -177,10 +182,13 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
     if not t:
         return []
     day = parse_day(t, today)
-    if "?" in t or any(w in t for w in Q_WORDS):
-        return [{"kind": "question", "why": "물음표·의문 어휘"}]
+    # [발행자 2026-09-19] "질문을 분석하고 그 성격을 분류해서 내부 로직으로" — 사람에게 종류를 고르라고 넘기지 않는다.
+    # 순서: 교정 요구(시스템을 향한 동사) → 질문(물음표 · 의문 · 요청형) → 계획 → 피해 → 사건 → 관찰 어휘 → 서술문은 관찰 메모.
+    # 종류는 규칙이 정하고 내용(날짜 · 사건 종류)은 지어내지 않는다 — 없으면 needs 로 남긴다. 확인에서 사람이 종류를 바꿀 수 있다.
     if any(w in t for w in REQ_WORDS):
         return [{"kind": "feedback.request", "text": t, "target": "other", "why": "교정·요구 어휘"}]
+    if "?" in t or any(w in t for w in Q_WORDS):
+        return [{"kind": "question", "why": "물음표·의문·요청형 어휘"}]
     et = _event_type(t)
     if any(w in t for w in PLAN_WORDS) or _PLAN_RE.search(t):
         if any(w in t for w in ("납품", "출하")):
@@ -200,7 +208,9 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
     if any(w in t for w in OBS_WORDS):
         return [{"kind": "observation.note", "text": t, "observed_at": day or today.isoformat(),
                  "why": "관찰 어휘(날짜 없으면 오늘 본 것으로 제안 — 확인에서 고친다)", "needs": []}]
-    return []
+    # 아무 어휘도 안 걸린 서술문 — 농가가 밭에서 한 말은 관찰 메모(원문 그대로)로 제안한다. 내용을 지어내지 않고 종류만 정한다
+    return [{"kind": "observation.note", "text": t, "observed_at": day or today.isoformat(),
+             "why": "서술문 — 사건·계획·질문 어휘가 없어 관찰 메모로 제안(원문 그대로 · 종류는 확인에서 바꾼다)", "needs": []}]
 
 
 # ── 질문 → 3층 봉투 ─────────────────────────────────────────────────────────────────
@@ -245,11 +255,18 @@ def summarize_envelope(e: Any) -> str:
         n = fams if isinstance(fams, int) else len(fams or [])
         return f"{head} {r.get('stage', '')} · 공시 자재 계열 {n}건 인용 — 효능 보증 아님. 화면 /judge 에 목록"
     if e.decision_id == "plan_vs_actual":
+        # [발행자 2026-09-19 "현재 관리해야 할 항목"] 지금 것이 먼저다 — 마감 안 미이행 → 다음 예정 → 놓침(사유). 옛 놓침 6건만 보이던 표현 층 결함
         rows = r.get("rows") or []
-        todo = [x for x in rows if x.get("status") in ("예정", "미이행", "놓침")]
-        body = " / ".join(f"{x.get('status')} {x.get('task')}({x.get('work_date')})" for x in todo[:6]) or "밀린 것 없음"
+        by = {k: [x for x in rows if x.get("status") == k] for k in ("미이행", "예정", "놓침")}
+        parts = []
+        if by["미이행"]:
+            parts.append(f"지금 할 것(마감 안) {len(by['미이행'])}: " + " · ".join(f"{x.get('task')}(~{(x.get('deadline_date') or '')[5:]})" for x in by["미이행"]))
+        if by["예정"]:
+            parts.append(f"다음 예정 {len(by['예정'])}: " + " · ".join(f"{x.get('task')}({(x.get('work_date') or '')[5:]})" for x in by["예정"][:3]))
         ask = r.get("ask_reason") or []
-        return f"{head} {body}" + (f" · 사유를 묻는다: {', '.join(a.get('task', '') for a in ask)}" if ask else "")
+        if by["놓침"]:
+            parts.append(f"놓침 {len(by['놓침'])}" + (f" — 사유를 묻는다: {', '.join(a.get('task', '') for a in ask)}" if ask else ""))
+        return f"{head} " + (" / ".join(parts) or "밀린 것 없음 · 다음 예정 없음")
     return f"{head} {json.dumps(r, ensure_ascii=False)[:300]}"
 
 
@@ -303,7 +320,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         need = d.get("needs") or []
         reply_text = f"{KIND_LABEL[d['kind']]}(으)로 읽었다 — {d['why']}. " + ("날짜를 넣고 " if need else "") + "확인하면 원장에 들어간다. 아니면 다른 종류를 고른다."
     else:
-        reply_text = "분류 안 됨 — 사건 · 관찰 · 계획 · 개선 요구 중 골라 주면 그 종류로 초안을 만든다. (추측으로 적지 않는다)"
+        reply_text = "분류 안 됨(빈 발화) — 사건 · 관찰 · 계획 · 개선 요구 중 골라 주면 그 종류로 초안을 만든다."   # 서술문은 관찰 메모로 제안되므로 여기 오는 것은 빈 발화뿐
     if media_refs and drafts:
         reply_text = media_line + reply_text
     reply = _append({"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": "system", "text": reply_text,

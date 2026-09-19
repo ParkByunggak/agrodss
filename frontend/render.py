@@ -72,6 +72,9 @@ nav a.on { background:var(--head); font-weight:600; }
 nav .grp { color:var(--muted); font-size:11px; margin:12px 8px 4px; text-transform:uppercase; }
 nav a.brand { font-weight:700; font-size:16px; letter-spacing:.02em; padding:4px 8px 10px; display:flex; justify-content:space-between; align-items:center; }
 nav a.brand small { color:var(--muted); font-weight:400; font-size:11px; } nav a.brand:hover { color:var(--accent, #2F6B3A); }
+nav { display:flex; flex-direction:column; } nav a.user { margin-top:auto; border-top:1px solid var(--line); border-radius:0; padding-top:12px; }
+nav a.user b { display:flex; justify-content:space-between; align-items:center; } nav a.user > span { display:block; color:var(--muted); font-size:11px; }
+nav a.user .pill { display:inline-block; font-size:11px; padding:0 7px; border-radius:9px; background:var(--head); color:var(--muted); margin-left:4px; }
 main { flex:1; padding:16px 24px; max-width:1100px; box-sizing:border-box; min-width:0; }
 h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:16px; margin:28px 0 8px; padding-top:12px; border-top:1px solid var(--line); }
 h3 { font-size:14px; margin:20px 0 6px; }
