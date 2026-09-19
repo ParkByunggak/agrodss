@@ -91,10 +91,26 @@ def test_screen_renders_each_draft_and_planned_task_input():
     assert "원장에 들어감" in chat_pages._draft_html(m, 0, m["drafts"][0]) and "원장에 들어감" not in chat_pages._draft_html(m, 1, m["drafts"][1])
 
 
+def test_damage_negation_is_a_note_and_never_feeds_alert_matching():
+    """§7.5 전수(2026-09-20): 피해 어휘 + 부정이 피해 사건이면 evolve 의 경보↔피해 대조가 적중으로 센다. 관찰 메모로 가야 한다."""
+    from judge import evolve
+    m, r = chat.send(SID, "서리에 안 얼었다", today=T, now=NOW)
+    d = m["drafts"][0]
+    assert d["kind"] == "observation.note" and "피해 없음" in d["why"] and "관찰" in r["text"]
+    rec = chat.confirm(m["id"], 0, now=NOW)
+    assert rec["kind"] == "observation.note"
+    assert [e for e in ev.list_records(SID, "event") if e.get("type") == ev.DAMAGE_TYPE] == []
+    assert evolve._measure_risk(SID, T, ev.list_records(SID, "event")) == []           # 예측 없음 + 피해 없음 → 아무것도 안 쓴다
+    assert chat._damage_risk("서리에 얼었다") == "서리" and chat._damage_risk("피해 없음") == chat.NO_DAMAGE
+    assert chat._damage_risk("피해가 컸다") == "피해" and chat._damage_risk("날씨 좋다") is None
+
+
 def test_wiring_ratchets_no_crop_branch_and_one_key():
     src = (ROOT / "ingest" / "chat.py").read_text(encoding="utf-8")
     body = src[src.index("def _negated_task"):src.index("def _damage_risk")]
     assert "쪽파" not in body and "웃거름" not in body and "EVENT_SYNONYMS" in body               # 작목 · 작업 리터럴 없음 — 공통 어휘로만
+    dmg = src[src.index("def _damage_risk"):src.index("def classify(")]
+    assert "_NEG_FOLD.sub(" in dmg and "_NEG_DMG.match(" in dmg and "return NO_DAMAGE" in dmg     # 피해 갈래도 같은 부정 규칙(§7.5 전수)
     send = src[src.index("def send("):src.index("def request_improvement")]
     assert "_attach_plan(subject_id, classify(" in send                                            # 계획표 잇기가 send 경로에 있다
     conf = src[src.index("def confirm("):src.index("def confirmed_ref(")]

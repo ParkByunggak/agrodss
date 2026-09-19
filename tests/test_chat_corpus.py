@@ -73,6 +73,16 @@ CORPUS = [
     ("벌레가 안 보인다", "observation.note", None),
     ("내일 웃거름 주지 않을 예정", "plan.farmer", None),
     ("웃거름 안 줘도 되나요", "question", "top_dressing_1"),
+    # 피해 어휘 + 부정 = 피해 없음 관찰 — §7.5 처방 직후 전수(2026-09-20): 사건 부정을 고친 직후 같은 형태를 세니 13문장 중 7건이 피해 사건이었다
+    ("서리에 안 얼었다", "observation.note", None),
+    ("서리 피해 없었다", "observation.note", None),
+    ("벌레가 먹지 않았다", "observation.note", None),
+    ("피해 없음", "observation.note", None),
+    ("병 걸린 건 없다", "observation.note", None),
+    ("진딧물이 안 보인다", "observation.note", None),
+    ("얼어 죽은 게 없다", "observation.note", None),
+    ("서리 맞았는데 피해는 없다", "observation.note", None),
+    ("피해가 컸다", "event", None),                                                   # 긍정은 그대로 피해(갈래 미상 → 확인이 묻는다)
 ]
 
 

@@ -233,11 +233,28 @@ def _attach_plan(subject_id: str, drafts: list[dict[str, Any]], today: date) -> 
     return out
 
 
+NO_DAMAGE = "없음"
+# 피해 어휘 뒤 부정 · '없' — 사건 어휘와 같은 창이되 두 토큰까지 본다("얼어 죽은 게 없다"). 긍정 피해 문장의 뒤에는 이 형태가 없다(말뭉치)
+_NEG_DMG = re.compile(r"^[^\s]*\s*(?:[가-힣]{1,4}\s*){0,2}(?:지\s*않|지\s*못|§|않|없)")
+
+
 def _damage_risk(text: str) -> str | None:
+    """피해 갈래 · '피해'(갈래 미상) · NO_DAMAGE(피해 어휘 + 부정 — 사건이 아니다) · None.
+    [§7.5 처방 직후 전수 2026-09-20] 사건 어휘의 부정을 고친 직후 같은 형태를 세니 피해 갈래 13문장 중 7건이 "서리에 안 얼었다" ·
+    "피해 없음"을 **피해 사건**으로 읽었다 — 그 사건은 경보↔피해 대조(evolve)에 적중으로 들어간다. 같은 규칙을 여기에도 둔다."""
+    norm = _NEG_FOLD.sub("§", text)
     for fam, words in DAMAGE_WORDS.items():
-        if any(w in text for w in words):
+        for w in words:
+            m = re.search("§?".join(re.escape(ch) for ch in w), norm)
+            if not m:
+                continue
+            if "§" in m.group(0) or _NEG_DMG.match(norm[m.end():]):
+                return NO_DAMAGE
             return fam
-    return "피해" if "피해" in text else None
+    m = re.search("피해", norm)
+    if not m:
+        return None
+    return NO_DAMAGE if _NEG_DMG.match(norm[m.end():]) else "피해"
 
 
 def classify(text: str, today: date) -> list[dict[str, Any]]:
@@ -274,6 +291,10 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
                            "why": "불이행 뒤에 이어진 실행 서술 — 관행을 관찰 메모로도 남긴다(선택)", "needs": []})
         return drafts
     dmg = _damage_risk(t)
+    if dmg == NO_DAMAGE:
+        # 피해 어휘 + 부정 = 피해가 **없었다**는 관찰. 사건으로 두면 경보↔피해 대조가 적중으로 센다(되먹임 오염)
+        return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
+                 "why": "피해 어휘 + 부정 → 피해 없음 관찰(사건이 아니다 · 경보 대조에 안 들어간다)", "needs": []}]
     if dmg:
         # [U-16] 피해는 사건이되 무엇의 피해인지(risk)가 있어야 경보와 대조된다. '피해'만 있고 갈래가 없으면 확인 화면이 묻는다
         risk = None if dmg == "피해" else dmg

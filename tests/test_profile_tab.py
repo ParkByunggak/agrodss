@@ -2,6 +2,7 @@
 # [M-13 · 발행자 2026-09-19] 채팅 목록 최하단 사용자 정보 탭 — 등록부 하나 · PII 거부 · 격리 · /me 화면.
 from __future__ import annotations
 
+import html
 import http.client
 import threading
 from pathlib import Path
@@ -75,7 +76,7 @@ def test_changes_page_shows_running_head_vs_repo_head_and_commit_titles(srv):
     body = c.getresponse().read().decode("utf-8")
     assert "변경 로그" in body and serve.RUNNING_HEAD in body and ("반영됨" in body or "뒤처짐" in body)
     lines = serve.git_log_lines(5)
-    assert lines and all(len(h) >= 7 and len(d) == 10 for h, d, _ in lines) and lines[0][2] in body
+    assert lines and all(len(h) >= 7 and len(d) == 10 for h, d, _ in lines) and html.escape(lines[0][2]) in body   # 제목은 이스케이프돼 실린다('가 &#x27;)
     assert serve.git_log_lines.__doc__ and "제목만" in serve.git_log_lines.__doc__      # 본문은 싣지 않는다
     for w in ("갈금", "010-", "@"):                                                       # 커밋 제목에 PII 가 없어야 화면에도 없다
         assert w not in "".join(s for _, _, s in serve.git_log_lines(50)), w
