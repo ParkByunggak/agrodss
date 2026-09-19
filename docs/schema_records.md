@@ -29,7 +29,7 @@
 | `plan.target_date` | 1층 계획 | 예 | `farmer` | subject, target_date, source, resolution | id, recorded_at, observed_at, note, chat_ref | — |
 | `chat.message` | 1층 사실 | — | `computed:chat`, `farmer`, `publisher` | id, subject, role, text, observed_at, recorded_at, source, resolution | drafts, confirmed_refs, reply_ref, retry_of, edit_of, request_ref, input_mode, media_refs | — |
 | `feedback.request` | 되먹임 | — | `farmer`, `publisher` | id, text, target, status, observed_at, recorded_at, source, resolution | subject, target_ref, response, item_ref | — |
-| `feedback.prediction` | 되먹임 | — | `computed:judge` | id, subject, decision_id, envelope_kind, payload, payload_hash, observed_at, recorded_at, source, resolution | grade, code_head | — |
+| `feedback.prediction` | 되먹임 | — | `computed:judge` | id, subject, decision_id, envelope_kind, payload, payload_hash, observed_at, recorded_at, source, resolution | grade, code_head, last_seen_at | — |
 | `feedback.outcome` | 되먹임 | — | `computed:evolve` | id, subject, decision_id, prediction_id, verdict, detail, observed_at, recorded_at, source, resolution | actual_ref | — |
 | `names.candidate` | 되먹임 | — | `farmer`, `publisher` | id, query, normalized, context, status, observed_at, recorded_at, source, resolution | subject, canonical, alias_kind, note | — |
 | `verification.live` | 되먹임 | — | `computed:verify` | id, subject, subjects, code_head, runs, verdict, live, agree, total, diffs, cache_suspect, observed_at, recorded_at, source, resolution | — | — |

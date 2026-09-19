@@ -146,8 +146,10 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
        ("id", "text", "target", "status", "observed_at", "recorded_at", "source", "resolution"),
        ("subject", "target_ref", "response", "item_ref"), sources=("farmer", "publisher")),
     _k("feedback.prediction", "되먹임",   # 예측 원장 — 3층이 낸 판단함의 대조 가능한 주장. 바뀔 때만 한 줄.
+       # [코드 평가 A2] last_seen_at — 같은 주장이 마지막으로 확인된 판정일. 바뀌지 않아도 이것은 갱신된다(같은 id 로 덧붙임 · latest 우선).
+       #   없으면 창이 첫 발행일+horizon 에서 끝나 그 뒤 피해가 "앞선 경보 없음"으로 잘못 적혔다.
        ("id", "subject", "decision_id", "envelope_kind", "payload", "payload_hash", "observed_at", "recorded_at", "source", "resolution"),
-       ("grade", "code_head"), sources=("computed:judge",)),
+       ("grade", "code_head", "last_seen_at"), sources=("computed:judge",)),
     _k("feedback.outcome", "되먹임",      # 대조 결과 — 예측 ↔ 사건 원장. 사건이 없으면 '대조 불가'(값을 메우지 않는다)
        ("id", "subject", "decision_id", "prediction_id", "verdict", "detail", "observed_at", "recorded_at", "source", "resolution"),
        ("actual_ref",), sources=("computed:evolve",)),

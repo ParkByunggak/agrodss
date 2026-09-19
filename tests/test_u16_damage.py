@@ -80,6 +80,30 @@ def test_no_prediction_or_no_damage_writes_nothing():
     assert evolve.measure(SID, date(2026, 10, 10)) == []                    # 예측이 없으면 대조도 없다
 
 
+# ── [코드 평가 A1 · A2 · 2026-09-19] 서 있던 주장에만 적는다 · 주장이 서 있던 구간은 마지막 확인일까지 ─────────────────
+def test_damage_before_any_standing_prediction_writes_nothing():
+    # A1: 피해 9/1, 예측은 9/10 부터 — 그날 서 있던 주장이 없다. 뒤에 만든 예측에 "놓친 경보"를 적으면 자동 상한의 근거가 오염된다
+    _pred([UNREC], as_of="2026-09-10", horizon=7)
+    ev.add_event(SID, "피해", "2026-09-01", risk="서리", now=NOW)
+    out = evolve.measure(SID, date(2026, 9, 12))
+    assert [o["verdict"] for o in out] == []
+
+
+def test_same_claim_seen_daily_extends_window_via_last_seen_at():
+    # A2: 같은 경보가 9/10~9/20 매일 확인됐다(원장은 한 줄) — 첫날+7 인 9/17 뒤의 피해도 그 주장의 창 안이다
+    p = _pred([UNREC], as_of="2026-09-10", horizon=7)
+    for day in range(11, 21):
+        assert _pred([UNREC], as_of=f"2026-09-{day}", horizon=7) is None      # 바뀌지 않았다 — 새 줄 없음
+    lines = [r for r in fb.list_records("feedback.prediction", SID) if r["id"] == p["id"]]
+    assert lines[-1]["last_seen_at"] == "2026-09-20" and lines[-1]["payload_hash"] == p["payload_hash"] and len(lines) >= 2
+    assert evolve._pred_window(lines[-1]) == (date(2026, 9, 10), date(2026, 9, 27))
+    ev.add_event(SID, "피해", "2026-09-24", risk="해충", now=NOW)                 # 9/17 뒤 · 9/27 안
+    out = evolve.measure(SID, date(2026, 9, 25))
+    assert len(out) == 1 and out[0]["verdict"] == "적중" and out[0]["prediction_id"] == p["id"]
+    # 같은 id 가 여러 줄이어도 대조는 한 번이다
+    assert evolve.measure(SID, date(2026, 9, 25)) == []
+
+
 def test_risk_miss_proposes_threshold_review_not_window():
     _pred([UNREC])
     ev.add_event(SID, "피해", "2026-09-25", risk="서리", now=NOW)

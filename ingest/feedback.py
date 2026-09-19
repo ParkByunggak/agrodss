@@ -115,6 +115,13 @@ def record_prediction(subject: str, decision_id: str, envelope_kind: str, payloa
     h = sch.payload_hash(payload)
     prev = [r for r in list_records("feedback.prediction", subject) if r.get("decision_id") == decision_id]
     if prev and prev[-1].get("payload_hash") == h:
+        # [코드 평가 A2] 주장은 그대로여도 "마지막으로 확인된 날"은 나아간다 — 같은 id 로 last_seen_at 만 갱신해 덧붙인다(원장 append-only ·
+        # 같은 id 는 latest 우선). 이것이 없으면 대조 창이 첫 발행일+horizon 에서 끝나, 살아 있던 경보 뒤의 피해가 "앞선 경보 없음"이 된다.
+        last = prev[-1]
+        if as_of > (last.get("last_seen_at") or last.get("observed_at") or ""):
+            upd = {k: v for k, v in last.items() if k != "schema_version"}
+            upd["last_seen_at"], upd["recorded_at"] = as_of, _now(now)
+            _append(upd)
         return None
     rec: dict[str, Any] = {"id": f"prd_{uuid.uuid4().hex[:12]}", "kind": "feedback.prediction", "subject": subject,
                            "decision_id": decision_id, "envelope_kind": envelope_kind, "payload": payload, "payload_hash": h,

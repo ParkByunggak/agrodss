@@ -107,8 +107,19 @@ def measure(subject: str, today: date, events: list[dict[str, Any]] | None = Non
 
 
 def _pred_window(pred: dict[str, Any]) -> tuple[date, date]:
+    """주장이 서 있던 구간 — 첫 발행일부터 **마지막으로 확인된 날**(last_seen_at) + horizon 까지.
+    [코드 평가 A2] 원장은 payload 가 바뀔 때만 한 줄이라 첫 발행일만 보면 매일 살아 있던 경보의 창이 첫날+7 에서 끝났다."""
     as_of = date.fromisoformat(pred["observed_at"][:10])
-    return as_of, as_of + timedelta(days=int(pred["payload"].get("horizon_days") or 0))
+    seen = date.fromisoformat((pred.get("last_seen_at") or pred["observed_at"])[:10])
+    return as_of, max(as_of, seen) + timedelta(days=int(pred["payload"].get("horizon_days") or 0))
+
+
+def _latest_lines(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """같은 id 가 여러 줄이면(last_seen_at 갱신) 마지막 줄만, 처음 나온 순서로."""
+    by: dict[str, dict[str, Any]] = {}
+    for r in records:
+        by[r["id"]] = r
+    return list(by.values())
 
 
 def _measure_risk(subject: str, today: date, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -116,7 +127,7 @@ def _measure_risk(subject: str, today: date, events: list[dict[str, Any]]) -> li
     (a) 피해가 있으면: 그 날을 창(as_of ~ as_of+horizon)에 품는 예측 중 같은 갈래를 경보·주의한 것이 있나 → 적중 / 없으면 빗나감(놓친 경보)
     (b) 창이 지난 경보에 피해가 없으면: 회복 불가 위험은 과경보 허용(H 비대칭) → 대조 불가 · 회복 가능 위험은 빗나감(과경보)
     사건이 아예 없으면 값을 메우지 않는다 — (b)는 예측 창이 지난 뒤에만."""
-    preds = [r for r in fb.list_records("feedback.prediction", subject) if r.get("decision_id") == "risk_alert"]
+    preds = _latest_lines([r for r in fb.list_records("feedback.prediction", subject) if r.get("decision_id") == "risk_alert"])
     if not preds:
         return []
     out: list[dict[str, Any]] = []
@@ -128,9 +139,13 @@ def _measure_risk(subject: str, today: date, events: list[dict[str, Any]]) -> li
                                                for a in p["payload"].get("alerts", []))), None)
         if hit:
             o = fb.add_outcome(hit, "적중", f"피해 {dmg.get('risk')} {d} — 창 안에 같은 갈래 경보가 있었다", actual_ref=dmg.get("id"), observed_at=d.isoformat())
+        elif covering:
+            # 그날 서 있던 주장이 있는데 이 갈래를 경보하지 않았다 — 놓친 경보. 가장 최근에 선 주장에 적는다
+            o = fb.add_outcome(covering[-1], "빗나감", f"피해 {dmg.get('risk')} {d} — 앞선 경보 없음(놓친 경보)", actual_ref=dmg.get("id"), observed_at=d.isoformat())
         else:
-            base = (covering or [p for p in preds if _pred_window(p)[0] <= d] or preds)[-1]
-            o = fb.add_outcome(base, "빗나감", f"피해 {dmg.get('risk')} {d} — 앞선 경보 없음(놓친 경보)", actual_ref=dmg.get("id"), observed_at=d.isoformat())
+            # [코드 평가 A1] 그날 서 있던 주장이 없다(첫 예측 이전 · 창 밖) — 아무것도 적지 않는다. 뒤에 만든 예측에 빗나감을 적으면
+            # 자동 등급 상한(propose)의 근거가 오염된다(m6 §7 "예측이 없으면 아무것도 적지 않는다")
+            o = None
         if o:
             out.append(o)
     latest = preds[-1]
