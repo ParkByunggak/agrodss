@@ -130,6 +130,15 @@ def test_judge_page_shows_kind_first(monkeypatch):
         assert "판단함" in page and "수확 창 2026-10-14 ~ 2026-11-03" in page and "신뢰 등급" in page
         assert "위험 경보" in page and "회복 가능 위험" in page      # M-10 ② 도 같은 화면에
         assert "사실 인용" in page and "공시" in page                 # M-15 ④ 자재 인용
+        assert "계획 대 실제" in page and "이행" in page              # M-10 ③
+        conn.request("GET", "/events")
+        resp = conn.getresponse()
+        assert resp.status == 200 and "불이행 사유" in resp.read().decode("utf-8")
+        body = "subject=p001-jjokpa-2026f&type=%EC%98%88%EC%B0%B0&observed_at=&note="
+        conn.request("POST", "/events/add", body=body,
+                     headers={"Content-Type": "application/x-www-form-urlencoded", "Content-Length": str(len(body))})
+        resp = conn.getresponse()
+        assert resp.status == 400 and "기록 안 됨" in resp.read().decode("utf-8")     # 대상 시각 없으면 거부
         assert "hourly_tmp" not in page
     finally:
         srv.shutdown()

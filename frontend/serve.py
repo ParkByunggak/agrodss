@@ -21,6 +21,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from frontend import config, render  # noqa: E402
+from ingest import events as ev  # noqa: E402  — 사건 원장도 ingest 를 통해서만
 from ingest import media  # noqa: E402  — 입력 화면은 ingest 를 통해서만 1층에 쓴다(원장 파일을 직접 열지 않는다)
 from grid import capture as grid_capture  # noqa: E402  — 촬영 시점 알림(격자 지식, 원장 아님)
 from judge import run as judge_run  # noqa: E402  — 4층은 3층 봉투만 받는다
@@ -50,6 +51,8 @@ def nav_html(current: str) -> str:
     parts.append('<div class="grp">입력</div>')
     cls = ' class="on"' if current == "/media" else ""
     parts.append(f'<a href="/media"{cls}>영상 반입 (I-7)</a>')
+    cls = ' class="on"' if current == "/events" else ""
+    parts.append(f'<a href="/events"{cls}>사건 · 불이행 사유 (I-3)</a>')
     parts.append('<div class="grp">문서</div>')
     for name in doc_list():
         cls = ' class="on"' if name == current else ""
@@ -84,12 +87,25 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         else:
             out.append("<p>지금 낼 경보가 없다.</p>")
         out.append(f"<p class=\"meta\">회복 가능 위험 {r['watched_recoverable']}건은 신호가 임계를 넘을 때만 나온다(확률 충분할 때만).</p>")
-    elif e["kind"] == "판단함":
+    elif e["kind"] == "판단함" and e["decision_id"] == "harvest_timing":
         out.append(f"<p><b>수확 창 {_e(r['window_start'])} ~ {_e(r['window_end'])}</b> (중심 {_e(r['center'])}, ±{r['error_days']}일) · "
                    f"신뢰 등급 <b>{_e(e['grade'])}</b> · 기준점 후 {r['days_since_anchor']}일 · {_e(r['position'])} · 재판정 {_e(e['revisit_at'])}</p>")
         out.append(f"<p class=\"meta\">근거: {_e(r['basis'])} · {_e(r['final_say'])}</p>")
         if e["caps"]:
             out.append("<ul>" + "".join(f"<li><b>상한 제약</b> {_e(c['name'])} — {_e(c['basis'])}</li>" for c in e["caps"]) + "</ul>")
+    elif e["kind"] == "판단함" and e["decision_id"] == "plan_vs_actual":
+        c = r["counts"]
+        out.append(f"<p>기준점 후 {r['days_since_anchor']}일 · " + " · ".join(f"{k} <b>{v}</b>" for k, v in c.items()) +
+                   f" · 사건 {r['events_used']} · 영상 {r['videos_used']} · 재판정 {_e(e['revisit_at'])}</p>")
+        if r["prep_now"]:
+            out.append("<p><b>지금 준비 착수</b>(임대 리드타임 기준): " + " · ".join(f"{_e(p['task'])}(작업 {_e(p['work_date'])})" for p in r["prep_now"]) + "</p>")
+        if r["ask_reason"]:
+            out.append("<p class=\"err\"><b>창을 넘긴 작업</b> — 안 한 이유가 조언보다 값지다. <a href=\"/events\">사건 화면</a>에서 사유를 적는다: " +
+                       " · ".join(f"{_e(a['task'])}({_e(a['work_date'])})" for a in r["ask_reason"]) + "</p>")
+        st_cls = {"이행": "완료", "예정": "대기", "미이행": "진행", "놓침": "폐기", "사유 기록됨": "보류"}
+        out.append("<table><tr><th>상태</th><th>칸</th><th>작업</th><th>작업일</th><th>마감</th><th>근거</th></tr>" + "".join(
+            f'<tr><td><span class="st st-{st_cls.get(x["status"], "대기")}">{_e(x["status"])}</span></td><td>{_e(x["stage"])}</td><td>{_e(x["task"])}</td>'
+            f'<td>{_e(x["work_date"])}</td><td>{_e(x.get("deadline_date") or "")}</td><td>{_e(x.get("evidence") or "")}</td></tr>' for x in r["rows"]) + "</table>")
     elif e["kind"] == "사실 인용":
         c = r["citation"]
         out.append(f"<p>칸 {_e(r['stage'])} · 인용 계열 {r['cited_families']}/{len(r['groups'])} · 출처 {_e(c['source'])} · 목록 시점 {_e(c['observed_at'])} · 재판정 {_e(e['revisit_at'])}</p>")
@@ -118,10 +134,49 @@ def judge_page() -> tuple[int, str]:
         out.append(f"<h1 style=\"font-size:17px;margin-top:24px\">{_e(s['label'])}</h1>")
         for env in envs:
             e = env.to_dict()
-            _render_env(out, e, {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용(유기 공시)"}.get(e["decision_id"], e["decision_id"]))
+            _render_env(out, e, {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용(유기 공시)",
+                                 "plan_vs_actual": "계획 대 실제"}.get(e["decision_id"], e["decision_id"]))
         out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 예찰: {_e(info.get('pest', ''))}</p>")
     footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
     return 200, render.page("agrodss — 판단", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)
+
+
+def events_page(message: str = "", error: str = "") -> tuple[int, str]:
+    subjects = media.load_subjects()
+    out = ["<h1>사건 · 불이행 사유 — 1층 기록</h1>"]
+    if error:
+        out.append(f'<p class="err"><b>기록 안 됨</b> — {_e(error)}</p>')
+    if message:
+        out.append(f'<p class="ok">{_e(message)}</p>')
+    sel = "".join(f'<option value="{_e(s["id"])}">{_e(s["label"])}</option>' for s in subjects)
+    types = "".join(f'<option value="{_e(t)}">{_e(t)}</option>' for t in ev.EVENT_TYPES)
+    out.append('<h2>사건 추가</h2><form method="post" action="/events/add" class="reg">')
+    out.append(f'<label>재배 단위 <select name="subject">{sel}</select></label>')
+    out.append(f'<label>종류 <select name="type">{types}</select></label>')
+    out.append('<label>일어난 날 <input name="observed_at" placeholder="2026-09-19" size="14"> <span class="meta">없으면 기록되지 않는다</span></label>')
+    out.append('<label>자재(쉼표) <input name="materials" size="40" placeholder="예: 비티박사, 님오일"></label>')
+    out.append('<label>메모 <input name="note" size="40"></label><button type="submit">기록</button></form>')
+    out.append('<h2>불이행 사유 (계획을 안 따른 이유)</h2><form method="post" action="/events/reason" class="reg">')
+    out.append(f'<label>재배 단위 <select name="subject">{sel}</select></label>')
+    out.append('<label>계획 작업명 <input name="planned_task" size="30" placeholder="예: 예찰(트랩 · 육안)"></label>')
+    out.append('<label>계획 작업일 <input name="planned_day" size="14" placeholder="2026-09-08"></label>')
+    out.append('<label>사유 <input name="reason" size="50" placeholder="예: 트랩을 못 구했다 / 비가 계속 왔다 / 필요 없다고 봤다"></label>')
+    out.append('<button type="submit">기록</button></form>')
+    recs = ev.list_records()
+    out.append(f"<h2>기록 ({len(recs)})</h2>")
+    if recs:
+        out.append("<table><tr><th>종류</th><th>재배 단위</th><th>대상 시각</th><th>내용</th><th>기록 시각</th></tr>" + "".join(
+            f"<tr><td>{_e(r.get('type') or r.get('kind'))}</td><td>{_e(r.get('subject'))}</td><td>{_e(r.get('observed_at'))}</td>"
+            f"<td>{_e(r.get('reason') or r.get('note') or '')} {_e(', '.join(r.get('materials') or []))}</td><td>{_e(r.get('recorded_at', '')[:16])}</td></tr>"
+            for r in reversed(recs)) + "</table>")
+    else:
+        out.append("<p>아직 없다. 파종은 기준점(재배 단위 등록부)이 사건을 대신한다.</p>")
+    style = ("<style>.reg{border:1px solid var(--line);border-radius:6px;padding:10px;margin:8px 0;display:grid;gap:6px}"
+             ".reg label{display:block}.err{color:var(--drop-fg);background:var(--drop);padding:6px 10px;border-radius:4px}"
+             ".ok{color:var(--done-fg);background:var(--done);padding:6px 10px;border-radius:4px}</style>")
+    footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
+    return (400 if error else 200), render.page("agrodss — 사건", nav_html("/events"), style + "".join(out),
+                                                "사건(I-3 §2) · 결정(§5 불이행 사유) — 대상 시각 없이는 기록되지 않는다", footer)
 
 
 def media_page(message: str = "", error: str = "") -> tuple[int, str]:
@@ -224,6 +279,8 @@ class Handler(BaseHTTPRequestHandler):
             status, body = media_page()
         elif p == "/judge":
             status, body = judge_page()
+        elif p == "/events":
+            status, body = events_page()
         elif p.startswith("/doc/"):
             status, body = render_page(unquote(p[len("/doc/"):]))
         else:
@@ -247,6 +304,20 @@ class Handler(BaseHTTPRequestHandler):
                 status, body = media_page(message=f"등록됨 {rec['id']} · 관측 {rec['observed_at']} · {rec['file']}")
             except media.RegisterError as e:
                 status, body = media_page(error=str(e))
+        elif p == "/events/add":
+            try:
+                mats = [m.strip() for m in (form.get("materials") or "").split(",") if m.strip()]
+                rec = ev.add_event(form.get("subject", ""), form.get("type", ""), form.get("observed_at", ""),
+                                   note=form.get("note", ""), materials=mats)
+                status, body = events_page(message=f"기록됨 {rec['id']} · {rec['type']} {rec['observed_at']}")
+            except ev.EventError as e:
+                status, body = events_page(error=str(e))
+        elif p == "/events/reason":
+            try:
+                rec = ev.add_noncompliance(form.get("subject", ""), form.get("planned_task", ""), form.get("reason", ""), form.get("planned_day", ""))
+                status, body = events_page(message=f"사유 기록됨 {rec['id']} · {rec['planned_task']}")
+            except ev.EventError as e:
+                status, body = events_page(error=str(e))
         else:
             status, body = 404, render.page("없음", nav_html(""), "<h1>없는 경로</h1>", "", "")
         data = body.encode("utf-8")

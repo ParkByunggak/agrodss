@@ -8,4 +8,5 @@ import pytest
 @pytest.fixture(autouse=True)
 def _isolate_media_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("AGRODSS_MEDIA_DIR", str(tmp_path / "media"))
+    monkeypatch.setenv("AGRODSS_EVENTS_DIR", str(tmp_path / "events"))
     yield
