@@ -45,8 +45,16 @@ _PLAN_RE = re.compile(r"(려고|려 한다|려한다|할 예정|예정|계획|�
 REQ_WORDS = ("틀렸", "잘못", "고쳐", "바꿔", "개선", "불편", "이상하", "너무 넓", "너무 좁", "안 맞", "맞지 않", "원한다", "해 줬으면", "해줬으면")
 Q_WORDS = ("언제", "얼마나", "할까", "될까", "어떻게", "뭐 해야", "무엇을", "해야 하나", "해야 할까", "괜찮나", "괜찮을까", "되나")
 TOPIC: tuple[tuple[str, tuple[str, ...]], ...] = (
+    # [M-10 결정 등록] 구체 결정이 일반 결정보다 앞 — "웃거름 줘야 하나"가 자재 인용으로 새지 않게
+    ("ship_or_store", ("출하", "저장할까", "납품할까", "저장")),
+    ("top_dressing_1", ("웃거름", "추비")),
+    ("base_fertilization", ("밑거름", "기비")),
+    ("replant", ("보식", "결주", "안 난", "안 났", "듬성")),
+    ("sowing_window", ("파종", "심을 때", "심어도", "언제 심")),
+    ("drainage_alert", ("배수", "물 빠", "고랑", "물이 고")),
     ("harvest_timing", ("수확", "캐", "뽑을", "거둘")),
-    ("risk_alert", ("서리", "추위", "얼", "비가", "장마", "위험", "경보", "병", "벌레", "습")),
+    ("pest_alert", ("벌레", "병", "나방", "파리", "진딧물")),
+    ("risk_alert", ("서리", "추위", "얼", "비가", "장마", "위험", "경보", "습")),
     ("material_citation", ("약", "자재", "비료", "공시", "뿌려도", "써도", "쳐도")),
     ("plan_vs_actual", ("해야", "할 일", "계획", "뭐", "무엇", "다음")),
 )
@@ -222,6 +230,9 @@ def summarize_envelope(e: Any) -> str:
         why = r.get("why") or ""
         miss = " · ".join(f"{m.get('axis')}: {m.get('who_can_fill')}" for m in (e.missing or []))
         return f"{head} {why}" + (f" — 채울 사람: {miss}" if miss else "")
+    if r.get("summary") and e.decision_id not in ("harvest_timing", "risk_alert", "material_citation", "plan_vs_actual"):
+        caps = " · ".join(f"상한: {c.get('name')}({c.get('basis')})" for c in (e.caps or []))
+        return f"{head} {r['summary']} · 등급 {e.grade}" + (f" · {caps}" if caps else "")
     if e.decision_id == "harvest_timing":
         return (f"{head} 수확 창 {r.get('window_start')} ~ {r.get('window_end')} (±{r.get('error_days')}일) · 등급 {e.grade} · "
                 f"{r.get('basis', '')} · {r.get('final_say', '')}")

@@ -97,4 +97,5 @@ def test_gate_position_in_all_judgments():
 
 def test_all_judgments_runs_through_gate_on_real_registry():
     out = R.all_judgments()
-    assert out and all(len(envs) == 4 for _, envs, _ in out)
+    # 첫해 값 4 + [M-10 결정 등록] 격자 선언 결정 8 = 12 — 전부 같은 게이트 뒤에서 나온다
+    assert out and all(len(envs) == 12 for _, envs, _ in out)
