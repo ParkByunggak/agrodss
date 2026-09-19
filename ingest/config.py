@@ -22,6 +22,10 @@ FRTLZR_USE_URL: str = os.environ.get(
 FRTLZR_STD_URL: str = os.environ.get(
     "AGRODSS_FRTLZR_STD_URL", "https://apis.data.go.kr/1390802/SoilEnviron/FrtlzrStdUse/getSoilFrtlzrQyList"
 )
+# PSIS 농약등록정보 검색(SVC01) — 전용 인증키. [D-9] VELA infra_config PSIS_BASE_URL 인용(2026-09-19)
+PSIS_URL: str = os.environ.get("AGRODSS_PSIS_URL", "https://psis.rda.go.kr/openApi/service.do")
+PSIS_MAX_ITEMS: int = int(os.environ.get("AGRODSS_PSIS_MAX_ITEMS", "5"))
+PSIS_CACHE_DAYS: int = int(os.environ.get("AGRODSS_PSIS_CACHE_DAYS", "7"))     # 등록정보는 저변동(VELA 6h 캐시 취지)
 TIMEOUT_SEC: float = float(os.environ.get("AGRODSS_INGEST_TIMEOUT_SEC", "15"))
 
 

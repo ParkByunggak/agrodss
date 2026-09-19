@@ -118,6 +118,9 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
     _k("reference.fertilizer_prescription", "1층 사실",   # 흙토람 FrtlzrUse — 필지 검정값 기반 N·P·K·퇴비(kg/10a). PII: pnu
        ("axis", "status", "pnu", "crop_code", "observed_at", "fetched_at", "source", "resolution", "values", "units"),
        ("crop_name", "raw", "message"), sources=("external:",), layer3_input=True, subject_bound=False, pii=("pnu",)),
+    _k("reference.pesticide_registration", "1층 사실",    # PSIS SVC01 — 작물·병해충별 현행 등록약제 + 안전사용기준(전국). 관행 갈래
+       ("axis", "status", "crop", "pest", "observed_at", "fetched_at", "source", "resolution", "total", "items"),
+       ("queried_as", "message"), sources=("external:",), layer3_input=True, subject_bound=False),
     _k("reference.fertilizer_standard", "1층 사실",       # 흙토람 FrtlzrStdUse — 작물 표준 시비량(전국). 필지값이 아니다
        ("axis", "status", "crop_code", "observed_at", "fetched_at", "source", "resolution", "values", "units"),
        ("crop_name", "raw", "message"), sources=("external:",), layer3_input=True, subject_bound=False),

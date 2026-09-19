@@ -22,4 +22,5 @@ def _isolate_media_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("AGRODSS_SUBJECTS_PATH", str(reg))
     monkeypatch.setenv("AGRODSS_PROFILE_PATH", str(tmp_path / "profile.json"))   # 사용자 등록부도 쓰기 대상 — 격리 짝(R-4)
     monkeypatch.setenv("AGRODSS_SOIL_DIR", str(tmp_path / "soil"))               # 토양 원천 저장소(PII) — 격리 짝
+    monkeypatch.setenv("AGRODSS_PSIS_DIR", str(tmp_path / "psis"))               # PSIS 캐시 — 격리 짝
     yield

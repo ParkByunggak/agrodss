@@ -22,6 +22,7 @@
 | `reference.organic_material_notice` | 1층 사실 | 예 | `external:` | axis, observed_at, source, resolution, values | — | — |
 | `observation.soil_exam` | 1층 사실 | 예 | `external:` | status, pnu, axis, source, resolution, observed_at, fetched_at | exam_year, address_label, values, units, message | pnu, address_label |
 | `reference.fertilizer_prescription` | 1층 사실 | 예 | `external:` | axis, status, pnu, crop_code, observed_at, fetched_at, source, resolution, values, units | crop_name, raw, message | pnu |
+| `reference.pesticide_registration` | 1층 사실 | 예 | `external:` | axis, status, crop, pest, observed_at, fetched_at, source, resolution, total, items | queried_as, message | — |
 | `reference.fertilizer_standard` | 1층 사실 | 예 | `external:` | axis, status, crop_code, observed_at, fetched_at, source, resolution, values, units | crop_name, raw, message | — |
 | `plan.task` | 1층 계획 | 예 | `computed:grid` | source, resolution, stage, task, work_day, work_date, prep_date_own, prep_date_rental, tools, materials, retry_possible, deadline_day, deadline_date, source_note | — | — |
 | `plan.capture` | 1층 계획 | 예 | `computed:grid` | source, resolution, stage, task, work_day, work_date, prep_date_own, prep_date_rental, tools, materials, retry_possible, deadline_day, deadline_date, source_note | — | — |

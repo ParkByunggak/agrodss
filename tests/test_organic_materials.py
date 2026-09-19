@@ -92,9 +92,14 @@ def test_citation_for_organic_subject_at_stage3():
     assert [i.axis for i in env.inputs] == ["cert", "anchor"]
 
 
-def test_citation_conventional_is_not_applicable():
+def test_citation_conventional_without_psis_key_is_data_gap(monkeypatch):
+    # [M-15 ⑤] 관행 갈래는 이제 PSIS 인용 — 키가 없으면 데이터 미비(범주명으로 메우지 않는다). 인용 자체는 tests/test_psis.py
+    for k in ("AGRODSS_PSIS_API_KEY", "PSIS_API_KEY", "EXTERNAL_API__PSIS_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
     env = MC.judge({**SUBJ, "cert": "관행"}, today=T24)
-    assert env.kind == "해당 없음" and "PSIS" in env.result["why"]
+    assert env.kind == "판단 불가(데이터)" and "PSIS" in env.result["why"] and env.missing[0]["axis"] == "cert"
+    env = MC.judge({**SUBJ, "cert": "무농약"}, today=T24)
+    assert env.kind == "해당 없음"
 
 
 def test_citation_missing_cert_is_data_gap():
