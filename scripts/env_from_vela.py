@@ -75,6 +75,12 @@ def main(argv: list[str]) -> int:
         target.write_text(new, encoding="utf-8")
     print(f"옮김 {len(copied)}: {', '.join(copied) or '없음'}")
     print(f"VELA 에도 없음 {len(missing)}: {', '.join(missing) or '없음'}")
+    # [발행자 실측 2026-09-20 05:17] FERTILIZER 두 키가 "VELA 에도 없음"인데 처방은 success 였다 — config 가 DATA_GO_KR 공통 키로 대체한다.
+    # 그 사실을 여기서 말해 두지 않으면 다음 사람이 없는 키를 쫓는다.
+    have_now = parse_env(new if copied else cur)
+    fallback = [n for n in missing if n.startswith("FERTILIZER") and have_now.get("DATA_GO_KR_API_KEY")]
+    if fallback:
+        print(f"  ({', '.join(fallback)} 는 DATA_GO_KR_API_KEY 로 대체된다 — 없어도 처방이 된다)")
     return 0
 
 
