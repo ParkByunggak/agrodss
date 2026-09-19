@@ -61,6 +61,12 @@ def _conditional(task_name: str) -> bool:
     return bool(_COND.search(task_name or ""))
 
 
+def reason_for(reasons: list[dict[str, Any]], task: str, work_date: str) -> dict[str, Any] | None:
+    """계획표 한 줄(작업명 · 계획일)에 기록된 불이행 사유. 계획 대 실제와 단계 결정(웃거름 등)이 **같은 키**로 잇는다 — 한 벌."""
+    return next((r for r in reasons if r.get("kind", "decision.noncompliance") == "decision.noncompliance"
+                 and r.get("planned_task") == task and r.get("planned_day") == work_date), None)
+
+
 def _matched_event(p: dict[str, Any], evts: list[dict[str, Any]], tol: int, params: dict[str, Any]) -> dict[str, Any] | None:
     types = _types_for(p["task"], params)
     if not types:
@@ -117,7 +123,12 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
             # 기준점 이전 촬영(종구 준비 칸) — 기준점을 뒤에 등록한 재배 단위는 소급 촬영이 있을 수 없다. 놓침이 아니라 기록 없음
             status, evidence = "기록 없음", "기준점 이전 작업 — 소급 촬영 불가, 사유를 묻지 않는다"
         if status is None:
-            if today < wd:
+            rec = reason_for(reasons, p["task"], p["work_date"])
+            if rec:
+                # [발행자 2026-09-20 "웃거름 주지 않고 …"] 안 하기로 한 이유가 기록됐으면 마감 전이라도 '미이행'이 아니다 —
+                # 전에는 마감 뒤에만 봐서, 마감 안에 말한 사유가 닷새 동안 '미이행'으로 보였다. 작목 무관(계획표 줄과 같은 키로 잇는다)
+                status, evidence = "사유 기록됨", rec["reason"]
+            elif today < wd:
                 status = "예정"
                 pr = p.get("prep_date_rental")
                 if pr and date.fromisoformat(pr) <= today:
@@ -125,12 +136,8 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
             elif today <= dl:
                 status, evidence = "미이행", f"마감까지 {(dl - today).days}일 (재시도 {'가능' if p['retry_possible'] else '불가'})"
             else:
-                rec = next((r for r in reasons if r.get("planned_task") == p["task"] and r.get("planned_day") == p["work_date"]), None)
-                if rec:
-                    status, evidence = "사유 기록됨", rec["reason"]
-                else:
-                    status, evidence = "놓침", f"마감 {p['deadline_date'] or p['work_date']} 지남 — 불이행 사유를 묻는다"
-                    ask.append({"task": p["task"], "work_date": p["work_date"], "stage": p["stage"]})
+                status, evidence = "놓침", f"마감 {p['deadline_date'] or p['work_date']} 지남 — 불이행 사유를 묻는다"
+                ask.append({"task": p["task"], "work_date": p["work_date"], "stage": p["stage"]})
         counts[status] += 1
         rows.append({"stage": p["stage"], "task": p["task"], "work_date": p["work_date"], "deadline_date": p.get("deadline_date"),
                      "status": status, "evidence": evidence, "materials": p.get("materials"), "kind": p["kind"]})

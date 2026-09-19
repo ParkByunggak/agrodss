@@ -61,6 +61,18 @@ CORPUS = [
     ("답이 틀린 것 같아요", "feedback.request", None),
     ("경보가 너무 자주 와서 불편해요", "feedback.request", None),
     ("예정일이 안 맞아요", "feedback.request", None),
+    # 불이행 사유 — 사건 어휘 + 부정(발행자 2026-09-20 "웃거름 주지 않고 …"). 쪽파는 사례 — 작업 종류는 작목 공통 어휘로 잡는다
+    ("쪽파 포장에는 웃거름 주지 않고 수분공급만 표면이 마르지 않게 해 줌. 그 근거는 토양검증 상태를 기준으로 함", "decision.noncompliance", None),
+    ("방제는 하지 않았다, 벌레가 없어서", "decision.noncompliance", None),
+    ("약 안 쳤다", "decision.noncompliance", None),                                   # 어휘 사이에 낀 부정
+    ("제초 생략했다", "decision.noncompliance", None),
+    ("웃거름 못 줬어요", "decision.noncompliance", None),
+    # 부정이 사건 어휘 **앞** 이면 사건이다 · 계획 · 질문은 여전히 먼저다
+    ("비가 안 와서 물 줬다", "event", None),
+    ("잎이 마르지 않게 물 줬다", "event", None),
+    ("벌레가 안 보인다", "observation.note", None),
+    ("내일 웃거름 주지 않을 예정", "plan.farmer", None),
+    ("웃거름 안 줘도 되나요", "question", "top_dressing_1"),
 ]
 
 
@@ -74,5 +86,5 @@ def test_corpus_kind_and_topic(text, kind, topic):
 
 def test_corpus_covers_every_kind_and_has_no_duplicates():
     kinds = {c[1] for c in CORPUS}
-    assert kinds == {"question", "event", "observation.note", "plan.farmer", "plan.target_date", "feedback.request"}
+    assert kinds == {"question", "event", "observation.note", "plan.farmer", "plan.target_date", "feedback.request", "decision.noncompliance"}
     assert len({c[0] for c in CORPUS}) == len(CORPUS)

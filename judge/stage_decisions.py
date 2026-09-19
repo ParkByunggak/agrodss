@@ -288,7 +288,8 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
     row = {"task": t.get("name", d.params["task_key"]), "work_date": work_date, "deadline_date": dl}
     hit = plan_vs_actual._matched_event(row, list(evts or []), int(pva.params["tolerance_days"]), pva.params)
     done = [hit] if hit else []
-    status = "이행" if done else ("예정" if day < wd else "미이행")
+    reason = plan_vs_actual.reason_for(list(evts or []), row["task"], work_date)   # 불이행 사유도 계획 대 실제와 같은 키 — 한 벌
+    status = "이행" if done else ("사유 기록됨" if reason else ("예정" if day < wd else "미이행"))
     p = _prescription(prescriptions)
     inputs = _anchor_inputs(subject, anchor)
     if p is not None:
@@ -300,8 +301,9 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
     return Envelope("판단함", did, sid, as_of, inputs=inputs, grade=weakest(["관측", _grid_grade(unit)]),
                     revisit_at=(today + timedelta(days=1)).isoformat(),
                     result={"status": status, "work_date": work_date, "deadline": dl, "materials": m, "done_refs": [e.get("id") for e in done],
-                            "amount": amount_note,
-                            "summary": f"{status} — 작업일 {work_date} · 마감 {dl} · 자재({cert}) {', '.join(m) or '없음'} · {'양 ' + amount_note if p else '양은 정본 대기'}"},
+                            "amount": amount_note, "reason": (reason or {}).get("reason"), "reason_ref": (reason or {}).get("id"),
+                            "summary": f"{status} — 작업일 {work_date} · 마감 {dl} · 자재({cert}) {', '.join(m) or '없음'} · {'양 ' + amount_note if p else '양은 정본 대기'}"
+                                       + (f" · 사유: {reason['reason'][:120]}" if reason else "")},
                     notes=["양(kg/10a)은 지어내지 않는다 — 처방 정본이 없으면 비운다"])
 
 

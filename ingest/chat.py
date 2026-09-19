@@ -176,6 +176,63 @@ def _event_type(text: str) -> str | None:
     return None
 
 
+# [발행자 2026-09-20 "쪽파 포장에는 웃거름 주지 않고 수분공급만 …. 그 근거는 토양검정 상태를 기준으로 함"]
+# 사건 어휘 + **부정**은 사건이 아니라 불이행 사유다(I-3 §5 "안 따른 이유가 조언보다 값지다"). 쪽파는 사례일 뿐이다 — 작업 종류는
+# EVENT_SYNONYMS(작목 공통), 계획 작업·계획일은 그 재배 단위의 격자 계획표에서 잇는다(_attach_plan). 작목별 분기는 없다.
+#   · 부정은 사건 어휘 **바로 뒤**에서만 본다 — "비가 안 와서 물 줬다"의 '안'은 관수를 부정하지 않는다.
+#   · '안/못 + 동사' 는 표지(§)로 접어 "약 안 쳤다"에서도 방제 어휘가 잡히게 한다(어휘 사이에 부정이 끼는 한국어 형태).
+_NEG_FOLD = re.compile(r"(?<![가-힣])(안|못)(?:\s+(?=[가-힣])|(?=[했줬쳤함줌하주치뿌심캐뽑걷]))")
+_NEG_AFTER = re.compile(r"^[^\s]*\s*(?:[가-힣]{1,4}\s*)?(?:지\s*않|지\s*못|§|않|생략|건너뛰|거른다|걸렀)")
+_ALT_AFTER = re.compile(r"(대신|만\s|만[가-힣]|해\s?줌|해\s?준다|하고 있|하는 중)")   # '했다'는 넣지 않는다 — "생략했다"의 어미가 대신 한 일로 읽힌다(실측)
+
+
+def _negated_task(text: str) -> tuple[str, int] | None:
+    """(부정된 작업 종류, 부정 표현 끝 위치) — 사건 어휘 바로 뒤에 부정이 붙은 첫 종류. 없으면 None."""
+    norm = _NEG_FOLD.sub("§", text)
+    for et, words in EVENT_SYNONYMS.items():
+        for w in words:
+            m = re.search("§?".join(re.escape(ch) for ch in w), norm)
+            if not m:
+                continue
+            if "§" in m.group(0):
+                return et, m.end()
+            a = _NEG_AFTER.match(norm[m.end():])
+            if a:
+                return et, m.end() + a.end()
+    return None
+
+
+def _plan_row_for(subject_id: str, et: str, today: date) -> dict[str, Any] | None:
+    """부정된 작업 종류 → 그 재배 단위의 계획표(계획 대 실제 봉투)에서 같은 종류의 미완 작업 한 줄. 작목 무관 — 격자가 무엇이든 그 격자의 줄이다.
+    이행된 줄은 제외. 지난 것(놓침·미이행)을 먼저, 없으면 가장 가까운 예정. 계획표가 없으면(기준점 없음 등) None."""
+    from judge import run as judge_run   # answer() 와 같은 규율 — 3층 봉투만 받는다
+    e = next((x for x in judge_run.judgments_for(subject_id, today=today) if x.decision_id == "plan_vs_actual"), None)
+    if e is None or e.kind != "판단함":
+        return None
+    words = EVENT_SYNONYMS.get(et, ())
+    rows = [r for r in (e.result or {}).get("rows", []) if r.get("status") not in ("이행", "사유 기록됨") and any(w in (r.get("task") or "") for w in words)]
+    if not rows:
+        return None
+    past = [r for r in rows if (r.get("work_date") or "") <= today.isoformat()]
+    return max(past, key=lambda r: r["work_date"]) if past else min(rows, key=lambda r: r["work_date"])
+
+
+def _attach_plan(subject_id: str, drafts: list[dict[str, Any]], today: date) -> list[dict[str, Any]]:
+    """불이행 초안에 계획표의 작업명·계획일을 잇는다(분류기는 재배 단위를 모른다 — 여기서만 잇는다). 계획표에 없으면 needs 로 남긴다."""
+    out = []
+    for d in drafts:
+        if d.get("kind") == "decision.noncompliance" and not d.get("planned_day"):
+            row = _plan_row_for(subject_id, d["task_type"], today)
+            d = dict(d)
+            if row:
+                d.update(planned_task=row["task"], planned_day=row["work_date"], needs=[],
+                         why=d["why"] + f" · 계획표 '{row['task']}'({row['work_date']} · {row.get('status')})에 맞췄다")
+            else:
+                d["why"] += " · 계획표에 같은 종류의 미완 작업이 없다 — 계획일을 적는다"
+        out.append(d)
+    return out
+
+
 def _damage_risk(text: str) -> str | None:
     for fam, words in DAMAGE_WORDS.items():
         if any(w in text for w in words):
@@ -204,6 +261,18 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
                      "needs": [] if day else ["target_date"]}]
         return [{"kind": "plan.farmer", "task": et or t[:60], "planned_day": day, "note": t, "why": "계획 어휘",
                  "needs": [] if day else ["planned_day"]}]
+    neg = _negated_task(t)
+    if neg:
+        # 사건 어휘 + 부정 = 하지 않았다는 사실과 그 이유(원문이 사유다). 종류만 정하고 계획 작업·계획일은 send() 가 계획표에서 잇는다
+        et_neg, end = neg
+        drafts: list[dict[str, Any]] = [{"kind": "decision.noncompliance", "task_type": et_neg, "planned_task": et_neg, "planned_day": day_past,
+                                         "reason": t, "why": f"사건 어휘 + 부정 → {et_neg} 불이행 사유(원문이 사유)",
+                                         "needs": [] if day_past else ["planned_day"]}]
+        if _ALT_AFTER.search(t[end:]):
+            # 부정 뒤에 대신 한 일이 이어진다("… 주지 않고 수분공급만 …") — 그 관행은 관찰 메모로도 남길 수 있다(선택 · 원문 그대로)
+            drafts.append({"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
+                           "why": "불이행 뒤에 이어진 실행 서술 — 관행을 관찰 메모로도 남긴다(선택)", "needs": []})
+        return drafts
     dmg = _damage_risk(t)
     if dmg:
         # [U-16] 피해는 사건이되 무엇의 피해인지(risk)가 있어야 경보와 대조된다. '피해'만 있고 갈래가 없으면 확인 화면이 묻는다
@@ -305,7 +374,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
             raise ChatError(f"없는 메시지를 잇는다: {ref}")
     today = today or date.today()
     ts = _now(now).isoformat(timespec="seconds")
-    drafts = classify(text, today)
+    drafts = _attach_plan(subject_id, classify(text, today), today)   # 불이행 초안만 계획표(재배 단위별)에 잇는다
     rec: dict[str, Any] = {"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": role, "text": text[:2000],
                            "observed_at": today.isoformat(), "recorded_at": ts, "source": role, "resolution": RESOLUTION,
                            "drafts": drafts, "confirmed_refs": [], "input_mode": input_mode}
@@ -327,6 +396,8 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         d = drafts[0]
         need = d.get("needs") or []
         reply_text = f"{KIND_LABEL[d['kind']]}(으)로 읽었다 — {d['why']}. " + ("날짜를 넣고 " if need else "") + "확인하면 원장에 들어간다. 아니면 다른 종류를 고른다."
+        if len(drafts) > 1:
+            reply_text += " 초안 " + " · ".join(f"{n + 1}) {KIND_LABEL.get(x['kind'], x['kind'])}" for n, x in enumerate(drafts)) + " — 각각 따로 확인한다."
     else:
         reply_text = "분류 안 됨(빈 발화) — 사건 · 관찰 · 계획 · 개선 요구 중 골라 주면 그 종류로 초안을 만든다."   # 서술문은 관찰 메모로 제안되므로 여기 오는 것은 빈 발화뿐
     if media_refs and drafts:
@@ -361,24 +432,29 @@ def choose_kind(msg_id: str, kind: str, today: date | None = None) -> dict[str, 
     today = today or date.today()
     t = m["text"]
     day = parse_day(t, today)
+    day_past = parse_day(t, today, past=True)      # 관찰·불이행은 이미 지난 것 — classify 와 같은 규율(전에는 이 이름이 없어 관찰 선택이 NameError 였다)
     if kind == "event":
-        d = {"kind": "event", "type": _event_type(t) or "기타", "observed_at": day, "note": t, "why": "사람이 고름", "needs": [] if day else ["observed_at"]}
+        d = {"kind": "event", "type": _event_type(t) or "기타", "observed_at": day_past, "note": t, "why": "사람이 고름", "needs": [] if day_past else ["observed_at"]}
     elif kind == "observation.note":
         d = {"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(), "why": "사람이 고름", "needs": []}
     elif kind == "plan.farmer":
         d = {"kind": "plan.farmer", "task": t[:60], "planned_day": day, "note": t, "why": "사람이 고름", "needs": [] if day else ["planned_day"]}
     elif kind == "feedback.request":
         d = {"kind": "feedback.request", "text": t, "target": "other", "why": "사람이 고름"}
+    elif kind == "decision.noncompliance":
+        et = _event_type(_NEG_FOLD.sub("", t)) or t[:60]
+        d = {"kind": "decision.noncompliance", "task_type": et, "planned_task": et, "planned_day": day_past, "reason": t, "why": "사람이 고름",
+             "needs": [] if day_past else ["planned_day"]}
     else:
         raise ChatError(f"고를 수 없는 종류: {kind}")
     rec = dict(m)
-    rec["drafts"] = [d]
+    rec["drafts"] = _attach_plan(m["subject"], [d], today)
     rec.pop("schema_version", None)
     return _append(rec)
 
 
 def confirm(msg_id: str, draft_index: int = 0, day: str | None = None, event_type: str | None = None,
-            now: datetime | None = None, risk: str | None = None) -> dict[str, Any]:
+            now: datetime | None = None, risk: str | None = None, planned_task: str | None = None) -> dict[str, Any]:
     """초안 → 원장. 날짜가 없으면 여기서 받은 day 가 필요하다. 확인된 레코드 id 가 메시지에 붙는다."""
     m = get_message(msg_id)
     if not m:
@@ -386,9 +462,11 @@ def confirm(msg_id: str, draft_index: int = 0, day: str | None = None, event_typ
     drafts = m.get("drafts") or []
     if draft_index >= len(drafts):
         raise ChatError("없는 초안")
-    if m.get("confirmed_refs"):
-        # [코드 평가 C7] 재확인 방지 — 브라우저 POST 재전송이 같은 사건을 두 번 원장에 썼다. 확인은 발화당 한 번
-        raise ChatError(f"이미 확인된 발화 — 원장 {', '.join(m['confirmed_refs'])}")
+    done = confirmed_ref(m, draft_index)
+    if done:
+        # [코드 평가 C7] 재확인 방지 — 브라우저 POST 재전송이 같은 사건을 두 번 원장에 썼다. 확인은 **초안당** 한 번
+        # (한 발화에 초안이 둘일 수 있다 — 불이행 사유 + 대신 한 일의 관찰 메모. 각각 따로 확인한다)
+        raise ChatError(f"이미 확인된 초안 — 원장 {done}")
     d = dict(drafts[draft_index])
     sid, ref = m["subject"], m["id"]
     k = d["kind"]
@@ -409,15 +487,31 @@ def confirm(msg_id: str, draft_index: int = 0, day: str | None = None, event_typ
             rec = ev.add_target_date(sid, day or d.get("target_date") or "", note=d.get("note", ""), chat_ref=ref, now=now)
         elif k == "feedback.request":
             rec = fb.add_request(d["text"], target=d.get("target", "other"), subject=sid, source=m.get("source", "farmer"), now=now)
+        elif k == "decision.noncompliance":
+            rec = ev.add_noncompliance(sid, (planned_task or d.get("planned_task") or "").strip() or d.get("task_type", ""), d["reason"],
+                                       day or d.get("planned_day") or "", now=now)
         else:
             raise ChatError(f"확인할 수 없는 종류: {k}")
     except (ev.EventError, fb.FeedbackError) as e:
         raise ChatError(str(e))
     upd = dict(m)
     upd["confirmed_refs"] = list(m.get("confirmed_refs", [])) + [rec["id"]]
+    upd["drafts"] = [dict(x, confirmed_ref=rec["id"]) if n == draft_index else x for n, x in enumerate(drafts)]
     upd.pop("schema_version", None)
     _append(upd)
     return rec
+
+
+def confirmed_ref(m: dict[str, Any], draft_index: int) -> str | None:
+    """이 초안이 이미 원장에 들어갔으면 그 원장 id. 초안에 confirmed_ref 가 붙은 것이 정본이고, 그 표지가 없는 옛 메시지는
+    발화 단위(confirmed_refs)로 본다 — 옛 기록의 C7(재확인 방지)을 그대로 지킨다."""
+    drafts = m.get("drafts") or []
+    if draft_index < len(drafts) and drafts[draft_index].get("confirmed_ref"):
+        return drafts[draft_index]["confirmed_ref"]
+    refs = m.get("confirmed_refs") or []
+    if refs and not any(x.get("confirmed_ref") for x in drafts):
+        return refs[0]
+    return None
 
 
 def pending_drafts(subject_id: str) -> list[tuple[dict[str, Any], int, dict[str, Any]]]:
@@ -425,10 +519,8 @@ def pending_drafts(subject_id: str) -> list[tuple[dict[str, Any], int, dict[str,
     for m in list_messages(subject_id):
         if m.get("role") != "farmer" and m.get("source") != "publisher":
             continue
-        if m.get("confirmed_refs"):
-            continue
         for i, d in enumerate(m.get("drafts") or []):
-            if d["kind"] != "question":
+            if d["kind"] != "question" and not confirmed_ref(m, i):
                 out.append((m, i, d))
     return out
 

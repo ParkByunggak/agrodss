@@ -43,6 +43,44 @@ def git_head_short() -> str:
         return "?"
 
 
+def git_log_lines(n: int = 20) -> list[tuple[str, str, str]]:
+    """(짧은 해시, 날짜, 제목) 최근 n건 — 변경 로그 화면. 제목만 싣는다(본문은 싣지 않는다 — 문서 인용 · 경로가 길다)."""
+    try:
+        r = subprocess.run(
+            ["git", "log", f"-{int(n)}", "--date=short", "--format=%h%x1f%ad%x1f%s"], cwd=config.ROOT,
+            capture_output=True, encoding="utf-8", errors="replace", timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    out = []
+    for line in r.stdout.splitlines():
+        parts = line.split("\x1f")
+        if len(parts) == 3:
+            out.append((parts[0], parts[1], parts[2]))
+    return out
+
+
+RUNNING_HEAD = git_head_short()   # 프로세스가 기동한 코드. 저장소 HEAD 가 앞서가면 watch_head 가 재기동한다(RELOAD_ON_HEAD_CHANGE) — 이 둘의 차이가 '반영 여부'다
+
+
+def changes_page() -> tuple[int, str]:
+    """[발행자 2026-09-20 메뉴 '변경 로그 보기'] 커밋 이력 + **실행 중 코드가 저장소와 같은가**. CLAUDE.md 라이브 반영 규율의 화면판."""
+    head = git_head_short()
+    if head == RUNNING_HEAD:
+        state = f'<span class="st st-완료">반영됨</span> 실행 중 {html.escape(RUNNING_HEAD)} = 저장소 HEAD'
+    elif config.RELOAD_ON_HEAD_CHANGE:
+        state = f'<span class="st st-진행">뒤처짐</span> 실행 중 {html.escape(RUNNING_HEAD)} · 저장소 {html.escape(head)} — 자동 재기동 대기({config.RELOAD_POLL_SEC}초 감시), 새로고침하면 새 코드'
+    else:
+        state = f'<span class="st st-대기">뒤처짐</span> 실행 중 {html.escape(RUNNING_HEAD)} · 저장소 {html.escape(head)} — AGRODSS_RELOAD=0 이라 수동 재시작'
+    rows = "".join(f"<tr><td><code>{html.escape(h)}</code></td><td>{html.escape(d)}</td><td>{html.escape(s)}</td></tr>" for h, d, s in git_log_lines(20))
+    body = (f"<h1>변경 로그</h1><p>{state}</p>"
+            f"<table><thead><tr><th>커밋</th><th>날짜</th><th>제목</th></tr></thead><tbody>{rows or '<tr><td colspan=3>git 이력을 읽지 못했다</td></tr>'}</tbody></table>"
+            "<p style='color:var(--muted)'>저장소 정본 <code>git log</code> 의 제목 20건 — 무엇이 언제 바뀌었는지. 반영 상태는 위 한 줄이다(커밋 완료 ≠ 반영 완료).</p>")
+    meta = "실행 중 코드와 저장소 HEAD 를 대조한다 — 뒤처지면 자동 재기동(run_frontend.bat) 뒤 새로고침"
+    footer = f"HEAD {head} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
+    return 200, render.page("AGRODSS —변경 로그", nav_html("/changes"), body, meta, footer)
+
+
 def doc_list() -> list[str]:
     present = sorted(p.name for p in config.DOCS_DIR.glob("*.md"))
     ordered = [n for n in config.NAV_ORDER if n in present]
@@ -451,6 +489,8 @@ class Handler(BaseHTTPRequestHandler):
             status, body = judge_page()
         elif p == "/events":
             status, body = events_page()
+        elif p == "/changes":
+            status, body = changes_page()
         elif p.startswith("/doc/"):
             status, body = render_page(unquote(p[len("/doc/"):]))
         else:
@@ -524,7 +564,7 @@ class Handler(BaseHTTPRequestHandler):
             sid = unquote(p[len("/c/"):-len("/confirm")])
             try:
                 rec = chat.confirm(form.get("msg", ""), int(form.get("i") or 0), day=form.get("day") or None, event_type=form.get("type") or None,
-                                   risk=form.get("risk") or None)
+                                   risk=form.get("risk") or None, planned_task=form.get("planned_task") or None)
                 status, body = chat_page(sid, message=f"원장에 들어감 {rec['id']} · {chat.KIND_LABEL.get(rec['kind'], rec['kind'])} {rec.get('observed_at', '')}")
             except (chat.ChatError, ValueError) as e:
                 status, body = chat_page(sid, error=str(e))

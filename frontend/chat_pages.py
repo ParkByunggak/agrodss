@@ -9,7 +9,7 @@ from datetime import date
 from typing import Any
 from urllib.parse import quote
 
-from frontend import config
+from frontend import config, render
 from grid import capture as grid_capture
 from ingest import chat, events as ev, feedback as fb, media, parcels, profile, subjects
 from judge import evolve, registry, run as judge_run
@@ -18,7 +18,7 @@ BRAND = "AGRODSS"
 BRAND_HTML = f'<a class="brand" href="/" id="brand" title="홈 — 첫 채팅으로">{BRAND} <small>내부 화면</small></a>'
 DECISION_LABEL = {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용", "plan_vs_actual": "계획 대 실제"}
 DECISION_LABEL.update({k: d.name for k, d in registry.all_decisions().items() if k not in DECISION_LABEL})   # M-10 등록분은 등록부 이름
-CHOOSABLE = (("event", "사건"), ("observation.note", "관찰"), ("plan.farmer", "계획"), ("feedback.request", "개선 요구"))
+CHOOSABLE = (("event", "사건"), ("observation.note", "관찰"), ("plan.farmer", "계획"), ("decision.noncompliance", "불이행 사유"), ("feedback.request", "개선 요구"))
 
 
 def _e(v: Any) -> str:
@@ -53,7 +53,8 @@ aside.side { background:var(--side); border-right:1px solid var(--line); padding
 .pill { display:inline-block; font-size:11px; padding:0 7px; border-radius:9px; background:var(--chip); color:var(--muted); margin-left:4px; }
 .pill.run { background:var(--ok); color:var(--ok-fg); } .pill.plan { background:var(--warn); color:var(--warn-fg); }
 .side .lnk { display:block; padding:5px 10px; font-size:13px; color:var(--muted); text-decoration:none; } .side .lnk:hover { color:var(--fg); }
-aside.side { display:flex; flex-direction:column; } .chat.user { margin-top:auto; border-top:1px solid var(--line); border-radius:0; padding-top:12px; }
+aside.side { display:flex; flex-direction:column; }
+""" + render.USER_MENU_CSS + """
 main.thread { display:flex; flex-direction:column; min-height:100vh; }
 .thead { position:sticky; top:0; background:var(--bg); border-bottom:1px solid var(--line); padding:12px 24px; display:flex; justify-content:space-between; align-items:center; z-index:2; }
 .thead h1 { font-size:16px; margin:0; font-weight:600; } .thead .meta { color:var(--muted); font-size:12px; }
@@ -133,12 +134,42 @@ def sidebar(current: str, docs: list[str], today: date) -> str:
     return "".join(out)
 
 
+# [발행자 2026-09-20 화면 형식 — 계정 메뉴 스크린샷] 사용자 탭을 누르면 위로 열리는 메뉴. 그 형식에서 agrodss 에 **실재하는** 항목만 옮겼다:
+#   설정 → /me · 도움 받기 → 채팅 화면 설명 · 모든 플랜 보기 → 모든 목록 · 앱/확장 → 휴대폰 동기화(D-16) · 변경 로그 → /changes · 자세히 → 대장.
+#   언어 · 팀 참여 · 로그아웃은 넣지 않았다 — 언어 전환 · 팀 · 계정이 없다(D-6 이 PC 뿐). 없는 기능을 메뉴에 두면 눌러서 실망하는 항목이 된다.
+USER_MENU: tuple[tuple[str, str, str] | None, ...] = (
+    ("/me", "설정", "사용자 정보 · 필지 · 동기화"),
+    ("/doc/m13_chat_screen.md", "도움 받기", "채팅 화면 설명"),
+    None,
+    ("/", "모든 목록 보기", "재배 단위 채팅"),
+    ("/judge", "판단 보기", "수확 시기 · 위험 경보 · 계획 대 실제"),
+    ("/events", "사건 · 불이행 사유", "표로 직접 적기"),
+    ("/media", "영상 · 사진 반입", "촬영 시각이 붙어야 등록"),
+    ("/improve", "개선 · 자율진화", "개선 요구 → 항목"),
+    ("/me#sync", "휴대폰 동기화(D-16)", "같은 Wi-Fi · 토큰"),
+    None,
+    ("/changes", "변경 로그 보기", "커밋 이력 · 실행 중 코드"),
+    ("/doc/agrodss_backlog.md", "자세히 알아보기", "대장 · 문서"),
+)
+
+
 def user_tab_html(current: str) -> str:
-    """[발행자 2026-09-19] 채팅 목록 최하단 — 사용자 정보 탭. **매 페이지**에 있다(채팅 셸 · 표 화면 · 404 까지) — 정본은 이 함수 하나."""
+    """[발행자 2026-09-19] 채팅 목록 최하단 — 사용자 정보 탭. **매 페이지**에 있다(채팅 셸 · 표 화면 · 404 까지) — 정본은 이 함수 하나.
+    [2026-09-20] 탭이 메뉴(USER_MENU)를 연다. 이름 · 역할만 보인다 — 이메일 · 연락처는 등록부에 없다(PII)."""
     u = profile.load()
+    name, role = u.get("name") or "사용자 정보", u.get("role") or ""
     cls = ' on' if current == "/me" else ""
-    return (f'<a class="chat user{cls}" href="/me" id="user-tab"><b>{_e(u.get("name") or "사용자 정보")}<span class="pill">{_e(u.get("role"))}</span></b>'
-            f'<span>필지 {len(u.get("parcels") or [])} · 설정 · 동기화</span></a>')
+    items = []
+    for it in USER_MENU:
+        if it is None:
+            items.append("<hr>")
+            continue
+        href, label, sub = it
+        on = ' class="on"' if href == current else ""
+        items.append(f'<a href="{href}"{on}>{_e(label)}' + (f"<small>{_e(sub)}</small>" if sub else "") + "</a>")
+    return (f'<details class="umenu" id="user-tab"><summary class="user{cls}"><b>{_e(name)}<span class="pill">{_e(role)}</span></b>'
+            f'<span>필지 {len(u.get("parcels") or [])} · 메뉴 ▴</span></summary>'
+            f'<div class="ulist"><div class="uhead">{_e(name)} · {_e(role)}</div>{"".join(items)}</div></details>')
 
 
 def me_main(message: str = "", error: str = "", form: dict[str, str] | None = None) -> str:
@@ -161,7 +192,7 @@ def me_main(message: str = "", error: str = "", form: dict[str, str] | None = No
         miss = parcels.missing_inputs(p)
         out.append(f'<div class="card"><b>{_e(p["id"])}</b> · 용도 {_e(v.get("use") or "미기재")} · 위치 {_e(v["location"])} · 인증 주장 {_e(v.get("cert_claimed") or "없음")}'
                    f'<div style="color:var(--muted)">입력 대기 {len(miss)}: {_e(", ".join(miss))}</div></div>')
-    out.append('<h2 style="font-size:14px">설정 · 동기화</h2>')
+    out.append('<h2 id="sync" style="font-size:14px">설정 · 동기화</h2>')
     lan = "켜짐(같은 Wi-Fi, 토큰 필요)" if config.BIND == config.LAN_BIND and config.LAN_TOKEN else "꺼짐(이 PC 에서만 — D-6)"
     out.append(f'<div class="card"><b>휴대폰 동기화(D-16)</b> {_e(lan)}<div style="color:var(--muted)">켜려면 <code>.env</code> 에 <code>AGRODSS_BIND=0.0.0.0</code> 과 <code>AGRODSS_LAN_TOKEN=(16자 이상)</code> 을 넣고 재시작, 휴대폰은 같은 Wi-Fi 에서 <code>http://&lt;PC IP&gt;:{config.PORT}/?t=&lt;토큰&gt;</code>. '
                '휴대폰 마이크·음성은 https 또는 localhost 에서만 열린다(브라우저 보안 규칙) — 휴대폰에서는 글·사진·영상 입력이 먼저다</div></div>')
@@ -176,8 +207,9 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
     k = d["kind"]
     if k == "question":
         return ""
-    if m.get("confirmed_refs"):
-        return f'<div class="draft"><span class="done">원장에 들어감</span> {_e(chat.KIND_LABEL.get(k, k))} · {_e(", ".join(m["confirmed_refs"]))}</div>'
+    done = chat.confirmed_ref(m, i)
+    if done:
+        return f'<div class="draft"><span class="done">원장에 들어감</span> {_e(chat.KIND_LABEL.get(k, k))} · {_e(done)}</div>'
     need = d.get("needs") or []
     parts = [f'<div class="draft"><b>{_e(chat.KIND_LABEL.get(k, k))}</b> 초안 — {_e(d.get("why", ""))}']
     parts.append(f'<form method="post" action="/c/{quote(m["subject"])}/confirm"><input type="hidden" name="msg" value="{_e(m["id"])}"><input type="hidden" name="i" value="{i}">')
@@ -186,6 +218,9 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
         parts.append(f'<select name="type">{opts}</select>')
         if d.get("type") == ev.DAMAGE_TYPE:
             parts.append(f'<input name="risk" value="{_e(d.get("risk") or "")}" placeholder="무엇의 피해(서리 · 부패 · 해충 · 병){" (필요)" if "risk" in need else ""}" size="16">')
+    if k == "decision.noncompliance":
+        # 계획 작업명은 계획표에서 이은 값(작목 무관 — 그 재배 단위의 격자 줄). 사람이 고칠 수 있고, 계획일은 아래 날짜 칸이다
+        parts.append(f'<input name="planned_task" value="{_e(d.get("planned_task") or "")}" placeholder="계획 작업명" size="18">')
     day = d.get("observed_at") or d.get("planned_day") or d.get("target_date") or ""
     if k != "feedback.request":
         parts.append(f'<input name="day" value="{_e(day)}" placeholder="YYYY-MM-DD{" (필요)" if need else ""}" size="12">')

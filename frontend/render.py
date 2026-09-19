@@ -49,6 +49,23 @@ def ledger_counts(text: str) -> dict[str, int]:
     return counts
 
 
+# [발행자 2026-09-20 화면 형식] 사용자 탭 = 위로 열리는 메뉴(설정 · 도움 · 화면들 · 변경 로그 · 문서). 채팅 셸과 표 화면이 이 CSS 한 벌을 쓴다.
+# JS 없음 — <details>/<summary> 로 연다. 항목은 chat_pages.USER_MENU 가 정본이고 전부 실재 경로다(없는 기능은 넣지 않는다).
+USER_MENU_CSS = """
+.umenu { margin-top:auto; border-top:1px solid var(--line); padding-top:8px; position:relative; }
+.umenu summary { list-style:none; cursor:pointer; padding:8px 10px; border-radius:8px; margin-top:0; border-top:0; display:block; }
+.umenu summary::-webkit-details-marker { display:none; } .umenu summary:hover, .umenu[open] summary { background:rgba(0,0,0,.05); }
+.umenu summary b { display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:13.5px; }
+.umenu summary > span { display:block; color:var(--muted); font-size:11px; }
+.umenu .pill { display:inline-block; font-size:11px; padding:0 7px; border-radius:9px; color:var(--muted); margin-left:4px; background:rgba(0,0,0,.06); }
+.umenu .ulist { position:absolute; bottom:100%; left:0; right:0; background:var(--bg); border:1px solid var(--line); border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.14); padding:6px; margin-bottom:6px; z-index:5; }
+.umenu .ulist .uhead { padding:6px 10px 8px; color:var(--muted); font-size:12px; border-bottom:1px solid var(--line); margin-bottom:4px; }
+.umenu .ulist a { display:block; padding:7px 10px; border-radius:6px; font-size:13px; text-decoration:none; margin:0; color:var(--fg); }
+.umenu .ulist a:hover, .umenu .ulist a.on { background:rgba(0,0,0,.05); } .umenu .ulist a small { display:block; color:var(--muted); font-size:11px; }
+.umenu .ulist hr { border:0; border-top:1px solid var(--line); margin:4px 0; }
+"""
+
 CSS = """
 :root { --bg:#fff; --fg:#1a1a1a; --muted:#6b6b6b; --line:#e3e3e3; --head:#f5f5f5; --nav:#fafafa;
   --wait:#e8eef8; --wait-fg:#2b4c8c; --run:#fff3d6; --run-fg:#8a5a00; --done:#e3f4e6; --done-fg:#1f6b35;
@@ -70,9 +87,9 @@ nav a.on { background:var(--head); font-weight:600; }
 nav .grp { color:var(--muted); font-size:11px; margin:12px 8px 4px; text-transform:uppercase; }
 nav a.brand { font-weight:700; font-size:16px; letter-spacing:.02em; padding:4px 8px 10px; display:flex; justify-content:space-between; align-items:center; }
 nav a.brand small { color:var(--muted); font-weight:400; font-size:11px; } nav a.brand:hover { color:var(--accent, #2F6B3A); }
-nav { display:flex; flex-direction:column; } nav a.user { margin-top:auto; border-top:1px solid var(--line); border-radius:0; padding-top:12px; }
-nav a.user b { display:flex; justify-content:space-between; align-items:center; } nav a.user > span { display:block; color:var(--muted); font-size:11px; }
-nav a.user .pill { display:inline-block; font-size:11px; padding:0 7px; border-radius:9px; background:var(--head); color:var(--muted); margin-left:4px; }
+nav { display:flex; flex-direction:column; }
+nav .umenu .pill { background:var(--head); }
+""" + USER_MENU_CSS + """
 main { flex:1; padding:16px 24px; max-width:1100px; box-sizing:border-box; min-width:0; }
 h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:16px; margin:28px 0 8px; padding-top:12px; border-top:1px solid var(--line); }
 h3 { font-size:14px; margin:20px 0 6px; }
