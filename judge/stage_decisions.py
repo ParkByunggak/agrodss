@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from judge import registry, risk_alert
+from judge import plan_vs_actual, registry, risk_alert
 from judge.envelope import AxisUse, Envelope, weakest
 from judge.harvest_timing import GRID_GRADE, _load_unit
 
@@ -38,6 +38,13 @@ def _task(stage: dict[str, Any], key: str) -> dict[str, Any] | None:
     if not isinstance(tasks, list):
         return None
     return next((t for t in tasks if key in t.get("name", "")), None)
+
+
+def _need_cert(did: str, sid: str, as_of: str) -> Envelope:
+    """[코드 평가 B2] cert 는 시비 결정의 필요 축 — 없으면 판단 불가(데이터). 전에는 mats.get(None, []) 로 빈 자재를 들고 '판단함'이 나갔다."""
+    return Envelope("판단 불가(데이터)", did, sid, as_of,
+                    missing=[{"axis": "cert", "who_can_fill": "농가 — 인증 유형(유기 · 무농약 · 관행) 을 재배 단위에"}],
+                    result={"why": "인증 유형(cert)이 없다 — 자재 갈래를 정할 수 없다", "summary": "인증 유형 대기"})
 
 
 def _grid_grade(unit: dict[str, Any]) -> str:
@@ -169,6 +176,8 @@ def judge_base_fertilization(subject, today: date, prescriptions: list[dict[str,
                         missing=[{"axis": "soil_chem", "who_can_fill": "농가 — 토양검정(python -m ingest.fertilizer <주소>, 키 투입) 또는 성적서 값"}],
                         result={"why": "토양검정 값이 없다", "summary": "토양검정 값 대기"})
     cert = subject.get("cert")
+    if not cert:
+        return _need_cert("base_fertilization", sid, as_of)
     mats = (t or {}).get("materials")
     m = mats.get(cert, []) if isinstance(mats, dict) else []
     p = _prescription(prescriptions)
@@ -261,18 +270,25 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
     wd = int(t["work_day"])
     deadline = int((t.get("retry") or {}).get("deadline_day", stage["window"]["to_day"]))
     cert = subject.get("cert")
+    if not cert:
+        return _need_cert(did, sid, as_of)                                   # [B2] 필요 축 부재는 데이터 미비 — 빈 자재로 판단하지 않는다
     mats = t.get("materials")
     m = mats.get(cert, []) if isinstance(mats, dict) else []
     work_date, dl = (a + timedelta(days=wd)).isoformat(), (a + timedelta(days=deadline)).isoformat()
+    # [B5] 판별 순서(I-1 §3): 해당하는가 → 지식 → 데이터. 창 지남을 먼저 본다 — 전에는 지식 미비가 먼저라 시즌 내내 그 상태로 남았다
+    if day > deadline:
+        return Envelope("해당 없음", did, sid, as_of, result={"why": f"마감({dl})을 지났다", "summary": f"창 지남({dl})"})
     if did == "top_dressing_2":
         return Envelope("판단 불가(지식)", did, sid, as_of,
                         result={"why": "'필요 시' 의 필요 여부 판정 규칙이 격자에 미채움(생육 관찰 기준 없음)", "work_date": work_date, "deadline": dl,
                                 "materials": m, "summary": f"필요 여부 규칙 없음 — 창 {work_date}~{dl} · 자재({cert}) {', '.join(m) or '없음'}"})
-    if day > deadline:
-        return Envelope("해당 없음", did, sid, as_of, result={"why": f"마감({dl})을 지났다", "summary": f"창 지남({dl})"})
-    lo = (a + timedelta(days=wd - 7)).isoformat()
-    done = [e for e in (evts or []) if e.get("type") == d.params["event_type"] and lo <= (e.get("observed_at") or "")[:10] <= dl]
-    status = "이행" if done else ("미이행" if day > wd else "예정")
+    # [B3] 이행 판정은 계획 대 실제와 **한 벌** — 같은 매처 · 같은 허용 폭(registry params). 전에는 wd-7 하드코딩 · 예정 경계가 달라
+    # 같은 사건이 한쪽은 이행, 다른 쪽은 미이행이었다
+    pva = registry.get(plan_vs_actual.DECISION_ID)
+    row = {"task": t.get("name", d.params["task_key"]), "work_date": work_date, "deadline_date": dl}
+    hit = plan_vs_actual._matched_event(row, list(evts or []), int(pva.params["tolerance_days"]), pva.params)
+    done = [hit] if hit else []
+    status = "이행" if done else ("예정" if day < wd else "미이행")
     p = _prescription(prescriptions)
     inputs = _anchor_inputs(subject, anchor)
     if p is not None:

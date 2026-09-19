@@ -169,7 +169,8 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
 LAYER3_INPUT_KINDS: frozenset[str] = frozenset(k.name for k in KINDS.values() if k.layer3_input)
 # 3층이 받는 재배 단위 = 등록부 필드 + 필지에서 붙는 비PII·좌표 필드(경계 허용 목록의 원천)
 PARCEL_FIELDS_TO_LAYER3: tuple[str, ...] = ("lat", "lon", "area_m2", "use", "irrigation", "drainage", "slope",
-                                            "microclimate", "night_light", "environment")
+                                            "microclimate", "night_light", "environment",
+                                            "mall_supply")   # [코드 평가 B7] 출하 결정(D-8)이 읽는 불리언 — 없어서 라이브 경로에서 도달 불가였다
 # 실행부(judge.run)가 원천 저장소에서 붙이는 파생 필드 — 토양검정 값(soil_chem)과 검정일. 봉투에는 이름만 실린다(4층 격리)
 SUBJECT_DERIVED_FIELDS: tuple[str, ...] = ("soil_chem", "soil_exam_at")
 LAYER3_SUBJECT_FIELDS: frozenset[str] = (frozenset(KINDS["subject"].required) | frozenset(KINDS["subject"].optional)

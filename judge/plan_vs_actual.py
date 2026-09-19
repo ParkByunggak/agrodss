@@ -10,6 +10,7 @@
 # 선제 발화(F): 예정 중 준비 착수일(임대 기준)이 오늘 안이면 표시한다.
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -53,6 +54,13 @@ def _types_for(task_name: str, params: dict[str, Any]) -> tuple[str, ...]:
     return ()
 
 
+_COND = re.compile(r"\((?:[^()]*\s)?시\)")   # "관수(건조 시)" · "웃거름 2회(필요 시)" — 격자 작업명의 조건 표기
+
+
+def _conditional(task_name: str) -> bool:
+    return bool(_COND.search(task_name or ""))
+
+
 def _matched_event(p: dict[str, Any], evts: list[dict[str, Any]], tol: int, params: dict[str, Any]) -> dict[str, Any] | None:
     types = _types_for(p["task"], params)
     if not types:
@@ -86,7 +94,7 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
     evts = list(evts) + [{"type": "파종", "observed_at": anchor, "id": "anchor", "source": subject.get("source", "farmer")}]
     tol = int(d.params["tolerance_days"])
     rows = []
-    counts = {"이행": 0, "예정": 0, "미이행": 0, "놓침": 0, "사유 기록됨": 0}
+    counts = {"이행": 0, "예정": 0, "미이행": 0, "놓침": 0, "사유 기록됨": 0, "조건부": 0, "기록 없음": 0}
     ask = []
     prep = []
     for p in plan.from_unit(unit, anchor_d, subject.get("cert")):
@@ -101,6 +109,13 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
             m = _matched_event(p, evts, tol, d.params)
             if m:
                 status, evidence = "이행", f"사건 {m.get('type')} {m.get('observed_at', '')[:10]}"
+        if status is None and _conditional(p["task"]):
+            # [코드 평가 B13] "관수(건조 시)" · "웃거름 2회(필요 시)" 같은 조건부 작업은 안 했다고 놓친 것이 아니다 — 조건 판정 규칙이
+            # 격자에 없으면(지식 미비) 사유를 묻지 않고 '조건부'로 둔다. 조건이 채워지는 날 결정기가 그것을 판단한다
+            status, evidence = "조건부", "조건('… 시')이 붙은 작업 — 조건 판정 규칙 없음, 놓침으로 세지 않는다"
+        elif status is None and p["kind"] == "plan.capture" and wd < anchor_d:
+            # 기준점 이전 촬영(종구 준비 칸) — 기준점을 뒤에 등록한 재배 단위는 소급 촬영이 있을 수 없다. 놓침이 아니라 기록 없음
+            status, evidence = "기록 없음", "기준점 이전 작업 — 소급 촬영 불가, 사유를 묻지 않는다"
         if status is None:
             if today < wd:
                 status = "예정"
