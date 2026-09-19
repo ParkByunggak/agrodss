@@ -7,8 +7,9 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from ingest import events as ev
 from ingest import kma, media, ncpms
-from judge import harvest_timing, material_citation, plan_vs_actual, risk_alert
+from judge import boundary, harvest_timing, material_citation, plan_vs_actual, risk_alert
 from judge.envelope import Envelope
 
 
@@ -55,12 +56,17 @@ def all_harvest(today: date | None = None) -> list[tuple[dict[str, Any], Envelop
 def all_judgments(today: date | None = None) -> list[tuple[dict[str, Any], list[Envelope], dict[str, str]]]:
     """재배 단위마다 [수확 시기, 위험 경보] 봉투 — 원천은 한 번만 모은다."""
     out = []
-    for s in media.load_subjects():
-        forecast, why = gather_forecast(s)
-        pest, pwhy = gather_pest(s)
-        envs = [harvest_timing.judge(s, forecast=forecast, today=today),
-                risk_alert.judge(s, forecast=forecast, today=today, pest=pest),
+    for s0 in media.load_subjects():
+        forecast, why = gather_forecast(s0)
+        pest, pwhy = gather_pest(s0)
+        evts = ev.list_records(s0.get("id"), "event")
+        reasons = ev.list_records(s0.get("id"), "decision.noncompliance")
+        videos = media.list_records(s0.get("id"))
+        # [M-3 · I-5 §3-4] 경계 게이트 — 모든 입력을 모은 뒤, 판정 직전, 한 번
+        s, recs = boundary.gate(s0, forecast=forecast, pest=pest, events=evts, reasons=reasons, videos=videos)
+        envs = [harvest_timing.judge(s, forecast=recs["forecast"], today=today),
+                risk_alert.judge(s, forecast=recs["forecast"], today=today, pest=recs["pest"]),
                 material_citation.judge(s, today=today),
-                plan_vs_actual.judge(s, today=today)]
+                plan_vs_actual.judge(s, today=today, evts=recs["events"], videos=recs["videos"], reasons=recs["reasons"])]
         out.append((s, envs, {"forecast": why or "예보 사용", "pest": pwhy or "예찰 사용"}))
     return out

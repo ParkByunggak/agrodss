@@ -81,6 +81,13 @@ VELA N-147 형태를 여기서 막는다 — *"관문은 서 있는데 값이 �
 본다(VELA 규율: 차단 지점이 주입 지점보다 앞이면 무효) — 게이트 호출이 모든 입력 병합
 뒤에 있는지. 구역(함수 본문)을 잘라 검사하고 문자 창·줄 번호로 고정하지 않는다.
 
+## 3b. 코드 (M-3, 2026-09-19)
+
+`judge/boundary.py` — 허용 목록: `ALLOWED_SUBJECT_FIELDS` · `ALLOWED_RECORD_KINDS` · `ALLOWED_EVENT_SOURCES` ·
+`ALLOWED_PLAN_SOURCES`. `gate()` 는 `judge/run.py` 에서 입력을 다 모은 뒤 판정 직전 **한 번** 선다. 위반은
+`BoundaryError` — 조용히 걷어 내지 않는다. `settlement_to_events()` 가 3-2 통과 흐름, `accept_plan_target()` 이 3-3.
+`tests/test_boundary.py` 15건, 주입 3(허용 목록 오염 · 반품 사유 매핑 제거 · 게이트 위치 앞) 각각 적발.
+
 ## 4. 검사의 검사
 
 네 검사 각각에 위 "주입" 을 실제로 넣어 **실패를 본 뒤** 배치한다. 주입은 원 결함을
