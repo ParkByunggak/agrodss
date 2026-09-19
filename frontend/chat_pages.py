@@ -122,7 +122,9 @@ def sidebar(current: str, docs: list[str], today: date) -> str:
         cls = ' on' if current == f"/c/{s['id']}" else ""
         out.append(f'<a class="chat{cls}" href="/c/{quote(s["id"])}"><b>{_e(s.get("crop"))}<span class="pill {"run" if st == "재배 중" else "plan"}">{_e(st)}</span></b><span>{meta}</span></a>')
     out.append('<div class="grp">화면</div>')
-    for href, label in (("/improve", "개선 · 자율진화"), ("/judge", "판단 봉투 전체"), ("/media", "영상 반입"), ("/events", "사건 · 사유(표)")):
+    first = subs[0]["id"] if subs else ""
+    for href, label in (("/improve", "개선 · 자율진화"), ("/judge", "판단 봉투 전체"), ("/media", "영상 반입"), ("/events", "사건 · 사유(표)"),
+                        (f"/mall/{quote(first)}" if first else "/c/new", "몰 상세페이지 목업 (M-11)")):
         out.append(f'<a class="lnk" href="{href}">{label}</a>')
     out.append('<div class="grp">문서</div>')
     for name in docs:
@@ -451,6 +453,33 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
         out.append("</table>")
     preds = fb.list_records("feedback.prediction")
     out.append(f'<p style="color:var(--muted);font-size:12px">예측 원장 {len(preds)} 줄(바뀔 때만 한 줄) · 오늘 {today}</p></div>')
+    return "".join(out)
+
+
+def mall_main(view: dict[str, Any]) -> str:
+    """[M-11] 소비자가 볼 상세페이지의 목업 — 영상 시계열이 본문이다. 내부 화면 안에서만 렌더된다(D-6)."""
+    out = [f'<div class="thead"><div><h1>{_e(view["title"])} <span class="pill plan">목업 · 내부</span></h1>'
+           f'<div class="meta">상품 = 재배 단위 {_e(view["product_id"])} · {_e(view["status"])} · 기준점({_e(view.get("anchor_kind") or "")}) 후 {_e(view.get("days_since_anchor"))}일 · {_e(view["as_of"])}</div></div>'
+           f'<div><a href="/c/{quote(view["product_id"])}">대화로</a></div></div><div class="msgs">']
+    out.append(f'<div class="card"><b>인증 표기</b> {_e(view["cert_label"])}</div>')
+    out.append(f'<div class="card"><b>현장 영상 {view["clips_total"]}건</b> — {_e(view["editing_rule"])}</div>')
+    out.append('<h2 style="font-size:14px">촬영 시계열 (격자 촬영 칸 — 연속성이 상품)</h2>')
+    for t in view["timeline"]:
+        cls = {"촬영됨": "kind-판단함", "촬영 창 열림": "kind-판단불가"}.get(t["state"], "")
+        out.append(f'<div class="card {cls}"><span class="k">{_e(t["stage"])}</span><b>{_e(t["state"])}</b><div>{_e(t["scene"])}</div><div style="color:var(--muted);font-size:12px">창 {_e(t["window"])}</div>')
+        for c in t["clips"]:
+            dur = f' · {c["duration_sec"]}초' if c.get("duration_sec") else ""
+            size = f' · {c["width"]}×{c["height"]}' if c.get("width") else ""
+            out.append(f'<div style="margin:4px 0 0 8px">▶ {_e(c["kind"])} {_e(str(c["observed_at"])[:16])}{_e(dur)}{_e(size)} {_e(c.get("note") or "")}</div>')
+        out.append("</div>")
+    out.append('<h2 style="font-size:14px">판정 노출 (몰-G)</h2>')
+    if view["judgments"]:
+        for j in view["judgments"]:
+            out.append(f'<div class="card kind-판단함"><span class="k">{_e(j["decision"])}</span><b>{_e(j["kind"])}</b> {_e(j["summary"])}<div style="color:var(--muted);font-size:12px">관측일 {_e(j["as_of"])} · 등급 {_e(j["grade"])} · 기준: {_e(j["basis"])}</div></div>')
+    else:
+        out.append('<p style="color:var(--muted)">노출 없음 — 첫 시즌 비노출 권고(D-2 대기). 판정은 내부 화면에서만 본다.</p>')
+    out.append(f'<h2 style="font-size:14px">구매</h2><div class="card">{_e(view["reservation"])}<br>{_e(view["quantity"])}</div>')
+    out.append('<p style="color:var(--muted);font-size:12px">이 페이지는 내부 목업이다 — 외부 배포 없음(D-6). 몰 MVP 는 봄 작기 납품 검토(D-8) 뒤. 주소·검정값·좌표는 어떤 경로로도 실리지 않는다(몰-H 게이트).</p></div>')
     return "".join(out)
 
 

@@ -305,6 +305,16 @@ def new_page(error: str = "", form: dict[str, str] | None = None) -> tuple[int, 
     return (400 if error else 200), _shell("/c/new", chat_pages.new_main(error, form), None, "새 채팅")
 
 
+def mall_page(sid: str) -> tuple[int, str]:
+    """[M-11] 몰 상세페이지 목업 — mall.product 가 몰-H 게이트를 지난 뷰만 준다."""
+    from mall import product as mall_product
+    try:
+        view = mall_product.product_view(sid, today=date.today())
+    except mall_product.MallBoundaryError as e:
+        return 404, _shell("", f'<div class="msgs"><h1>없는 상품</h1><p>{html.escape(str(e))}</p></div>', None, "없음")
+    return 200, _shell(f"/mall/{sid}", chat_pages.mall_main(view), None, f"몰 목업 — {view['title']}")
+
+
 def me_page(message: str = "", error: str = "", form: dict[str, str] | None = None) -> tuple[int, str]:
     return (400 if error else 200), _shell("/me", chat_pages.me_main(message, error, form), None, "사용자 정보")
 
@@ -388,6 +398,8 @@ class Handler(BaseHTTPRequestHandler):
             status, body = improve_page()
         elif p == "/me":
             status, body = me_page()
+        elif p.startswith("/mall/"):
+            status, body = mall_page(unquote(p[len("/mall/"):]))
         elif p == "/media":
             status, body = media_page()
         elif p == "/judge":
