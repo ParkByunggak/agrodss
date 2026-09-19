@@ -151,6 +151,9 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
     _k("feedback.outcome", "되먹임",      # 대조 결과 — 예측 ↔ 사건 원장. 사건이 없으면 '대조 불가'(값을 메우지 않는다)
        ("id", "subject", "decision_id", "prediction_id", "verdict", "detail", "observed_at", "recorded_at", "source", "resolution"),
        ("actual_ref",), sources=("computed:evolve",)),
+    _k("verification.live", "되먹임",     # 라이브 3/3 재현 기록(scripts/live_reproduce.py) — 독립 프로세스 회차 · 대조 · 판정. 완료의 증거
+       ("id", "subject", "subjects", "code_head", "runs", "verdict", "live", "agree", "total", "diffs", "cache_suspect",
+        "observed_at", "recorded_at", "source", "resolution"), (), sources=("computed:verify",)),
     _k("improvement.item", "되먹임",      # 개선 항목 — 자기개선 업무의 단위. 보이게까지 자동, 확장 방향의 채택은 사람.
        ("id", "origin", "target", "proposal", "direction", "status", "auto_applied", "observed_at", "recorded_at", "source", "resolution"),
        ("subject", "target_ref", "applied_ref", "verify", "note", "history"),

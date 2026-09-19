@@ -31,6 +31,7 @@
 | `feedback.request` | 되먹임 | — | `farmer`, `publisher` | id, text, target, status, observed_at, recorded_at, source, resolution | subject, target_ref, response, item_ref | — |
 | `feedback.prediction` | 되먹임 | — | `computed:judge` | id, subject, decision_id, envelope_kind, payload, payload_hash, observed_at, recorded_at, source, resolution | grade, code_head | — |
 | `feedback.outcome` | 되먹임 | — | `computed:evolve` | id, subject, decision_id, prediction_id, verdict, detail, observed_at, recorded_at, source, resolution | actual_ref | — |
+| `verification.live` | 되먹임 | — | `computed:verify` | id, subject, subjects, code_head, runs, verdict, live, agree, total, diffs, cache_suspect, observed_at, recorded_at, source, resolution | — | — |
 | `improvement.item` | 되먹임 | 예 | `computed:evolve`, `farmer`, `publisher` | id, origin, target, proposal, direction, status, auto_applied, observed_at, recorded_at, source, resolution | subject, target_ref, applied_ref, verify, note, history | — |
 
 ## 어휘

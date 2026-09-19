@@ -420,6 +420,15 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
         for o in reversed(outs[-30:]):
             out.append(f'<tr><td>{_e(o["observed_at"])}</td><td>{_e(o["subject"])}</td><td>{_e(DECISION_LABEL.get(o["decision_id"], o["decision_id"]))}</td><td>{_e(o["verdict"])}</td><td>{_e(o["detail"])}</td></tr>')
         out.append("</table>")
+    lives = fb.list_records("verification.live")
+    out.append('<h2 style="font-size:14px">라이브 3/3 재현 (M-10 관문)</h2>')
+    if not lives:
+        out.append('<p style="color:var(--muted)">아직 없다 — <code>python scripts\\live_reproduce.py</code> 가 독립 프로세스 3회로 재현해 여기 적는다. 외부 원천(키)이 없으면 미성립으로 적힌다.</p>')
+    else:
+        out.append('<table class="tb"><tr><th>날짜</th><th>HEAD</th><th>판정</th><th>일치</th><th>캐시 의심</th></tr>')
+        for v in reversed(lives[-5:]):
+            out.append(f'<tr><td>{_e(v["observed_at"])}</td><td>{_e(v["code_head"])}</td><td>{_e(v["verdict"])}</td><td>{v["agree"]}/{v["total"]}</td><td>{_e(v["cache_suspect"] or "없음")}</td></tr>')
+        out.append("</table>")
     preds = fb.list_records("feedback.prediction")
     out.append(f'<p style="color:var(--muted);font-size:12px">예측 원장 {len(preds)} 줄(바뀔 때만 한 줄) · 오늘 {today}</p></div>')
     return "".join(out)
