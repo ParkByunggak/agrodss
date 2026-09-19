@@ -73,16 +73,18 @@ def test_parcel_set_fields_validates_and_is_isolated():
     from ingest import parcels
     import pytest
     before = parcels.by_id("p001")
-    rec = parcels.set_fields("p001", environment="노지")
-    assert rec["environment"] == "노지" and parcels.by_id("p001")["environment"] == "노지"
-    assert parcels.set_fields("p001", environment="시설")["environment"] == "노지"                  # 있는 값은 덮지 않는다
-    assert parcels.set_fields("p001", environment="시설", overwrite=True)["environment"] == "시설"   # 발행자 답은 덮는다
-    assert "environment" not in parcels.set_fields("p001", environment=None)                       # None 은 키 삭제
+    assert "slope" not in before                                                                   # 아직 빈 칸으로 쓰기 규칙을 잰다
+    rec = parcels.set_fields("p001", slope="평지")
+    assert rec["slope"] == "평지" and parcels.by_id("p001")["slope"] == "평지"
+    assert parcels.set_fields("p001", slope="완경사")["slope"] == "평지"                             # 있는 값은 덮지 않는다
+    assert parcels.set_fields("p001", slope="완경사", overwrite=True)["slope"] == "완경사"            # 발행자 답은 덮는다
+    assert "slope" not in parcels.set_fields("p001", slope=None)                                    # None 은 키 삭제
     with pytest.raises(parcels.ParcelError, match="없는 필드"):
         parcels.set_fields("p001", stock=3)
     with pytest.raises(parcels.ParcelError, match="없는 필지"):
-        parcels.set_fields("p999", environment="노지")
-    assert parcels.parcels_path().resolve() != parcels.PARCELS_PATH.resolve() and "environment" not in before   # 운영 등록부 무변경
+        parcels.set_fields("p999", slope="평지")
+    assert parcels.parcels_path().resolve() != parcels.PARCELS_PATH.resolve()                       # 운영 등록부 무변경(conftest 사본)
+    assert before.get("environment") == "노지"                                                      # 발행자 답 2026-09-19 — 등록부 정본
 
 
 def test_collect_persists_geocoded_coordinates_into_parcel_registry():

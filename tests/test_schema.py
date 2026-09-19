@@ -126,7 +126,7 @@ def test_parcel_public_view_strips_pii_and_enrich_carries_only_layer3_fields():
     assert s["lat"] == 36.9 and s["drainage"] == "양호"
     assert "address" not in s and "pnu" not in s
     boundary.gate_subject(s)                                                 # 붙은 결과가 경계 허용 목록 안이다
-    assert "environment" in parcels.missing_inputs(p) and "use" not in parcels.missing_inputs(p)
+    assert "slope" in parcels.missing_inputs(p) and "use" not in parcels.missing_inputs(p)   # environment 는 발행자 답(노지)으로 채워졌다(2026-09-19)
 
 
 def test_parcel_record_with_undeclared_field_rejected(tmp_path):
