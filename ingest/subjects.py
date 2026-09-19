@@ -45,7 +45,11 @@ def resolve_crop(name: str) -> str:
         return r.canonical or r.query
     if r.status == "ambiguous":
         raise SubjectError(f"'{name}' 은 여러 작목을 가리킨다 — {' / '.join(r.candidates)} 중 어느 것인가")
-    raise SubjectError(f"'{name}' 은 사전에 없는 이름이다 — 정본명으로 적거나 발행자가 사전(data/crop_names.csv)에 올린다(U-14)")
+    # [U-14] 모르는 이름은 추측하지 않고 후보로 적어 둔다 — 보이게까지 자동, 등재는 발행자(/improve 이름 후보)
+    from names import candidates
+    cand = candidates.add(name, context="new_chat")
+    tail = f" 후보로 적어 두었다({cand['id']}) — /improve 에서 정본명에 잇는다" if cand else " 이미 후보에 있다 — /improve 에서 정본명에 잇는다"
+    raise SubjectError(f"'{name}' 은 사전에 없는 이름이다 — 정본명으로 적거나 발행자가 사전(data/crop_names.csv)에 올린다(U-14).{tail}")
 
 
 def grid_unit_for(crop: str, season: str) -> str | None:

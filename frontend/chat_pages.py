@@ -14,6 +14,8 @@ from grid import capture as grid_capture
 from ingest import chat, events as ev, feedback as fb, media, parcels, profile, subjects
 from judge import evolve, registry, run as judge_run
 
+BRAND = "AGRODSS"
+BRAND_HTML = f'<a class="brand" href="/" id="brand" title="홈 — 첫 채팅으로">{BRAND} <small>내부 화면</small></a>'
 DECISION_LABEL = {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용", "plan_vs_actual": "계획 대 실제"}
 DECISION_LABEL.update({k: d.name for k, d in registry.all_decisions().items() if k not in DECISION_LABEL})   # M-10 등록분은 등록부 이름
 CHOOSABLE = (("event", "사건"), ("observation.note", "관찰"), ("plan.farmer", "계획"), ("feedback.request", "개선 요구"))
@@ -39,7 +41,8 @@ body { margin:0; background:var(--bg); color:var(--fg); font-family:"Noto Sans K
 a { color:inherit; }
 .app { display:grid; grid-template-columns:260px 1fr 340px; min-height:100vh; }
 aside.side { background:var(--side); border-right:1px solid var(--line); padding:14px 12px; position:sticky; top:0; height:100vh; overflow:auto; }
-.brand { font-weight:700; letter-spacing:-.01em; font-size:16px; padding:4px 8px 10px; display:flex; justify-content:space-between; align-items:center; }
+.brand { font-weight:700; letter-spacing:.02em; font-size:16px; padding:4px 8px 10px; display:flex; justify-content:space-between; align-items:center; text-decoration:none; color:var(--fg); }
+.brand:hover { color:var(--accent); }
 .brand small { color:var(--muted); font-weight:400; font-size:11px; }
 .newchat { display:block; width:100%; text-align:left; padding:8px 10px; border:1px solid var(--line); background:var(--panel); border-radius:8px; color:var(--fg); text-decoration:none; font-size:13.5px; margin-bottom:12px; }
 .newchat:hover { border-color:var(--accent); }
@@ -98,6 +101,7 @@ table.tb { border-collapse:collapse; width:100%; font-size:13px; } .tb th, .tb t
 
 def shell(title: str, side: str, main: str, panel: str | None, head: str) -> str:
     cols = "" if panel is not None else "<style>.app{grid-template-columns:260px 1fr}.composer{right:0}</style>"
+    title = title if title.startswith(BRAND) else f"{BRAND} — {title}"
     return (f'<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             f"<title>{_e(title)}</title><style>{CSS}</style>{cols}</head><body><div class=\"app\">"
             f'<aside class="side">{side}</aside><main class="thread">{main}</main>'
@@ -106,7 +110,8 @@ def shell(title: str, side: str, main: str, panel: str | None, head: str) -> str
 
 
 def sidebar(current: str, docs: list[str], today: date) -> str:
-    out = [f'<div class="brand">agrodss <small>내부 화면</small></div>', '<a class="newchat" href="/c/new">＋ 새 채팅 (작목 추가 · 계획)</a>',
+    # [발행자 2026-09-19] 좌측 상단 탭 = AGRODSS(대문자) · 홈(/) 링크 · 모든 화면에 있다
+    out = [BRAND_HTML, '<a class="newchat" href="/c/new">＋ 새 채팅 (작목 추가 · 계획)</a>',
            '<div class="grp">채팅 — 재배 단위</div>']
     subs = subjects.load()
     if not subs:
@@ -419,6 +424,21 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
         out.append('<h2 style="font-size:14px">대조 결과</h2><table class="tb"><tr><th>날짜</th><th>목록</th><th>결정</th><th>판정</th><th>내용</th></tr>')
         for o in reversed(outs[-30:]):
             out.append(f'<tr><td>{_e(o["observed_at"])}</td><td>{_e(o["subject"])}</td><td>{_e(DECISION_LABEL.get(o["decision_id"], o["decision_id"]))}</td><td>{_e(o["verdict"])}</td><td>{_e(o["detail"])}</td></tr>')
+        out.append("</table>")
+    # [U-14] 사전에 없는 작목 이름 후보 — 승인(정본명에 잇기)은 사람
+    from names import candidates as nc
+    cands = nc.open_candidates()
+    out.append('<h2 style="font-size:14px">작목 이름 후보 (U-14 — 사투리 · 이명)</h2>')
+    if not cands:
+        out.append('<p style="color:var(--muted)">열린 후보 없음 — 새 채팅에서 사전에 없는 이름을 적으면 여기 쌓인다.</p>')
+    else:
+        kinds = "".join(f'<option value="{k}">{k}</option>' for k in nc.KINDS)
+        out.append('<table class="tb"><tr><th>이름</th><th>맥락</th><th>날짜</th><th>처리</th></tr>')
+        for c in cands:
+            out.append(f'<tr><td><b>{_e(c["query"])}</b></td><td>{_e(c["context"])}</td><td>{_e(c["observed_at"])}</td>'
+                       f'<td><form method="post" action="/improve/name" class="inline"><input type="hidden" name="id" value="{_e(c["id"])}">'
+                       f'<input name="canonical" size="10" placeholder="정본명"> <select name="kind">{kinds}</select> '
+                       f'<button class="btn pri" name="act" value="approve">승인 → 사전</button> <button class="btn" name="act" value="reject">거부</button></form></td></tr>')
         out.append("</table>")
     lives = fb.list_records("verification.live")
     out.append('<h2 style="font-size:14px">라이브 3/3 재현 (M-10 관문)</h2>')

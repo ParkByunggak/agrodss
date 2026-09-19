@@ -48,7 +48,7 @@ def doc_list() -> list[str]:
 
 
 def nav_html(current: str) -> str:
-    parts = ['<div class="grp">판단</div>']
+    parts = [chat_pages.BRAND_HTML, '<div class="grp">판단</div>']     # [발행자 2026-09-19] AGRODSS 홈 탭은 표 화면에도 있다
     cls = ' class="on"' if current == "/judge" else ""
     parts.append(f'<a href="/judge"{cls}>수확 시기 · 위험 경보 (M-10)</a>')
     parts.append('<div class="grp">입력</div>')
@@ -141,7 +141,7 @@ def judge_page() -> tuple[int, str]:
                                  "plan_vs_actual": "계획 대 실제"}.get(e["decision_id"], e["decision_id"]))
         out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 예찰: {_e(info.get('pest', ''))}</p>")
     footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
-    return 200, render.page("agrodss — 판단", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)
+    return 200, render.page("AGRODSS —판단", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)
 
 
 def events_page(message: str = "", error: str = "") -> tuple[int, str]:
@@ -178,7 +178,7 @@ def events_page(message: str = "", error: str = "") -> tuple[int, str]:
              ".reg label{display:block}.err{color:var(--drop-fg);background:var(--drop);padding:6px 10px;border-radius:4px}"
              ".ok{color:var(--done-fg);background:var(--done);padding:6px 10px;border-radius:4px}</style>")
     footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
-    return (400 if error else 200), render.page("agrodss — 사건", nav_html("/events"), style + "".join(out),
+    return (400 if error else 200), render.page("AGRODSS —사건", nav_html("/events"), style + "".join(out),
                                                 "사건(I-3 §2) · 결정(§5 불이행 사유) — 대상 시각 없이는 기록되지 않는다", footer)
 
 
@@ -254,7 +254,7 @@ def media_page(message: str = "", error: str = "") -> tuple[int, str]:
              ".ok{color:var(--done-fg);background:var(--done);padding:6px 10px;border-radius:4px}</style>")
     meta = "1층 관찰(영상) — 촬영 시각 · 출처 · 해상도가 붙어야 등록된다. 좌표는 화면에 내지 않는다"
     footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
-    return (400 if error else 200), render.page("agrodss — 영상 반입", nav_html("/media"), style + "".join(out), meta, footer)
+    return (400 if error else 200), render.page("AGRODSS —영상 반입", nav_html("/media"), style + "".join(out), meta, footer)
 
 
 def render_page(name: str) -> tuple[int, str]:
@@ -270,7 +270,7 @@ def render_page(name: str) -> tuple[int, str]:
             f'<span class="st st-{s}">{s} {n}</span>' for s, n in counts.items()
         ) + "</span>"
     footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
-    return 200, render.page(f"agrodss — {name}", nav_html(name), body, meta, footer)
+    return 200, render.page(f"AGRODSS —{name}", nav_html(name), body, meta, footer)
 
 
 # ── [M-13] Claude 형식 채팅 화면 ─────────────────────────────────────────────────────
@@ -291,7 +291,7 @@ def chat_page(sid: str, message: str = "", error: str = "") -> tuple[int, str]:
         return 404, _shell("", '<div class="msgs"><h1>없는 목록</h1></div>', None, "없음")
     today = date.today()
     body = chat_pages.thread_main(s, today, message=message, error=error)
-    return (400 if error else 200), _shell(f"/c/{sid}", body, chat_pages.thread_panel(s, today), f"agrodss — {s.get('label')}")
+    return (400 if error else 200), _shell(f"/c/{sid}", body, chat_pages.thread_panel(s, today), f"AGRODSS —{s.get('label')}")
 
 
 def diary_page(sid: str) -> tuple[int, str]:
@@ -473,6 +473,17 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 status, body = improve_page(message=chat_pages.handle_improve_status(form))
             except fb.FeedbackError as e:
+                status, body = improve_page(error=str(e))
+        elif p == "/improve/name":
+            from names import candidates as nc
+            try:
+                if form.get("act") == "approve":
+                    r = nc.approve(form.get("id", ""), form.get("canonical", ""), alias_kind=form.get("kind") or "사투리", by="publisher")
+                    status, body = improve_page(message=f"사전 등재 — '{r['query']}' → {r['canonical']} ({r['alias_kind']}). 서버 재시작 없이 다음 새 채팅부터 통한다")
+                else:
+                    r = nc.reject(form.get("id", ""), why=form.get("why", ""), by="publisher")
+                    status, body = improve_page(message=f"거부 — '{r['query']}'")
+            except nc.CandidateError as e:
                 status, body = improve_page(error=str(e))
         elif p == "/improve/cycle":
             status, body = improve_page(cycle=chat_pages.run_cycle(date.today(), git_head_short()))

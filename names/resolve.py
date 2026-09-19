@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import csv
+import os
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -19,6 +20,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 NAMES_CSV = ROOT / "data" / "crop_names.csv"
 AXES_CSV = ROOT / "data" / "crop_axes.csv"
+
+
+def names_csv_path() -> Path:
+    """정본 CSV 경로 — 호출 시점에 env 로 푼다(U-14 승인이 여기에 쓴다 · 테스트는 사본 — R-4 규율)."""
+    return Path(os.environ.get("AGRODSS_NAMES_CSV") or NAMES_CSV)
 
 IDENTITY = "동일"
 AMBIGUOUS = "모호"
@@ -67,8 +73,18 @@ def _read(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(f))
 
 
-@lru_cache(maxsize=1)
-def load(names_csv: Path = NAMES_CSV, axes_csv: Path = AXES_CSV) -> Dictionary:
+def load(names_csv: Path | None = None, axes_csv: Path | None = None) -> Dictionary:
+    """경로는 호출 시점에 푼다 — 기본 인자에 묶으면 승인(CSV 추가)·격리가 안 닿는다(R-4)."""
+    return _load(Path(names_csv or names_csv_path()), Path(axes_csv or AXES_CSV))
+
+
+def reload() -> None:
+    """사전 재적재 — U-14 승인이 CSV 에 줄을 붙인 뒤, 테스트 격리 전후."""
+    _load.cache_clear()
+
+
+@lru_cache(maxsize=4)
+def _load(names_csv: Path, axes_csv: Path) -> Dictionary:
     d = Dictionary()
     # 정본명의 첫 원천: 격자 대상 작목 전수(범위=작목)
     for r in _read(axes_csv):

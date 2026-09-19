@@ -109,6 +109,7 @@ _ALLOWED_TOPLEVEL = {
     "__future__", "os", "re", "sys", "html", "subprocess", "webbrowser", "threading",
     "http", "urllib", "pathlib", "typing", "markdown", "frontend",
     "email",  # multipart/form-data 파서(표준 라이브러리) — 채팅 반입(M-13)
+    "names",  # 작목 이름 사전·후보(U-14) — ingest 와 같은 규율: 원장은 모듈 함수를 통해서만, 파일을 직접 열지 않는다
     "ingest",  # 입력 화면(I-7)은 ingest 를 통해서만 1층에 쓴다 — 아래 검사가 원장 직접 접근을 막는다
     "datetime", "grid",  # 촬영 시점 알림 — 격자 지식(원장 아님)
     "judge",  # 3층 봉투만 받는다
