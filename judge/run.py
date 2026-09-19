@@ -8,8 +8,9 @@ from datetime import date
 from typing import Any
 
 from ingest import events as ev
-from ingest import kma, media, ncpms
-from judge import boundary, harvest_timing, material_citation, plan_vs_actual, risk_alert
+from ingest import feedback as fb
+from ingest import kma, media, ncpms, parcels
+from judge import boundary, evolve, harvest_timing, material_citation, plan_vs_actual, risk_alert
 from judge.envelope import Envelope
 
 
@@ -56,17 +57,22 @@ def all_harvest(today: date | None = None) -> list[tuple[dict[str, Any], Envelop
 def all_judgments(today: date | None = None) -> list[tuple[dict[str, Any], list[Envelope], dict[str, str]]]:
     """재배 단위마다 [수확 시기, 위험 경보] 봉투 — 원천은 한 번만 모은다."""
     out = []
-    for s0 in media.load_subjects():
+    for s_reg in media.load_subjects():
+        # [M-6] 필지 등록부에서 3층 허용 필드만 붙인다(주소·PNU 는 안 붙는다) — 입력 병합은 게이트 앞
+        s0 = parcels.enrich_subject(s_reg, parcels.by_id(s_reg.get("parcel", "")))
         forecast, why = gather_forecast(s0)
         pest, pwhy = gather_pest(s0)
         evts = ev.list_records(s0.get("id"), "event")
         reasons = ev.list_records(s0.get("id"), "decision.noncompliance")
         videos = media.list_records(s0.get("id"))
+        caps = fb.active_caps(s0.get("id"))
         # [M-3 · I-5 §3-4] 경계 게이트 — 모든 입력을 모은 뒤, 판정 직전, 한 번
-        s, recs = boundary.gate(s0, forecast=forecast, pest=pest, events=evts, reasons=reasons, videos=videos)
+        s, recs = boundary.gate(s0, forecast=forecast, pest=pest, events=evts, reasons=reasons, videos=videos, caps=caps)
         envs = [harvest_timing.judge(s, forecast=recs["forecast"], today=today),
                 risk_alert.judge(s, forecast=recs["forecast"], today=today, pest=recs["pest"]),
                 material_citation.judge(s, today=today),
                 plan_vs_actual.judge(s, today=today, evts=recs["events"], videos=recs["videos"], reasons=recs["reasons"])]
+        # [M-6 · D-14] 자율진화 보수 상한 — 판정기 뒤, 돌려주기 전, 한 번. 규칙은 안 바꾸고 등급만 낮춘다
+        envs = evolve.apply_caps(s["id"], envs, caps=recs["caps"])
         out.append((s, envs, {"forecast": why or "예보 사용", "pest": pwhy or "예찰 사용"}))
     return out

@@ -12,6 +12,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from schema import records as sch
+
 ROOT = Path(__file__).resolve().parent.parent
 EVENT_TYPES = ("파종", "정식", "방제", "시비", "관수", "제초", "예찰", "보식", "배수", "수확", "납품", "저장", "소독", "정리", "기타")
 SOURCE = "farmer"
@@ -30,6 +32,7 @@ class EventError(ValueError):
 
 
 def _append(rec: dict[str, Any]) -> dict[str, Any]:
+    rec = sch.stamp(rec)                      # [M-6] 원장에 쓰는 직전 한 번 — 스키마 밖 레코드는 여기서 죽는다
     index_path().parent.mkdir(parents=True, exist_ok=True)
     with index_path().open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")

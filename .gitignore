@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 data/media/
 data/events/
+data/feedback/
+data/chat/

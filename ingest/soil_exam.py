@@ -81,6 +81,7 @@ class SoilExamRecord:
     """1층 사실 레코드. 3요건(observed_at · source · resolution)이 항상 채워진다."""
     status: str                       # success | no_data | error
     pnu: str
+    kind: str = "observation.soil_exam"   # [M-6] 스키마 종류
     axis: str = AXIS
     source: str = SOURCE
     resolution: str = RESOLUTION

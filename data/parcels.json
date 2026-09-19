@@ -1,0 +1,17 @@
+{
+  "_note": "필지 등록부(I-3 §1) — I-6 값의 자리. 값이 없으면 키를 두지 않는다(대리값 금지). 주소·PNU·좌표는 PII — 화면·봉투·몰에 안 나간다(ingest.parcels.public_view). d1_first_farm.md §5 표는 이 파일로 옮겨졌다(2026-09-19).",
+  "parcels": [
+    {
+      "id": "p001",
+      "source": "publisher",
+      "recorded_at": "2026-09-19T00:00:00+00:00",
+      "observed_at": "2026-09-18",
+      "resolution": "parcel",
+      "address": "충청북도 괴산군 연풍면 갈금리 50",
+      "use": "시험 재배(자가)",
+      "mall_supply": false,
+      "cert_claimed": "유기",
+      "note": "발행자 2026-09-18 원문: 텃밭 · 유기농 포장 · 토양검정을 한 포장. D-8(2026-09-18): 이번 작기 자가, 몰 납품은 봄 작기부터 검토. 검정값·좌표·PNU 는 ingest.soil_exam 로(키 투입 뒤) — soil_exam_ref 에 기록. 재배 환경(노지/시설)은 원문 '텃밭'이 노지를 뜻하는지 농가 확인 전이라 비움."
+    }
+  ]
+}

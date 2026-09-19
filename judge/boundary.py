@@ -9,29 +9,23 @@
 # 위반은 조용히 걷어 내지 않고 BoundaryError 로 올린다 — 걷어 내면 "경계가 있다"고 믿은 채 샌다(fail-open 금지).
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
-# 재배 단위(subject) — 3층이 받아도 되는 필드 전부. 여기 없으면 거부.
-ALLOWED_SUBJECT_FIELDS: frozenset[str] = frozenset({
-    "id", "parcel", "label", "crop", "season", "anchor", "anchor_kind", "grid_unit", "cert", "source",
-    "lat", "lon", "area_m2", "use", "irrigation", "drainage", "slope", "microclimate", "night_light", "environment",
-})
-# 1층 레코드 종류 — 3층이 받아도 되는 kind
-ALLOWED_RECORD_KINDS: frozenset[str] = frozenset({
-    "observation.video", "observation.weather_daily", "observation.pest_forecast", "reference.climate_normal",
-    "reference.organic_material_notice", "forecast.weather_daily", "event", "decision.noncompliance",
-    "plan.task", "plan.capture", "plan.target_date",
-})
+from schema import records as sch
+
+# [M-6] 허용 목록은 스키마 정본에서 파생된다 — 여기서 따로 적지 않는다(두 벌 금지).
+# 재배 단위(subject) — 3층이 받아도 되는 필드 전부(등록부 필드 + 필지에서 붙는 비PII·좌표 필드). 여기 없으면 거부.
+ALLOWED_SUBJECT_FIELDS: frozenset[str] = sch.LAYER3_SUBJECT_FIELDS
+# 1층 레코드 종류 — 3층이 받아도 되는 kind(스키마의 layer3_input)
+ALLOWED_RECORD_KINDS: frozenset[str] = sch.LAYER3_INPUT_KINDS
 # 문서용 금지 목록(I-5 §1-1) — 검사는 허용 목록으로 한다. 이 이름들이 어디에도 없어야 함을 별도 검사가 본다.
-FORBIDDEN_FIELDS: frozenset[str] = frozenset({
-    "stock", "inventory", "inventory_qty", "order_qty", "orders_pending", "sales_velocity", "views", "settlement_amount",
-    "unit_price", "price", "revenue", "review_score", "rating", "demand_forecast", "demand",
-    "재고", "주문", "주문잔량", "판매속도", "조회수", "정산액", "단가", "리뷰", "평점", "수요예측", "수요",
-})
+FORBIDDEN_FIELDS: frozenset[str] = sch.FORBIDDEN_FIELDS
 # 사건 레코드의 허용 출처
-ALLOWED_EVENT_SOURCES: frozenset[str] = frozenset({"farmer", "mall:settlement", "computed:grid"})
+ALLOWED_EVENT_SOURCES: frozenset[str] = sch.KINDS["event"].sources
 # 계획(납품 계획일)은 농가가 정한 것만 — 몰 수요가 정한 것은 조언 입력이 된다
-ALLOWED_PLAN_SOURCES: frozenset[str] = frozenset({"farmer"})
+ALLOWED_PLAN_SOURCES: frozenset[str] = sch.KINDS["plan.target_date"].sources
 RETURN_KIND_QUALITY = "품질"
 
 
@@ -78,19 +72,20 @@ def settlement_to_events(settlement: dict[str, Any]) -> list[dict[str, Any]]:
     sid = settlement.get("subject")
     if not sid:
         raise BoundaryError("정산 레코드에 재배 단위가 없다")
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     out: list[dict[str, Any]] = []
     if settlement.get("harvested_at"):
-        out.append({"kind": "event", "type": "수확", "subject": sid, "observed_at": settlement["harvested_at"],
+        out.append({"id": f"evt_{uuid.uuid4().hex[:12]}", "kind": "event", "type": "수확", "subject": sid,
+                    "observed_at": settlement["harvested_at"], "recorded_at": now,
                     "source": "mall:settlement", "resolution": "cultivation_unit",
                     "quantity": settlement.get("quantity"), "materials": [], "note": "몰 정산에서"})
     if settlement.get("delivered_at"):
         reason = settlement.get("return_reason") if settlement.get("return_kind") == RETURN_KIND_QUALITY else None
-        out.append({"kind": "event", "type": "납품", "subject": sid, "observed_at": settlement["delivered_at"],
+        out.append({"id": f"evt_{uuid.uuid4().hex[:12]}", "kind": "event", "type": "납품", "subject": sid,
+                    "observed_at": settlement["delivered_at"], "recorded_at": now,
                     "source": "mall:settlement", "resolution": "cultivation_unit",
                     "quality_grade": settlement.get("quality_grade"), "return_reason": reason, "materials": [], "note": "몰 정산에서"})
-    for e in out:
-        assert not (FORBIDDEN_FIELDS & set(e)), "변환 결과에 금지 필드가 남았다"
-    return out
+    return [sch.validate(e) for e in out]      # 스키마가 금지 필드·출처를 본다 — 변환 결과도 예외 없이
 
 
 def accept_plan_target(plan: dict[str, Any]) -> dict[str, Any]:

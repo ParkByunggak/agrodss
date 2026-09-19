@@ -9,4 +9,6 @@ import pytest
 def _isolate_media_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("AGRODSS_MEDIA_DIR", str(tmp_path / "media"))
     monkeypatch.setenv("AGRODSS_EVENTS_DIR", str(tmp_path / "events"))
+    monkeypatch.setenv("AGRODSS_FEEDBACK_DIR", str(tmp_path / "feedback"))
+    monkeypatch.setenv("AGRODSS_CHAT_DIR", str(tmp_path / "chat"))
     yield

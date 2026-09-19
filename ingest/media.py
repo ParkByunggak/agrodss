@@ -22,6 +22,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from schema import records as sch
+
 ROOT = Path(__file__).resolve().parent.parent
 SUBJECTS_PATH = ROOT / "data" / "subjects.json"
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".3gp"}
@@ -68,7 +70,7 @@ WATCH_LIST_LIMIT = 50
 def load_subjects(path: Path = SUBJECTS_PATH) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    return json.loads(path.read_text(encoding="utf-8")).get("subjects", [])
+    return [sch.validate(s, kind="subject") for s in json.loads(path.read_text(encoding="utf-8")).get("subjects", [])]
 
 
 def subject_ids() -> set[str]:
@@ -313,6 +315,7 @@ def register(key: str, subject: str, observed_at: str | None = None, note: str =
         "gps": list(pr.gps) if pr.gps else None,
         "note": note.strip()[:500],
     }
+    rec = sch.stamp(rec)                      # [M-6] 원장에 쓰는 직전 한 번 — 스키마 밖 레코드는 여기서 죽는다
     with index_path().open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     return rec
