@@ -4,6 +4,33 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def load_dotenv(path: Path) -> list[str]:
+    """루트 .env 의 KEY=VALUE 를 환경에 넣는다(이미 있는 키는 덮지 않는다). 값은 여기 말고 .env 에만. 넣은 키 이름을 돌려준다.
+    [2026-09-19] 화면(frontend.config)만 .env 를 읽고 CLI(python -m ingest.fertilizer · scripts/live_reproduce.py)는 안 읽었다 —
+    키를 넣어도 '키 없음'이 나는 경로. 원천 모듈이 쓰는 이 설정에서 읽는다."""
+    loaded: list[str] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return loaded
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k, v = k.strip(), v.strip().strip('"').strip("'")
+        if k and v and k not in os.environ:
+            os.environ[k] = v
+            loaded.append(k)
+    return loaded
+
+
+load_dotenv(ROOT / ".env")
 
 # 흙토람 토양검정(SoilExam) — data.go.kr 1390802. [D-9] VELA 에서 인용한 원천.
 SOIL_EXAM_URL: str = os.environ.get(

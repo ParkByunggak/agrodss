@@ -206,6 +206,17 @@ def collect_for_parcel(parcel_id: str, address: str, crop: str, environment: str
     return out
 
 
+def summary(res: dict[str, Any]) -> dict[str, Any]:
+    """수집 결과의 상태 요약 — PNU · 검정값 · 처방값은 뺀다(PII). 채팅에 붙이는 용도."""
+    def st(x: Any) -> str:
+        return (x or {}).get("status", "없음") if isinstance(x, dict) else "없음"
+    return {"parcel": res.get("parcel"), "crop": res.get("crop"), "pnu": "있음" if res.get("pnu") else "없음",
+            "soil": st(res.get("soil")), "prescription": st(res.get("prescription")), "standard": st(res.get("standard")),
+            "saved": len(res.get("saved") or []), "message": res.get("message"),
+            "notes": [f"{k}: {(res.get(k) or {}).get('message')}" for k in ("soil", "prescription", "standard")
+                      if isinstance(res.get(k), dict) and res[k].get("message")]}
+
+
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -215,5 +226,9 @@ if __name__ == "__main__":
         print("사용: python -m ingest.fertilizer <지번 주소> [--parcel=p001] [--crop=쪽파] [--env=노지|시설]")
         sys.exit(2)
     res = collect_for_parcel(opts.get("--parcel", "p001"), " ".join(args), opts.get("--crop", "쪽파"), opts.get("--env"))
-    # 화면 출력은 PNU·검정값을 담는다(PII) — 저장은 data/soil/ (git 제외) 에만
-    print(json.dumps(res, ensure_ascii=False, indent=2))
+    if "--summary" in sys.argv:
+        # 상태만(PII 없음) — 채팅에 붙여도 되는 형태. 값은 data/soil/ 에만
+        print(json.dumps(summary(res), ensure_ascii=False, indent=2))
+    else:
+        # 화면 출력은 PNU·검정값을 담는다(PII) — 저장은 data/soil/ (git 제외) 에만
+        print(json.dumps(res, ensure_ascii=False, indent=2))
