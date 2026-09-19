@@ -56,27 +56,83 @@ def list_records(subject: str | None = None, kind: str | None = None) -> list[di
     return out
 
 
+def _need_day(observed_at: str | None, what: str = "사건") -> str:
+    observed_at = (observed_at or "").strip()
+    if not observed_at:
+        raise EventError(f"대상 시각(observed_at)이 없다 — {what}은 언제인지 없이는 1층에 들어가지 않는다")
+    try:
+        date.fromisoformat(observed_at[:10])
+    except ValueError:
+        raise EventError(f"날짜 형식이 아니다: {observed_at!r} (예 2026-09-19)")
+    return observed_at
+
+
 def add_event(subject: str, event_type: str, observed_at: str, note: str = "", advice_ref: str | None = None,
-              materials: list[str] | None = None, quantity: str | None = None, now: datetime | None = None) -> dict[str, Any]:
+              materials: list[str] | None = None, quantity: str | None = None, now: datetime | None = None,
+              chat_ref: str | None = None) -> dict[str, Any]:
     """사건 1건. observed_at(대상 시각) 필수 — 없으면 거부(지금 시각으로 메우지 않는다)."""
     if event_type not in EVENT_TYPES:
         raise EventError(f"사건 종류가 아니다: {event_type!r} ({', '.join(EVENT_TYPES)})")
     if not subject:
         raise EventError("재배 단위(subject) 필수")
-    observed_at = (observed_at or "").strip()
-    if not observed_at:
-        raise EventError("대상 시각(observed_at)이 없다 — 사건은 언제 일어났는지 없이는 1층에 들어가지 않는다")
-    try:
-        date.fromisoformat(observed_at[:10])
-    except ValueError:
-        raise EventError(f"날짜 형식이 아니다: {observed_at!r} (예 2026-09-19)")
+    observed_at = _need_day(observed_at)
     now = now or datetime.now(timezone.utc)
-    return _append({
+    rec = {
         "id": f"evt_{uuid.uuid4().hex[:12]}", "kind": "event", "type": event_type, "subject": subject,
         "observed_at": observed_at, "recorded_at": now.isoformat(timespec="seconds"),
         "source": SOURCE, "resolution": "cultivation_unit",
         "advice_ref": advice_ref, "materials": materials or [], "quantity": quantity, "note": note.strip()[:500],
-    })
+    }
+    if chat_ref:
+        rec["chat_ref"] = chat_ref
+    return _append(rec)
+
+
+def add_observation(subject: str, text: str, observed_at: str, tags: list[str] | None = None,
+                    chat_ref: str | None = None, now: datetime | None = None) -> dict[str, Any]:
+    """[I-3 §3] 직접 관찰값 — 농가가 본 것. 최종 심급. 판단은 여기 없다."""
+    text = (text or "").strip()
+    if not text:
+        raise EventError("관찰 내용이 비어 있다")
+    observed_at = _need_day(observed_at, "관찰")
+    now = now or datetime.now(timezone.utc)
+    rec: dict[str, Any] = {"id": f"obs_{uuid.uuid4().hex[:12]}", "kind": "observation.note", "subject": subject, "text": text[:1000],
+                           "observed_at": observed_at, "recorded_at": now.isoformat(timespec="seconds"),
+                           "source": SOURCE, "resolution": "cultivation_unit", "tags": tags or []}
+    if chat_ref:
+        rec["chat_ref"] = chat_ref
+    return _append(rec)
+
+
+def add_farmer_plan(subject: str, task: str, planned_day: str, note: str = "", chat_ref: str | None = None,
+                    now: datetime | None = None) -> dict[str, Any]:
+    """[I-3 §4] 농가 자신의 계획 — 영농일지의 '할 일'. 날짜 없는 계획은 계획이 아니다."""
+    task = (task or "").strip()
+    if not task:
+        raise EventError("계획 작업이 비어 있다")
+    planned_day = _need_day(planned_day, "계획")
+    now = now or datetime.now(timezone.utc)
+    rec: dict[str, Any] = {"id": f"pln_{uuid.uuid4().hex[:12]}", "kind": "plan.farmer", "subject": subject, "task": task[:200],
+                           "planned_day": planned_day[:10], "observed_at": planned_day[:10],
+                           "recorded_at": now.isoformat(timespec="seconds"), "source": SOURCE, "resolution": "cultivation_unit",
+                           "note": note.strip()[:500]}
+    if chat_ref:
+        rec["chat_ref"] = chat_ref
+    return _append(rec)
+
+
+def add_target_date(subject: str, target_date: str, note: str = "", chat_ref: str | None = None,
+                    now: datetime | None = None) -> dict[str, Any]:
+    """[I-3 §4 · I-5] 납품 계획일 — 농가가 정한 것만(source=farmer 고정. 몰 수요는 여기로 못 들어온다)."""
+    target_date = _need_day(target_date, "납품 계획일")
+    now = now or datetime.now(timezone.utc)
+    rec: dict[str, Any] = {"id": f"tgt_{uuid.uuid4().hex[:12]}", "kind": "plan.target_date", "subject": subject,
+                           "target_date": target_date[:10], "observed_at": target_date[:10],
+                           "recorded_at": now.isoformat(timespec="seconds"), "source": SOURCE, "resolution": "cultivation_unit",
+                           "note": note.strip()[:500]}
+    if chat_ref:
+        rec["chat_ref"] = chat_ref
+    return _append(rec)
 
 
 def add_noncompliance(subject: str, planned_task: str, reason: str, planned_day: str, now: datetime | None = None) -> dict[str, Any]:

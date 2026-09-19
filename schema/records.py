@@ -84,8 +84,14 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
        ("width", "height", "duration_sec", "gps", "note"), sources=("farmer",), layer3_input=True, pii=("gps",)),
     _k("event", "1층 사실",
        ("id", "type", "subject", "observed_at", "recorded_at", "source", "resolution"),
-       ("advice_ref", "materials", "quantity", "quality_grade", "return_reason", "note"),
+       ("advice_ref", "materials", "quantity", "quality_grade", "return_reason", "note", "chat_ref"),
        sources=("farmer", "mall:settlement"), layer3_input=True),
+    _k("observation.note", "1층 사실",   # I-3 §3 직접 관찰값 — 농가가 본 것(최종 심급). 채팅에서 분류돼 확인 뒤 들어온다
+       ("id", "subject", "text", "observed_at", "recorded_at", "source", "resolution"),
+       ("tags", "chat_ref"), sources=("farmer",), layer3_input=True),
+    _k("plan.farmer", "1층 계획",         # 농가가 스스로 세운 계획(격자 계획과 다르다) — 영농일지의 '할 일'
+       ("id", "subject", "task", "planned_day", "recorded_at", "observed_at", "source", "resolution"),
+       ("note", "chat_ref", "done_ref"), sources=("farmer",), layer3_input=True),
     _k("decision.noncompliance", "1층 사실",
        ("id", "subject", "planned_task", "planned_day", "reason", "observed_at", "recorded_at", "source", "resolution"),
        sources=("farmer",), layer3_input=True),
@@ -113,7 +119,7 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
         "materials", "retry_possible", "deadline_day", "deadline_date", "source_note"),
        sources=("computed:grid",), layer3_input=True, subject_bound=False),
     _k("plan.target_date", "1층 계획",   # I-3 §4 — 농가가 정한 것만(몰 수요가 정하면 조언 입력이 된다)
-       ("subject", "target_date", "source", "resolution"), ("id", "recorded_at", "observed_at", "note"),
+       ("subject", "target_date", "source", "resolution"), ("id", "recorded_at", "observed_at", "note", "chat_ref"),
        sources=("farmer",), layer3_input=True),
     # ── 1층 사실(농가 발화 — I-3 §3 "질의 자체가 관찰", M-13 채팅) ─────────────────────────
     _k("chat.message", "1층 사실",   # 채팅 한 줄. 분류(2층)는 drafts 에 제안으로만 — 확인(confirm)해야 원장에 들어간다

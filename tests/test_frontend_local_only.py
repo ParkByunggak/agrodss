@@ -92,6 +92,11 @@ def test_server_serves_on_loopback(monkeypatch):
         conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
         conn.request("GET", "/")
         resp = conn.getresponse()
+        # [M-13] 루트는 첫 채팅(재배 단위)으로 보낸다 — 목록이 있으면 /c/<id>, 없으면 /c/new
+        assert resp.status == 302 and resp.getheader("Location", "").startswith("/c/")
+        resp.read()
+        conn.request("GET", resp.getheader("Location"))
+        resp = conn.getresponse()
         assert resp.status == 200
         assert "agrodss" in resp.read().decode("utf-8")
     finally:

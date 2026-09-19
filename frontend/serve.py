@@ -14,13 +14,14 @@ import webbrowser
 from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 if __package__ in (None, ""):
     # `python frontend/serve.py` 로 직접 실행될 때 저장소 루트를 경로에 넣는다
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from frontend import config, render  # noqa: E402
+from frontend import chat_pages, config, render  # noqa: E402
+from ingest import chat, feedback as fb, subjects  # noqa: E402  — [M-13] 채팅 원장 · 되먹임 · 재배 단위 등록부도 ingest 를 통해서만
 from ingest import events as ev  # noqa: E402  — 사건 원장도 ingest 를 통해서만
 from ingest import media  # noqa: E402  — 입력 화면은 ingest 를 통해서만 1층에 쓴다(원장 파일을 직접 열지 않는다)
 from grid import capture as grid_capture  # noqa: E402  — 촬영 시점 알림(격자 지식, 원장 아님)
@@ -270,11 +271,66 @@ def render_page(name: str) -> tuple[int, str]:
     return 200, render.page(f"agrodss — {name}", nav_html(name), body, meta, footer)
 
 
+# ── [M-13] Claude 형식 채팅 화면 ─────────────────────────────────────────────────────
+def _shell(current: str, main_html: str, panel_html: str | None, title: str) -> str:
+    return chat_pages.shell(title, chat_pages.sidebar(current, doc_list(), date.today()), main_html, panel_html, git_head_short())
+
+
+def chat_home() -> tuple[int, str, str | None]:
+    subs = subjects.load()
+    if subs:
+        return 302, "", f"/c/{quote(subs[0]['id'])}"
+    return 302, "", "/c/new"
+
+
+def chat_page(sid: str, message: str = "", error: str = "") -> tuple[int, str]:
+    s = subjects.by_id(sid)
+    if not s:
+        return 404, _shell("", '<div class="msgs"><h1>없는 목록</h1></div>', None, "없음")
+    today = date.today()
+    body = chat_pages.thread_main(s, today, message=message, error=error)
+    return (400 if error else 200), _shell(f"/c/{sid}", body, chat_pages.thread_panel(s, today), f"agrodss — {s.get('label')}")
+
+
+def diary_page(sid: str) -> tuple[int, str]:
+    s = subjects.by_id(sid)
+    if not s:
+        return 404, _shell("", '<div class="msgs"><h1>없는 목록</h1></div>', None, "없음")
+    return 200, _shell(f"/c/{sid}", chat_pages.diary_main(s, date.today()), None, f"영농일지 — {s.get('label')}")
+
+
+def new_page(error: str = "", form: dict[str, str] | None = None) -> tuple[int, str]:
+    return (400 if error else 200), _shell("/c/new", chat_pages.new_main(error, form), None, "새 채팅")
+
+
+def improve_page(message: str = "", error: str = "", cycle=None) -> tuple[int, str]:
+    return (400 if error else 200), _shell("/improve", chat_pages.improve_main(date.today(), message, error, cycle), None, "개선 · 자율진화")
+
+
 class Handler(BaseHTTPRequestHandler):
+    def _send(self, status: int, body: str, location: str | None = None) -> None:
+        data = body.encode("utf-8")
+        self.send_response(status)
+        if location:
+            self.send_header("Location", location)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_GET(self) -> None:  # noqa: N802
         p = urlparse(self.path).path
+        loc = None
         if p == "/":
-            status, body = render_page(config.LEDGER_DOC)
+            status, body, loc = chat_home()
+        elif p == "/c/new":
+            status, body = new_page()
+        elif p.startswith("/c/"):
+            status, body = chat_page(unquote(p[len("/c/"):]))
+        elif p.startswith("/diary/"):
+            status, body = diary_page(unquote(p[len("/diary/"):]))
+        elif p == "/improve":
+            status, body = improve_page()
         elif p == "/media":
             status, body = media_page()
         elif p == "/judge":
@@ -285,19 +341,59 @@ class Handler(BaseHTTPRequestHandler):
             status, body = render_page(unquote(p[len("/doc/"):]))
         else:
             status, body = 404, render.page("없음", nav_html(""), "<h1>없는 경로</h1>", "", "")
-        data = body.encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        self._send(status, body, loc)
 
     def do_POST(self) -> None:  # noqa: N802
         p = urlparse(self.path).path
         length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(min(length, 1 << 20)).decode("utf-8", errors="replace")
         form = {k: v[0] for k, v in parse_qs(raw, keep_blank_values=True).items()}
-        if p == "/media/register":
+        if p == "/c/new":
+            try:
+                s = subjects.add(form.get("crop", ""), form.get("season", ""), status=form.get("status") or "계획",
+                                 parcel=form.get("parcel") or subjects.DEFAULT_PARCEL, anchor=form.get("anchor") or None,
+                                 cert=form.get("cert") or None)
+                self._send(302, "", f"/c/{quote(s['id'])}")
+                return
+            except (subjects.SubjectError, ValueError) as e:
+                status, body = new_page(error=str(e), form=form)
+        elif p.startswith("/c/") and p.endswith("/send"):
+            sid = unquote(p[len("/c/"):-len("/send")])
+            try:
+                chat.send(sid, form.get("text", ""))
+                self._send(302, "", f"/c/{quote(sid)}")
+                return
+            except chat.ChatError as e:
+                status, body = chat_page(sid, error=str(e))
+        elif p.startswith("/c/") and p.endswith("/confirm"):
+            sid = unquote(p[len("/c/"):-len("/confirm")])
+            try:
+                rec = chat.confirm(form.get("msg", ""), int(form.get("i") or 0), day=form.get("day") or None, event_type=form.get("type") or None)
+                status, body = chat_page(sid, message=f"원장에 들어감 {rec['id']} · {chat.KIND_LABEL.get(rec['kind'], rec['kind'])} {rec.get('observed_at', '')}")
+            except (chat.ChatError, ValueError) as e:
+                status, body = chat_page(sid, error=str(e))
+        elif p.startswith("/c/") and p.endswith("/choose"):
+            sid = unquote(p[len("/c/"):-len("/choose")])
+            try:
+                chat.choose_kind(form.get("msg", ""), form.get("kind", ""))
+                self._send(302, "", f"/c/{quote(sid)}")
+                return
+            except chat.ChatError as e:
+                status, body = chat_page(sid, error=str(e))
+        elif p == "/improve/request":
+            try:
+                r = fb.add_request(form.get("text", ""), target=form.get("target") or "other", subject=form.get("subject") or None, source="publisher")
+                status, body = improve_page(message=f"접수 {r['id']}")
+            except fb.FeedbackError as e:
+                status, body = improve_page(error=str(e))
+        elif p == "/improve/status":
+            try:
+                status, body = improve_page(message=chat_pages.handle_improve_status(form))
+            except fb.FeedbackError as e:
+                status, body = improve_page(error=str(e))
+        elif p == "/improve/cycle":
+            status, body = improve_page(cycle=chat_pages.run_cycle(date.today(), git_head_short()))
+        elif p == "/media/register":
             try:
                 rec = media.register(form.get("key", ""), form.get("subject", ""),
                                      form.get("observed_at") or None, form.get("note", ""))
@@ -320,12 +416,7 @@ class Handler(BaseHTTPRequestHandler):
                 status, body = events_page(error=str(e))
         else:
             status, body = 404, render.page("없음", nav_html(""), "<h1>없는 경로</h1>", "", "")
-        data = body.encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        self._send(status, body)
 
     def log_message(self, fmt: str, *args) -> None:  # 조용히
         pass

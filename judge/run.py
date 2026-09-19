@@ -54,10 +54,20 @@ def all_harvest(today: date | None = None) -> list[tuple[dict[str, Any], Envelop
     return out
 
 
-def all_judgments(today: date | None = None) -> list[tuple[dict[str, Any], list[Envelope], dict[str, str]]]:
-    """재배 단위마다 [수확 시기, 위험 경보] 봉투 — 원천은 한 번만 모은다."""
+def judgments_for(subject_id: str, today: date | None = None) -> list[Envelope]:
+    """한 재배 단위의 봉투들(채팅 답변용). 없으면 []."""
+    for s, envs, _ in all_judgments(today=today, only=subject_id):
+        if s["id"] == subject_id:
+            return envs
+    return []
+
+
+def all_judgments(today: date | None = None, only: str | None = None) -> list[tuple[dict[str, Any], list[Envelope], dict[str, str]]]:
+    """재배 단위마다 [수확 시기, 위험 경보, 자재 인용, 계획 대 실제] 봉투 — 원천은 한 번만 모은다."""
     out = []
     for s_reg in media.load_subjects():
+        if only and s_reg.get("id") != only:
+            continue
         # [M-6] 필지 등록부에서 3층 허용 필드만 붙인다(주소·PNU 는 안 붙는다) — 입력 병합은 게이트 앞
         s0 = parcels.enrich_subject(s_reg, parcels.by_id(s_reg.get("parcel", "")))
         forecast, why = gather_forecast(s0)

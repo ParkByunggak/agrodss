@@ -67,7 +67,13 @@ WATCH_LIST_LIMIT = 50
 
 
 # ── 재배 단위(subject) 등록부 ────────────────────────────────────────────────────
-def load_subjects(path: Path = SUBJECTS_PATH) -> list[dict[str, Any]]:
+def subjects_path() -> Path:
+    """등록부 경로 — AGRODSS_SUBJECTS_PATH 로 바꿀 수 있다(테스트는 tmp 사본 — conftest). 호출 시점에 푼다(기본 인자에 묶지 않는다)."""
+    return Path(os.environ.get("AGRODSS_SUBJECTS_PATH") or SUBJECTS_PATH)
+
+
+def load_subjects(path: Path | None = None) -> list[dict[str, Any]]:
+    path = path or subjects_path()
     if not path.exists():
         return []
     return [sch.validate(s, kind="subject") for s in json.loads(path.read_text(encoding="utf-8")).get("subjects", [])]
