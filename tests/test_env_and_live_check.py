@@ -39,6 +39,33 @@ def test_live_check_bat_is_ascii_uses_subject_and_delayed_expansion():
     text = raw.decode("ascii")
     assert "enabledelayedexpansion" in text and "!errorlevel!" in text and "%errorlevel%" not in text.split("REM inside")[-1].split("\n", 1)[1]
     assert "--subject=" in text and "--parcel=" not in text and "--crop=" not in text  # 작목·주소는 등록부에서 — 배치에 리터럴 없음
+    # [발행자 라이브 2026-09-19 21:30 "메모장이 열리지만 내용은 없다"] 리다이렉트 블록 `( … ) >> 로그` 안에 괄호가 있으면 cmd 가 블록을
+    # 거기서 닫아 구문 오류 → 아무것도 안 돌고 빈 로그. 블록 안 줄에는 괄호가 없어야 한다
+    lines = text.splitlines()
+    starts = [i for i, ln in enumerate(lines) if ln.strip() == "("]
+    assert len(starts) == 1, "리다이렉트 블록은 하나"
+    end = next(i for i in range(starts[0] + 1, len(lines)) if lines[i].startswith(")"))
+    inner = lines[starts[0] + 1:end]
+    assert inner and not any("(" in ln or ")" in ln for ln in inner), [ln for ln in inner if "(" in ln or ")" in ln]
+    assert any("> \"%LOG%\"" in ln for ln in lines[:starts[0]]), "블록 전에 로그 첫 줄을 먼저 쓴다 — 블록이 죽어도 로그가 빈 채로 열리지 않는다"
+
+
+def test_every_bat_block_has_balanced_unquoted_parens():
+    # 같은 형태 전수(§7.5 지점 축): diag_frontend.bat 의 bind check 줄도 같은 괄호를 들고 있었다. 큰따옴표 밖 괄호는 줄 안에서 짝이 맞아야 한다
+    import re
+    for name in ("scripts/live_check.bat", "scripts/diag_frontend.bat"):
+        lines = (ROOT / name).read_text(encoding="utf-8", errors="replace").splitlines()
+        inside = False
+        for i, ln in enumerate(lines, 1):
+            if ln.strip() == "(":
+                inside = True
+                continue
+            if ln.startswith(")"):
+                inside = False
+                continue
+            if inside:
+                bare = re.sub(r'"[^"]*"', "", ln)
+                assert bare.count("(") == bare.count(")"), f"{name}:{i} 블록 안 괄호 짝 불일치 — cmd 가 블록을 닫는다: {ln.strip()}"
 
 
 def test_resolve_subject_reads_registries_and_refuses_unknown():
