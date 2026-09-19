@@ -217,15 +217,33 @@ def summary(res: dict[str, Any]) -> dict[str, Any]:
                       if isinstance(res.get(k), dict) and res[k].get("message")]}
 
 
+def resolve_subject(subject_id: str) -> dict[str, str | None]:
+    """[코드 평가 D1·D11] 재배 단위 id(ASCII) 하나로 작목 · 필지 · 주소 · 재배환경을 **등록부에서** 푼다.
+    배치 파일에 한글 주소·작목을 리터럴로 두지 않기 위한 경로(cmd 는 배치를 cp949 로 읽어 UTF-8 한글이 깨진다 · 주소는 PII)."""
+    from ingest import parcels, subjects
+    s = subjects.by_id(subject_id)
+    if not s:
+        raise CodeError(f"없는 재배 단위: {subject_id}")
+    p = parcels.by_id(s.get("parcel", "")) or {}
+    return {"parcel": s.get("parcel"), "crop": s.get("crop"), "address": p.get("address"), "environment": p.get("environment")}
+
+
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     opts = {a.split("=", 1)[0]: a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--") and "=" in a}
-    if not args:
-        print("사용: python -m ingest.fertilizer <지번 주소> [--parcel=p001] [--crop=쪽파] [--env=노지|시설]")
+    if opts.get("--subject"):
+        r = resolve_subject(opts["--subject"])
+        if not r["address"]:
+            print(json.dumps({"status": "error", "message": f"필지 {r['parcel']} 에 주소가 없다 — 등록부(parcels)에 넣는다"}, ensure_ascii=False))
+            sys.exit(2)
+        res = collect_for_parcel(r["parcel"] or "", r["address"], r["crop"] or "", opts.get("--env") or r["environment"])
+    elif not args:
+        print("사용: python -m ingest.fertilizer <지번 주소> [--parcel=p001] [--crop=쪽파] [--env=노지|시설]  |  --subject=<재배 단위 id>")
         sys.exit(2)
-    res = collect_for_parcel(opts.get("--parcel", "p001"), " ".join(args), opts.get("--crop", "쪽파"), opts.get("--env"))
+    else:
+        res = collect_for_parcel(opts.get("--parcel", "p001"), " ".join(args), opts.get("--crop", "쪽파"), opts.get("--env"))
     if "--summary" in sys.argv:
         # 상태만(PII 없음) — 채팅에 붙여도 되는 형태. 값은 data/soil/ 에만
         print(json.dumps(summary(res), ensure_ascii=False, indent=2))

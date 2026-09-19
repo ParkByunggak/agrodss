@@ -36,19 +36,27 @@ def merge(agrodss_env_text: str, vela_env_text: str, names: list[str]) -> tuple[
     vela = parse_env(vela_env_text)
     copied: list[str] = []
     missing: list[str] = []
-    lines = [agrodss_env_text.rstrip("\n")] if agrodss_env_text.strip() else []
+    body = agrodss_env_text.rstrip("\n").split("\n") if agrodss_env_text.strip() else []
+    appended: list[str] = []
     for n in names:
         if have.get(n):
             continue
         val = next((vela[p + n] for p in PREFIXES if vela.get(p + n)), None)
-        if val:
-            lines.append(f"{n}={val}")
-            copied.append(n)
-        else:
+        if not val:
             missing.append(n)
-    if copied:
-        lines.insert(len(lines) - len(copied), "# [D-9 키 인용] D:\\vela\\.env 에서 옮김 — 값은 이 파일에만")
-    return "\n".join(lines) + "\n", copied, missing
+            continue
+        copied.append(n)
+        # [코드 평가 D2] .env.example 을 복사한 파일에는 빈 `KEY=` 줄이 이미 있다 — 끝에 덧붙이면 같은 키가 두 줄이 되고
+        # 로더(첫 줄 우선)가 빈 값을 본다. 빈 줄이 있으면 그 자리에서 **교체**하고, 없을 때만 덧붙인다.
+        idx = next((i for i, ln in enumerate(body) if ln.split("=", 1)[0].strip() == n and "=" in ln), None)
+        if idx is not None:
+            body[idx] = f"{n}={val}"
+        else:
+            appended.append(f"{n}={val}")
+    if appended:
+        body.append("# [D-9 키 인용] D:\\vela\\.env 에서 옮김 — 값은 이 파일에만")
+        body.extend(appended)
+    return "\n".join(body) + "\n", copied, missing
 
 
 def main(argv: list[str]) -> int:

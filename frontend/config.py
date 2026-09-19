@@ -7,23 +7,9 @@ import os
 from pathlib import Path
 
 
-def _load_dotenv(path: Path) -> None:
-    """루트 .env 의 KEY=VALUE 를 환경에 넣는다(이미 있는 키는 덮지 않는다). 값은 여기 말고 .env 에만."""
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        k, v = k.strip(), v.strip().strip('"').strip("'")
-        if k and k not in os.environ:
-            os.environ[k] = v
-
-
-_load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+# [코드 평가 D2 · 2026-09-19] .env 로더는 ingest.config.load_dotenv **하나**다. 여기 두 벌째가 있었고 빈 값(KEY=)을 환경에 넣어
+# 화면 프로세스에서 옮긴 키가 사라졌다(ingest 로더는 빈 값을 건너뛴다). import 가 곧 적재다(ingest.config 모듈 말미).
+from ingest import config as _ingest_config  # noqa: F401  — .env 적재 정본
 
 # [D-6 절대 제약] 외부 배포 금지 — 루프백에만 묶는다. 이것은 설정값이 아니라 **제약**이라
 # 환경변수로 덮어쓰지 않는다. tests/test_frontend_local_only.py 가 양방향으로 고정한다.
