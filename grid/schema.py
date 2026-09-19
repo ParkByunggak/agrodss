@@ -99,13 +99,16 @@ def validate(unit: dict[str, Any], canonical: set[str] | None = None) -> Report:
             err(f"{tag}: 판정 축과 금지 축이 겹친다 {set(req) & set(forb)}")
         w = s.get("window")
         if isinstance(w, dict):
-            if w.get("basis") not in ("anchor", "gdd"):
-                err(f"{tag}: window.basis 는 anchor | gdd")
+            # [코드 평가 A7] gdd basis 는 소비자(plan · capture · harvest_timing · stage_decisions)가 전부 기준일+일수로만 읽으므로
+            # 지금 허용하면 조용히 틀린 날짜가 나온다. 소비자가 생길 때 여기와 I-4 문서에 함께 연다.
+            if w.get("basis") != "anchor":
+                err(f"{tag}: window.basis 는 anchor 만(gdd 는 소비자가 아직 없다 — 열려면 판정기와 함께)")
             if not (isinstance(w.get("from_day"), int) and isinstance(w.get("to_day"), int)) or w["from_day"] > w["to_day"]:
                 err(f"{tag}: window from_day <= to_day 정수")
         for r in (s.get("risks") or []) if s.get("risks") != NA else []:
             rt = f"{tag} risk {r.get('name')!r}"
-            if "recoverable" not in r or r.get("alert") not in ("oversignal_ok", "confident_only"):
+            # [코드 평가 A5] recoverable 은 **bool** — "false" 문자열이 통과하면 risk_alert 의 `is False` 비교가 회복 가능으로 읽어 비대칭이 무너진다
+            if not isinstance(r.get("recoverable"), bool) or r.get("alert") not in ("oversignal_ok", "confident_only"):
                 err(f"{rt}: recoverable(bool) · alert(oversignal_ok|confident_only) 필수")
             elif r["recoverable"] is False and r["alert"] != "oversignal_ok":
                 err(f"{rt}: 회복 불가 위험은 alert=oversignal_ok (경보 비대칭)")

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -14,14 +15,20 @@ ROOT = Path(__file__).resolve().parent.parent
 PARCELS_PATH = ROOT / "data" / "parcels.json"
 
 
-def load(path: Path = PARCELS_PATH) -> list[dict[str, Any]]:
-    if not path.exists():
+def parcels_path() -> Path:
+    """[R-4 · 코드 평가 C4] 경로는 호출 시점에 env 로 푼다 — 기본 인자에 묶으면 conftest 격리가 안 닿는다(오늘 전수 처방에서 빠진 한 곳)."""
+    return Path(os.environ.get("AGRODSS_PARCELS_PATH") or PARCELS_PATH)
+
+
+def load(path: Path | None = None) -> list[dict[str, Any]]:
+    p = path or parcels_path()
+    if not p.exists():
         return []
-    rows = json.loads(path.read_text(encoding="utf-8")).get("parcels", [])
+    rows = json.loads(p.read_text(encoding="utf-8")).get("parcels", [])
     return [sch.validate(r, kind="parcel") for r in rows]
 
 
-def by_id(pid: str, path: Path = PARCELS_PATH) -> dict[str, Any] | None:
+def by_id(pid: str, path: Path | None = None) -> dict[str, Any] | None:
     for r in load(path):
         if r.get("id") == pid:
             return r

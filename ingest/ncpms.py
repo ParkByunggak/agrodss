@@ -22,8 +22,10 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any
 
+from ingest import config as _config  # [코드 평가 C11] .env 적재 + 타임아웃 정본
+
 BASE_URL = os.environ.get("AGRODSS_NCPMS_BASE_URL", "http://ncpms.rda.go.kr/npmsAPI/service")
-TIMEOUT = float(os.environ.get("AGRODSS_INGEST_TIMEOUT_SEC", "30"))
+TIMEOUT = _config.TIMEOUT_SEC
 SOURCE = "external:ncpms_svc51"
 SERVICE_FORECAST = "SVC51"
 SERVICE_TYPE = "AA003"

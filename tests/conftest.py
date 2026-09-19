@@ -20,6 +20,9 @@ def _isolate_media_dir(tmp_path, monkeypatch):
     reg = tmp_path / "subjects.json"
     reg.write_text(_REAL_SUBJECTS.read_text(encoding="utf-8"), encoding="utf-8")   # 운영 등록부의 사본 — 읽기는 같고 쓰기는 tmp
     monkeypatch.setenv("AGRODSS_SUBJECTS_PATH", str(reg))
+    parcels = tmp_path / "parcels.json"                                            # [코드 평가 C4] 필지 등록부 — R-4 전수에서 빠졌던 한 곳
+    parcels.write_text((_REAL_SUBJECTS.parent / "parcels.json").read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setenv("AGRODSS_PARCELS_PATH", str(parcels))
     monkeypatch.setenv("AGRODSS_PROFILE_PATH", str(tmp_path / "profile.json"))   # 사용자 등록부도 쓰기 대상 — 격리 짝(R-4)
     monkeypatch.setenv("AGRODSS_SOIL_DIR", str(tmp_path / "soil"))               # 토양 원천 저장소(PII) — 격리 짝
     monkeypatch.setenv("AGRODSS_PSIS_DIR", str(tmp_path / "psis"))               # PSIS 캐시 — 격리 짝

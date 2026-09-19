@@ -24,7 +24,7 @@ variety_correction time_shift_days · cell_overrides   트리 D 보정 2종
 | 필드 | 형 | 뜻 · 규칙 |
 |---|---|---|
 | `order` · `name` | int · str | 순서 유일 |
-| `window` | `{from_day, to_day, basis}` | 기준점 기준 상대 일수. `basis` = `anchor` \| `gdd` |
+| `window` | `{from_day, to_day, basis}` | 기준점 기준 상대 일수. `basis` = `anchor` 만 — `gdd` 는 예약어(스키마가 거부. [코드 평가 A7 2026-09-19] 소비자 넷이 전부 기준일+일수로만 읽어 열어 두면 조용히 틀린 날짜가 난다 — 적산온도 판정기가 생길 때 여기와 검증기를 함께 연다) |
 | `risks[]` | 아래 | 위험 + **회복 가능성** |
 | `tasks[]` | 아래 | 작업 + 도구 + 자재 + 작업일/준비 착수일 |
 | `required_axes[]` · `forbidden_axes[]` | I-4 id | 판정 축 / 금지 축. 교집합 없음. **I-4 밖 id 는 검증 실패** |

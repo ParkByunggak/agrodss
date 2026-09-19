@@ -25,12 +25,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from ingest import config as _config  # [코드 평가 C11] .env 적재 + 타임아웃 정본 — 세 원천 모듈이 각자 15/20/30 으로 읽고 .env 는 안 읽었다
+
 ROOT = Path(__file__).resolve().parent.parent
 STATIONS_PATH = ROOT / "data" / "kma" / "stations.json"
 
 HUB_BASE = os.environ.get("AGRODSS_KMA_HUB_BASE", "https://apihub.kma.go.kr/api/typ01/url")
 FCST_BASE = os.environ.get("AGRODSS_KMA_FCST_BASE", "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0")
-TIMEOUT = float(os.environ.get("AGRODSS_INGEST_TIMEOUT_SEC", "20"))
+TIMEOUT = _config.TIMEOUT_SEC
 
 SRC_OBS = "external:kma_sfcdd"
 SRC_NORM = "external:kma_sfc_norm1"

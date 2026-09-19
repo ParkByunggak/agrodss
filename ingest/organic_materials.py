@@ -18,6 +18,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from ingest import config as _config  # noqa: F401  [코드 평가 C11] .env 적재 정본 — 키(ORGANIC_API_KEY)를 넣어도 여기서는 못 읽던 경로
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = Path(os.environ.get("AGRODSS_ORGANIC_PATH") or (ROOT / "data" / "organic" / "organic_materials_public.json"))
 GRID_ID = "Grid_20200929000000000606_1"

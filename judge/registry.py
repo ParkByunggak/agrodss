@@ -62,8 +62,12 @@ def all_decisions() -> dict[str, Decision]:
 def check_against_grid(d: Decision, stage: dict[str, Any]) -> list[str]:
     """결정의 필요 축 ⊆ 칸의 판정 축, 결정의 금지 축 ⊇ 칸의 금지 축 — 어긋나면 사유 목록."""
     errs = []
-    req = set(stage.get("required_axes") or [])
-    forb = set(stage.get("forbidden_axes") or [])
+
+    def _axes(v: Any) -> set[str]:
+        # [코드 평가 A4] 격자는 "N/A"(해당 없음) 문자열을 허용한다 — set("N/A") 로 만들면 'N','/','A' 글자 단위로 돌아 사유가 오염됐다
+        return set() if not v or isinstance(v, str) else set(v)
+    req = _axes(stage.get("required_axes"))
+    forb = _axes(stage.get("forbidden_axes"))
     for a in d.required_axes:
         if a not in req:
             errs.append(f"결정 {d.id} 의 필요 축 {a!r} 가 칸 '{stage.get('name')}' 의 판정 축에 없다")

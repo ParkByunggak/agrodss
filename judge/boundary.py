@@ -54,6 +54,12 @@ def gate_records(records: list[dict[str, Any]] | None, what: str = "records") ->
         hit = FORBIDDEN_FIELDS & set(r.get("values", {}) or {})
         if hit:
             raise BoundaryError(f"[G1] {what}: 레코드 값에 금지 필드 {sorted(hit)}")
+        # [코드 평가 A3 · 2026-09-19] 레코드 **필드**도 허용 목록(스키마 정본)으로 본다 — kind·출처·values 만 보고 필드를 안 봐서
+        # `stock`·`unit_price` 같은 미선언 필드가 통과했다. kma·ncpms 레코드는 원장을 거치지 않아 이 게이트가 유일한 방어다.
+        try:
+            sch.validate(r)
+        except sch.SchemaError as e:
+            raise BoundaryError(f"[G1] {what}: 스키마 밖 레코드 — {e}") from e
     return list(records)
 
 

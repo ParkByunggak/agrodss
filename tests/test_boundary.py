@@ -33,10 +33,24 @@ def test_records_with_unknown_kind_or_forbidden_value_rejected():
         B.gate_records([{"kind": "forecast.weather_daily", "values": {"tmin": 1.0, "demand": 3}}], "x")
 
 
+EVENT = {"kind": "event", "id": "evt_x", "type": "관수", "subject": SUBJ["id"], "observed_at": "2026-09-18", "recorded_at": "2026-09-18T00:00:00",
+         "source": "farmer", "resolution": "cultivation_unit"}
+
+
 def test_event_source_allowed_list():
     with pytest.raises(B.BoundaryError, match="출처"):
-        B.gate_records([{"kind": "event", "source": "mall:orders", "values": {}}], "x")
-    assert B.gate_records([{"kind": "event", "source": "farmer", "values": {}}], "x")
+        B.gate_records([{**EVENT, "source": "mall:orders"}], "x")
+    assert B.gate_records([EVENT], "x")
+
+
+def test_records_with_undeclared_field_rejected_by_schema():
+    # [코드 평가 A3] 게이트가 kind·출처·values 만 보고 레코드 필드를 안 봐서 stock·unit_price 가 통과했다 — 스키마 허용 목록으로 본다
+    with pytest.raises(B.BoundaryError, match="스키마 밖"):
+        B.gate_records([{**EVENT, "stock": 5, "unit_price": 100}], "x")
+    with pytest.raises(B.BoundaryError, match="스키마 밖"):
+        B.gate_records([{**EVENT, "inventory_left": 2}], "x")
+    with pytest.raises(B.BoundaryError, match="스키마 밖"):
+        B.gate_records([{"kind": "event", "source": "farmer"}], "x")           # 필수 필드 없는 토막도 못 들어온다
 
 
 # ── 3-2 통과: 허용 필드는 흐른다 ─────────────────────────────────────────────────────
