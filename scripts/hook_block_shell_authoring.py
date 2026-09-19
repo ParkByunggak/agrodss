@@ -24,17 +24,23 @@ except Exception:
     pass
 
 HEREDOC = re.compile(r"<<(-?)\s*(?:(['\"])([A-Za-z_]\w*)\2|([A-Za-z_]\w*))(?![\w<])")
-REDIRECT = re.compile(r"\d?>>?\s*(?!&)\S")                 # 2>&1 · >&2 는 파일이 아니다
+REDIRECT = re.compile(r"(?<![-=<])\d?>>?\s*(?!&)\S")       # 2>&1 · >&2 는 파일이 아니다 · `->` `=>` 는 화살표다(D 리뷰 #29)
 TEE = re.compile(r"\|\s*tee\b")
+TEE_LINE = re.compile(r"(?m)^\s*tee\b")                    # 앞줄이 `|` 로 끝나고 다음 줄이 tee 로 시작하는 형태(D9)
 WRITERS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\.write_text\s*\("), "write_text"), (re.compile(r"\.write_bytes\s*\("), "write_bytes"),
-    (re.compile(r"\.\s*write\s*\("), "write()"), (re.compile(r"\bwritelines\s*\("), "writelines()"),
-    (re.compile(r"\bopen\s*\([^)]*['\"][rbt]*[wax]"), "open(…,'w'/'a'/'x')"), (re.compile(r"\bjson\.dump\s*\("), "json.dump()"),
+    # [코드 평가 D10] 표준출력 쓰기(sys.stdout/stderr.write · json.dump(…, sys.stdout))는 측정이다 — 막지 않는다(과잉 차단은 가드를 끄게 만든다)
+    (re.compile(r"(?<!sys\.stdout)(?<!sys\.stderr)(?<!stdout)(?<!stderr)\.\s*write\s*\("), "write()"), (re.compile(r"\bwritelines\s*\("), "writelines()"),
+    # open() 은 **모드 인자**만 본다 — 전에는 `[^)]*` 가 비어 따옴표 뒤 첫 글자를 모드로 읽어 open("agrodss_backlog.md") 를 쓰기로 오판했다
+    (re.compile(r"\bopen\s*\((?:[^,()]*,\s*)(?:mode\s*=\s*)?['\"][rbt+]*[wax]"), "open(…,'w'/'a'/'x')"),
+    (re.compile(r"\bjson\.dump\s*\((?![^()]*sys\.std(?:out|err))"), "json.dump()"),
     (re.compile(r"\bshutil\.(copy|move)"), "shutil.copy/move"), (re.compile(r"\bos\.(replace|rename|remove|unlink)\b"), "os.replace/remove"),
     (re.compile(r"\.unlink\s*\("), "unlink()"), (re.compile(r"\.rename\s*\("), "rename()"),
     (re.compile(r"\b(?:write|append)File(?:Sync)?\s*\("), "fs.writeFile/appendFile"),   # node -e
 )
-INLINE = re.compile(r"(?<![\w./-])(python3?|py|node|perl|ruby)(?:\.exe)?\s+(?:-[A-Za-z]\w*\s+|--[\w-]+(?:=\S+)?\s+)*-([ce])\s+")
+# [코드 평가 D8] 인터프리터 앞 경로(/usr/bin/python3) · 버전 접미(python3.12) · 아무 옵션 토큰(-3 · -X utf8) 뒤의 -c/-e 도 본다.
+# 전에는 옵션이 `-[A-Za-z]\w*` 뿐이고 lookbehind 가 `/` 를 제외해 배치가 고르는 바로 그 호출형(`py -3 -c`)을 못 봤다.
+INLINE = re.compile(r"(?<![\w-])(?:\S*/)?(python3?(?:\.\d+)?|py|node|perl|ruby)(?:\.exe)?\s+(?:-\S+\s+(?:(?!-)\S+\s+)?)*?-([ce])\s+")
 SHELL_EATS = ((re.compile(r"(?<!\\)`"), "백틱 명령 치환"), (re.compile(r"(?<!\\)\$\("), "$( ) 명령 치환"))
 PS_WRITERS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?i)\b(Set|Add)-Content\b"), "Set-Content/Add-Content"), (re.compile(r"(?i)\bOut-File\b"), "Out-File"),
@@ -111,6 +117,7 @@ def verdict(cmd: str, tool: str = "Bash"):
     v = _inline(cmd)
     if v:
         return v
+    outside = cmd                       # [코드 평가 D9] heredoc 본문을 걷어낸 나머지 — 리다이렉트·tee 는 같은 줄이 아니라 **어디든** 본다
     for m in HEREDOC.finditer(cmd):
         delim = m.group(3) or m.group(4)
         s = cmd.rfind("\n", 0, m.start()) + 1
@@ -119,6 +126,14 @@ def verdict(cmd: str, tool: str = "Bash"):
         if REDIRECT.search(line) or TEE.search(line):
             return "heredoc 출력이 파일로 흘러간다(출력을 버리는 것도 포함).", line.strip()[:120]
         body = _heredoc_body(cmd, m.end(), delim, strip_tabs=bool(m.group(1)))
+        if body:
+            outside = outside.replace(body, "", 1)
+        # `{ cat <<EOF … EOF } > out.txt` · `( … ) > out.txt` · 다음 줄 `tee out.txt` — 본문 밖 어디에 있어도 파일로 흐르는 것이다
+        rest = outside.replace(line, "", 1)
+        hit = REDIRECT.search(rest) or TEE.search(rest) or TEE_LINE.search(rest)   # 파이프가 앞줄 끝에 있고 tee 가 다음 줄에 오는 형태
+        if hit:
+            ln = rest[max(0, hit.start() - 40):hit.end() + 40].strip().replace("\n", "⏎")
+            return "heredoc 이 있는 명령의 출력이 파일로 흘러간다(다른 줄 · 블록 뒤).", ln[:120]
         for rx, name in WRITERS:
             hit = rx.search(body)
             if hit:

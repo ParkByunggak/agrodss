@@ -382,6 +382,22 @@ class Handler(BaseHTTPRequestHandler):
         cookie = self.headers.get("Cookie") or ""
         return (f"{config.COOKIE_NAME}={tok}" in cookie), None
 
+    def _same_origin(self) -> bool:
+        """[코드 평가 D6] Host 가 이 서버(루프백이면 127.0.0.1|localhost:PORT, LAN 옵트인이면 아무 호스트:PORT)이고,
+        Origin 이 있으면 그 Host 와 같고, Sec-Fetch-Site 가 있으면 same-origin 이어야 한다. 헤더가 없는 도구(curl · 검사)는 Host 만 본다."""
+        host = (self.headers.get("Host") or "").strip().lower()
+        port = self.server.server_address[1]                          # 실제 리슨 포트(검사는 0 → 임의 포트)
+        if config.BIND == config.HOST:                                # 루프백 기본 — 두 이름만
+            if host not in (f"127.0.0.1:{port}", f"localhost:{port}"):
+                return False
+        elif not host or "," in host or not host.endswith(f":{port}"):   # LAN 옵트인 — 이 포트로 온 것만(호스트명은 폰이 정한다)
+            return False
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        if origin and origin not in (f"http://{host}", f"https://{host}"):
+            return False
+        sfs = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        return sfs in ("", "same-origin", "none")
+
     # [코드 평가 D4 · 2026-09-19] 총괄 예외 — BaseHTTPRequestHandler 는 do_* 의 예외를 잡지 않아 응답 없이 연결이 끊겼다(브라우저 "연결 끊김",
     # 원인 안 보임). 여기서 500 페이지로 바꾼다. 메시지는 이스케이프하고 traceback 은 콘솔에만.
     def _guarded(self, fn) -> None:
@@ -441,8 +457,19 @@ class Handler(BaseHTTPRequestHandler):
         if not ok:
             self._send(401, render.page("접근 불가", "", "<h1>토큰이 필요하다</h1>", "", ""))
             return
+        # [코드 평가 D6] POST 는 같은 출처에서만 — 루프백 기본은 토큰도 쿠키도 없어 브라우저에 열린 아무 사이트가 폼 POST 로 원장을
+        # 쓸 수 있었다(CSRF · DNS 리바인딩). Host 가 이 서버이고, Origin/Sec-Fetch-Site 가 있으면 같은 출처여야 한다.
+        if not self._same_origin():
+            self._send(403, render.page("AGRODSS —거부", nav_html(""), "<h1>다른 출처의 요청</h1><p>이 화면에서 보낸 폼만 받는다.</p>", "", ""))
+            return
         length = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(min(length, config.MAX_UPLOAD_MB << 20))
+        limit = config.MAX_UPLOAD_MB << 20
+        if length > limit:
+            # [코드 평가 D5] 상한 초과는 413 — 전에는 잘라 읽고 잘린 multipart 를 그대로 등록했다(불완전 파일이 1층 관찰로)
+            self._send(413, render.page("AGRODSS —너무 큼", nav_html(""),
+                                        f"<h1>본문이 너무 크다</h1><p>한 번에 {config.MAX_UPLOAD_MB}MB 까지. 파일을 나눠 올린다.</p>", "", ""))
+            return
+        raw = self.rfile.read(length)
         form, files = parse_body(self.headers.get("Content-Type") or "", raw)
         if p == "/c/new":
             try:

@@ -32,6 +32,15 @@ def blocked(cmd: str, tool: str = "Bash") -> bool:
     "python -c \"print('A' + " + BT + "echo X" + BT + " + 'B')\"",
     "python -c \"print('$(date)')\"",
     "node -e \"require('fs').writeFileSync('x','1')\"",
+    # [코드 평가 D8] 배치가 고르는 호출형 · 경로 · 옵션 토큰 뒤의 -c
+    "py -3 -c \"open('x','w').write('a')\"",
+    "/usr/bin/python3 -c \"open('x','w').write('a')\"",
+    "python -X utf8 -c \"open('x','w').write('a')\"",
+    "python3.12 -c \"open('x','w').write('a')\"",
+    # [코드 평가 D9] 리다이렉트·tee 가 heredoc 과 다른 줄에 있어도 파일로 흐르는 것이다
+    "{ cat <<'EOF'\nhi\nEOF\n} > out.txt",
+    "( python3 - <<'PY'\nprint(1)\nPY\n) > out.txt",
+    "cat <<'EOF' |\nhi\nEOF\ntee out.txt",
 ])
 def test_bash_write_paths_are_blocked(cmd):
     assert blocked(cmd), cmd
@@ -57,6 +66,12 @@ def test_powershell_write_paths_are_blocked(cmd):
     "cat <<< 'herestring is not heredoc'",
     "python -c 'import sys; print(sys.version)'",
     "",
+    # [코드 평가 D10] 표준출력 쓰기 · 읽기 열기는 측정이다 — 막으면 다음 사람이 가드를 통째로 끈다
+    "python3 - <<'PY'\nimport sys; sys.stdout.write('measure')\nPY",
+    "python3 - <<'PY'\nprint(open('agrodss_backlog.md').read()[:10])\nPY",
+    "python3 - <<'PY'\nwith open('x.csv', 'r') as f: print(len(f.read()))\nPY",
+    "python -c 'import json, sys; json.dump({\"a\": 1}, sys.stdout)'",
+    "python3 - <<'PY'\nprint('a -> b')\nPY",                                                # 화살표는 리다이렉트가 아니다(D 리뷰 #29)
 ])
 def test_bash_read_only_paths_pass(cmd):
     assert not blocked(cmd), cmd

@@ -54,3 +54,27 @@ def test_handler_exception_becomes_500_page_and_server_survives(srv, monkeypatch
     c = http.client.HTTPConnection("127.0.0.1", srv, timeout=5)
     c.request("POST", "/c/nope/send", body="text=x", headers={"Content-Type": "application/x-www-form-urlencoded", "Content-Length": "abc"})
     assert c.getresponse().status == 500                                            # POST 도 같은 방어선(Content-Length 비정수)
+
+
+# ── [코드 평가 D5 · D6] 업로드 상한은 413 · 다른 출처의 POST 는 403 ─────────────────────────────────────────────────
+def test_oversized_post_is_413_not_truncated(srv, monkeypatch):
+    monkeypatch.setattr(config, "MAX_UPLOAD_MB", 1)
+    c = http.client.HTTPConnection("127.0.0.1", srv, timeout=5)
+    body = b"x" * (2 << 20)
+    c.request("POST", "/me", body=body, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    r = c.getresponse()
+    assert r.status == 413 and "너무 크다" in r.read().decode("utf-8")
+
+
+def test_cross_origin_post_is_refused_same_origin_passes(srv):
+    from urllib.parse import urlencode
+    body = urlencode({"name": "박병각", "role": "farmer", "note": ""})
+    hdr = {"Content-Type": "application/x-www-form-urlencoded"}
+    for bad in ({"Origin": "http://evil.example"}, {"Sec-Fetch-Site": "cross-site"}, {"Host": f"evil.example:{srv}"}):
+        c = http.client.HTTPConnection("127.0.0.1", srv, timeout=5)
+        c.request("POST", "/me", body=body, headers={**hdr, **bad})
+        assert c.getresponse().status == 403, bad
+    for good in ({}, {"Origin": f"http://127.0.0.1:{srv}"}, {"Sec-Fetch-Site": "same-origin"}, {"Host": f"localhost:{srv}"}):
+        c = http.client.HTTPConnection("127.0.0.1", srv, timeout=5)
+        c.request("POST", "/me", body=body, headers={**hdr, **good})
+        assert c.getresponse().status == 200, good

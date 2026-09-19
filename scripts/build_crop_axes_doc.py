@@ -55,9 +55,14 @@ def build(rows: list[dict[str, str]]) -> str:
     dups = [r for r in rows if "같은 종" in r["비고"] or "중복 등재" in r["비고"]]
     out.append("## 목록 성격 (M-7 확인 사항)\n")
     out.append(f"- 같은 종이 두 번 등재된 것 {len(dups)}건 — 비고에 '같은 종' 표시. 농산물/임산물 양쪽 등재가 원인.")
-    out.append("- 트리가 말한 '180종'은 실제 202종이고, 격자 대상(작목)은 " + str(len(crops)) + "종.")
-    out.append("- 버섯 12 중 채취만 가능한 것 4(능이·석이·송이·싸리). 나머지 8이 트리 C 별도 구조의 대상.")
-    out.append("- 축이 늘지 않았다 — 202종을 훑어도 ①~⑥ 밖의 축은 필요하지 않았다(U-6 축 수렴의 방증).\n")
+    # [코드 평가 D12] "생성물" 안의 수치는 전부 CSV 에서 센다 — 손으로 박은 '버섯 12 · 채취 4' 가 정본(버섯 8)과 어긋나 있었다
+    mushrooms = [r for r in rows if r["범위"] == "버섯"]
+    wild_fungi = [r for r in rows if r["범위"] == "채취·부산물" and "버섯" in r["VELA분류"]]
+    out.append(f"- 트리가 말한 '180종'은 실제 {len(rows)}종이고, 격자 대상(작목)은 {len(crops)}종.")
+    out.append(f"- 버섯류 {len(mushrooms) + len(wild_fungi)} 중 채취만 가능한 것 {len(wild_fungi)}"
+               + (f"({'·'.join(r['작목'] for r in wild_fungi)})" if wild_fungi else "")
+               + f". 나머지 {len(mushrooms)}(범위=버섯)이 트리 C 별도 구조의 대상.")
+    out.append(f"- 축이 늘지 않았다 — {len(rows)}종을 훑어도 ①~⑥ 밖의 축은 필요하지 않았다(U-6 축 수렴의 방증).\n")
     out.append("## 전수 표\n")
     cols = ["작목", "VELA분류"] + AXES + ["비고"]
     out.append("| " + " | ".join(cols) + " |")
