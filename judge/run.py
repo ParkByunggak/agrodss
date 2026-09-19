@@ -86,7 +86,7 @@ def all_judgments(today: date | None = None, only: str | None = None) -> list[tu
         s, recs = boundary.gate(s0, forecast=forecast, pest=pest, events=evts, ledger=ledger, reasons=reasons, videos=videos, caps=caps,
                                 prescriptions=prescriptions)
         envs = [harvest_timing.judge(s, forecast=recs["forecast"], today=today),
-                risk_alert.judge(s, forecast=recs["forecast"], today=today, pest=recs["pest"]),
+                risk_alert.judge(s, forecast=recs["forecast"], today=today, pest=recs["pest"], evts=recs["events"]),   # [B1] 수확 사건
                 material_citation.judge(s, today=today),
                 plan_vs_actual.judge(s, today=today, evts=recs["events"], videos=recs["videos"], reasons=recs["reasons"])]
         # [M-10 결정 등록] 격자 칸이 선언한 나머지 8 결정 — 같은 입력, 같은 게이트 뒤

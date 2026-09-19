@@ -123,3 +123,23 @@ def test_envelope_has_no_raw_forecast_values():
     fc = [_fc("2026-09-19", tmin=3.0, rain=60.0, pop=90)]
     dumped = json.dumps(A.judge(SUBJ, forecast=fc, today=T24).to_dict(), ensure_ascii=False)
     assert '"pop_max"' not in dumped and '"tmin"' not in dumped
+
+
+def test_harvest_delay_alert_stops_after_harvest_event_or_end():
+    # [코드 평가 B1 · 2026-09-19] 창을 넘기면 수확 사건이 있어도 시즌 끝까지 매일 '수확 지연' 경보가 나갔다 — 판정기가 사건을 못 봤다
+    from datetime import timedelta
+    from judge import run as judge_run
+    late = date.fromisoformat(SUBJ["anchor"]) + timedelta(days=100)
+    assert _levels(A.judge(SUBJ, today=late)).get("수확 지연") == "경보"                       # 사건 없음 → 지연이 맞다
+    harvest = {"kind": "event", "type": "수확", "subject": SUBJ["id"], "observed_at": (late - timedelta(days=30)).isoformat(),
+               "recorded_at": "2026-11-01T00:00:00", "source": "farmer", "resolution": "cultivation_unit"}
+    assert "수확 지연" not in _levels(A.judge(SUBJ, today=late, evts=[harvest]))                 # 수확했다 → 지연 아님
+    assert "수확 지연" not in _levels(A.judge({**SUBJ, "status": "종료"}, today=late))          # 단위 종료 → 지연 아님
+    future = {**harvest, "observed_at": (late + timedelta(days=5)).isoformat()}
+    assert _levels(A.judge(SUBJ, today=late, evts=[future])).get("수확 지연") == "경보"          # 미래 날짜 사건은 아직 아니다
+    # 배선: run.all_judgments 가 게이트 통과 사건을 판정기에 넘긴다
+    src = open(judge_run.__file__, encoding="utf-8").read()
+    blk = src[src.index("def all_judgments"):]
+    call = blk[blk.index("risk_alert.judge("):]
+    call = call[:call.index(")")]
+    assert "evts=" in call, call                                              # 호출형만 고정 — 인자 표현식은 고정하지 않는다

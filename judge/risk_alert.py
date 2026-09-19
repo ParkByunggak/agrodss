@@ -126,7 +126,10 @@ def _risk_signal(risk: dict[str, Any], sig: dict[str, Any], params: dict[str, An
 
 
 def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
-          today: date | None = None, pest: list[dict[str, Any]] | None = None) -> Envelope:
+          today: date | None = None, pest: list[dict[str, Any]] | None = None,
+          evts: list[dict[str, Any]] | None = None) -> Envelope:
+    """evts — 사건 원장(게이트 통과분). [코드 평가 B1] 수확 사건이 있거나 재배 단위가 종료면 '수확 지연' 경보를 내지 않는다.
+    없으면 창을 넘긴 뒤 시즌 끝까지 매일 경보가 나갔다(농가가 수확을 기록해도)."""
     today = today or date.today()
     as_of = _now()
     sid = subject.get("id", "?")
@@ -179,9 +182,13 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
             alerts.append({"risk": r["name"], "stage": f"{s['order']}. {s['name']}", "level": level,
                            "recoverable": not unrec, "policy": r.get("alert"), "basis": basis,
                            "axes": r.get("axes", []), "source": r.get("source", "")})
-    # 수확 지연 — 창을 넘긴 뒤에도 경보(회복 불가)
+    # 수확 지연 — 창을 넘긴 뒤에도 경보(회복 불가). 단 수확 사건이 있거나 단위가 종료면 지연이 아니다(B1)
+    harvested = any(e.get("type") == "수확" and (e.get("observed_at") or "")[:10] <= today.isoformat() for e in (evts or []))
+    ended = subject.get("status") == "종료"
     for s in unit["stages"]:
         w = s.get("window")
+        if harvested or ended:
+            break
         if isinstance(w, dict) and "harvest_timing" in (s.get("decisions") or []) and day > w["to_day"]:
             alerts.append({"risk": "수확 지연", "stage": f"{s['order']}. {s['name']}", "level": "경보",
                            "recoverable": False, "policy": "oversignal_ok",
