@@ -11,6 +11,7 @@ import email.policy
 import html
 import subprocess
 import sys
+import traceback
 import webbrowser
 from datetime import date
 from email.parser import BytesParser
@@ -381,7 +382,24 @@ class Handler(BaseHTTPRequestHandler):
         cookie = self.headers.get("Cookie") or ""
         return (f"{config.COOKIE_NAME}={tok}" in cookie), None
 
+    # [코드 평가 D4 · 2026-09-19] 총괄 예외 — BaseHTTPRequestHandler 는 do_* 의 예외를 잡지 않아 응답 없이 연결이 끊겼다(브라우저 "연결 끊김",
+    # 원인 안 보임). 여기서 500 페이지로 바꾼다. 메시지는 이스케이프하고 traceback 은 콘솔에만.
+    def _guarded(self, fn) -> None:
+        try:
+            fn()
+        except Exception as e:  # noqa: BLE001 — 마지막 방어선. 여기서 삼키는 것이 아니라 보이게 만든다
+            traceback.print_exc()
+            msg = f"{type(e).__name__}: {e}"
+            try:
+                self._send(500, render.page("AGRODSS —오류", nav_html(""),
+                                            f"<h1>화면 오류</h1><p>이 화면을 만들다 실패했다. 아래 한 줄을 세션에 붙이면 고친다.</p><pre>{html.escape(msg)}</pre>", "", ""))
+            except Exception:  # noqa: BLE001 — 응답 도중 끊긴 소켓
+                pass
+
     def do_GET(self) -> None:  # noqa: N802
+        self._guarded(self._get)
+
+    def _get(self) -> None:
         p = urlparse(self.path).path
         ok, cookie = self._authorized()
         if not ok:
@@ -415,6 +433,9 @@ class Handler(BaseHTTPRequestHandler):
         self._send(status, body, loc, set_cookie=cookie)
 
     def do_POST(self) -> None:  # noqa: N802
+        self._guarded(self._post)
+
+    def _post(self) -> None:
         p = urlparse(self.path).path
         ok, _ = self._authorized()
         if not ok:

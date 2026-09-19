@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 SCHEMA_VERSION = 1
@@ -240,6 +241,20 @@ def _validate_vocab(name: str, rec: dict[str, Any]) -> None:
     elif name == "feedback.outcome":
         if rec["verdict"] not in VERDICTS:
             raise SchemaError(f"대조 판정이 어휘 밖: {rec['verdict']!r}")
+    elif name == "subject":
+        # [코드 평가 D3 · A12 · 2026-09-19] 기준점은 YYYY-MM-DD 여야 한다 — 화면 사이드바가 매 페이지 date.fromisoformat 으로 읽어,
+        # 비ISO 값 하나가 모든 셸 화면을 죽였다. 상태 어휘(SUBJECT_STATUS)도 등록부 편집 경로(subjects.add)만이 아니라 여기서 본다.
+        if rec.get("status") is not None and rec["status"] not in SUBJECT_STATUS:
+            raise SchemaError(f"재배 단위 상태가 어휘 밖: {rec['status']!r} — {' · '.join(SUBJECT_STATUS)}")
+        a = rec.get("anchor")
+        if a is not None:
+            try:
+                date.fromisoformat(str(a))
+                ok = len(str(a)) == 10
+            except ValueError:
+                ok = False
+            if not ok:
+                raise SchemaError(f"기준점(anchor)은 YYYY-MM-DD 여야 한다: {a!r}")
 
 
 def stamp(rec: dict[str, Any]) -> dict[str, Any]:
