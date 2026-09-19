@@ -475,6 +475,14 @@ class Handler(BaseHTTPRequestHandler):
         limit = config.MAX_UPLOAD_MB << 20
         if length > limit:
             # [코드 평가 D5] 상한 초과는 413 — 전에는 잘라 읽고 잘린 multipart 를 그대로 등록했다(불완전 파일이 1층 관찰로)
+            # 본문은 읽어 버린다(메모리에 안 남김) — 안 읽고 닫으면 브라우저/클라이언트가 보내는 도중 연결이 끊겨 413 을 못 본다
+            # (관문 간헐 실패 2026-09-19 22:1x: 3회 중 1회 ConnectionReset — 근본 원인이 이것).
+            left = length
+            while left > 0:
+                chunk = self.rfile.read(min(left, 1 << 20))
+                if not chunk:
+                    break
+                left -= len(chunk)
             self._send(413, render.page("AGRODSS —너무 큼", nav_html(""),
                                         f"<h1>본문이 너무 크다</h1><p>한 번에 {config.MAX_UPLOAD_MB}MB 까지. 파일을 나눠 올린다.</p>", "", ""))
             return
