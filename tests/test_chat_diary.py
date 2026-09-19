@@ -52,6 +52,8 @@ def test_classify_rules_are_proposals_only():
     d = chat.classify("수확 창이 너무 넓다, 고쳐 달라", TODAY)[0]
     assert d["kind"] == "feedback.request"
     assert chat.classify("언제 캐면 되나?", TODAY)[0]["kind"] == "question"
+    # 발행자 첫 발화(2026-09-19 라이브) — 분류 안 됨이었다. 생육 상태 서술은 관찰이다
+    assert chat.classify("오늘 상황은 줄기가 매우 왕성한 모습이다", TODAY)[0]["kind"] == "observation.note"
     assert chat.classify("날씨가 좋다", TODAY) == []                       # 추측하지 않는다
     assert ev.list_records(SID) == [] and fb.list_records() == []         # 분류는 아무 원장에도 안 쓴다
 
