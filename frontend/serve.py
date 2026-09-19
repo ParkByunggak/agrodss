@@ -11,6 +11,7 @@ import email.policy
 import html
 import subprocess
 import sys
+import threading
 import traceback
 import webbrowser
 from datetime import date
@@ -114,13 +115,21 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
     elif e["kind"] == "사실 인용":
         c = r["citation"]
         out.append(f"<p>칸 {_e(r['stage'])} · 인용 계열 {r['cited_families']}/{len(r['groups'])} · 출처 {_e(c['source'])} · 목록 시점 {_e(c['observed_at'])} · 재판정 {_e(e['revisit_at'])}</p>")
+        if c.get("proxy_notice"):
+            out.append(f'<p class="meta"><b>⚠ {_e(c["proxy_notice"])}</b></p>')
         for g in r["groups"]:
-            if g["status"] == "success":
-                out.append(f"<p><b>{_e(g['family'])}</b> <span class=\"meta\">(검색어 '{_e(g['keyword'])}' · 유효 {g['total']}건 중 {len(g['items'])})</span></p><ul>" + "".join(
+            head = g.get("family") or f"{g.get('risk', '')} · {g.get('pest', '')}"       # 유기(계열) · 관행(위험 · 병해충) 두 모양
+            proxy = f' <span class="st st-보류">{_e(g["proxy_label"])}</span>' if g.get("proxy_label") else ""
+            if g["status"] == "success" and "family" in g:
+                out.append(f"<p><b>{_e(head)}</b> <span class=\"meta\">(검색어 '{_e(g['keyword'])}' · 유효 {g['total']}건 중 {len(g['items'])})</span></p><ul>" + "".join(
                     # [코드 평가 C1] 공시 가격은 싣지 않는다(스키마 금지 필드 price) — 화면이 그 값의 마지막 소비자였다
             f"<li><b>{_e(i['product'])}</b>({_e(i['material'])}) · {_e(i['company'])} · 공시 {_e(i['notice_no'])} (~{_e(i['valid_until'])})</li>" for i in g["items"]) + "</ul>")
+            elif g["status"] == "success":
+                # 관행 갈래(PSIS) — 항목 필드는 원천 표기(FIELD_KO)를 그대로. [C3 표기] 대체 조회면 그 사실을 항목 위에 단다
+                out.append(f"<p><b>{_e(head)}</b>{proxy} <span class=\"meta\">(등록 {g['total']}건 중 {len(g['items'])})</span></p><ul>" + "".join(
+                    f"<li>{_e(' · '.join(f'{k} {v}' for k, v in i.items() if v))}</li>" for i in g["items"]) + "</ul>")
             else:
-                out.append(f"<p><b>{_e(g['family'])}</b> — <span class=\"st st-보류\">{_e(g['status'])}</span> {_e(g.get('note', ''))}</p>")
+                out.append(f"<p><b>{_e(head)}</b>{proxy} — <span class=\"st st-보류\">{_e(g['status'])}</span> {_e(g.get('note') or '')}</p>")
         out.append(f"<p class=\"meta\">{_e(c['note'])}</p>")
     elif e["kind"] == "판단 불가(데이터)":
         out.append("<ul>" + "".join(f"<li>없는 축 <code>{_e(m['axis'])}</code> — 채울 수 있는 자: {_e(m['who_can_fill'])}</li>" for m in e["missing"]) + "</ul>")
@@ -583,21 +592,43 @@ def make_server() -> ThreadingHTTPServer:
     return ThreadingHTTPServer((host, config.PORT), Handler)
 
 
-def main(open_browser: bool = True) -> None:
+def watch_head(srv, start_head: str, poll_sec: float, stop: threading.Event, head_fn=git_head_short) -> bool:
+    """[발행자 2026-09-19 21:40 "수정된 것들은 리프레시하면 반영이 되어야 한다"] git HEAD 가 바뀌면(= git pull 이 내려앉으면) 서버를 내린다 —
+    run_frontend.bat 가 새 코드로 다시 띄운다. True 면 HEAD 변화로 내렸다(종료 코드 3), False 면 stop 으로 끝났다(Ctrl+C).
+    데이터(검정값 · 좌표 · 채팅)는 원래 요청마다 새로 읽으니 새로고침으로 충분했다 — 재시작이 필요했던 것은 코드뿐이다."""
+    while not stop.wait(poll_sec):
+        now = head_fn()
+        if now not in ("?", "", start_head):
+            print(f"[agrodss] 코드가 바뀌었다 {start_head} → {now} — 새 코드로 다시 뜬다(브라우저는 새로고침만)")
+            srv.shutdown()
+            return True
+    return False
+
+
+def main(open_browser: bool = True) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     srv = make_server()
     url = f"http://{config.HOST}:{config.PORT}/"
-    print(f"[agrodss 내부 화면] {url}  (Ctrl+C 로 종료)")
+    head = git_head_short()
+    print(f"[agrodss 내부 화면] {url}  HEAD {head}  (Ctrl+C 로 종료 · git pull 이 오면 스스로 다시 뜬다)")
     if open_browser:
         webbrowser.open(url)
+    stop = threading.Event()
+    restarted = {"v": False}
+    if config.RELOAD_ON_HEAD_CHANGE:
+        def _w() -> None:
+            restarted["v"] = watch_head(srv, head, config.RELOAD_POLL_SEC, stop)
+        threading.Thread(target=_w, daemon=True, name="agrodss-head-watch").start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        stop.set()
         srv.server_close()
+    return config.RESTART_EXIT_CODE if restarted["v"] else 0
 
 
 if __name__ == "__main__":
-    main(open_browser="--no-browser" not in sys.argv)
+    sys.exit(main(open_browser="--no-browser" not in sys.argv))

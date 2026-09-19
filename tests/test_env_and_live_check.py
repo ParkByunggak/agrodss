@@ -68,6 +68,46 @@ def test_every_bat_block_has_balanced_unquoted_parens():
                 assert bare.count("(") == bare.count(")"), f"{name}:{i} 블록 안 괄호 짝 불일치 — cmd 가 블록을 닫는다: {ln.strip()}"
 
 
+# ── [발행자 라이브 2026-09-19 21:34] 지오코딩 좌표는 등록부로 · 되물은 재배환경은 등록부로 ─────────────────────────────────────
+def test_parcel_set_fields_validates_and_is_isolated():
+    from ingest import parcels
+    import pytest
+    before = parcels.by_id("p001")
+    rec = parcels.set_fields("p001", environment="노지")
+    assert rec["environment"] == "노지" and parcels.by_id("p001")["environment"] == "노지"
+    assert parcels.set_fields("p001", environment="시설")["environment"] == "노지"                  # 있는 값은 덮지 않는다
+    assert parcels.set_fields("p001", environment="시설", overwrite=True)["environment"] == "시설"   # 발행자 답은 덮는다
+    assert "environment" not in parcels.set_fields("p001", environment=None)                       # None 은 키 삭제
+    with pytest.raises(parcels.ParcelError, match="없는 필드"):
+        parcels.set_fields("p001", stock=3)
+    with pytest.raises(parcels.ParcelError, match="없는 필지"):
+        parcels.set_fields("p999", environment="노지")
+    assert parcels.parcels_path().resolve() != parcels.PARCELS_PATH.resolve() and "environment" not in before   # 운영 등록부 무변경
+
+
+def test_collect_persists_geocoded_coordinates_into_parcel_registry():
+    from ingest import parcels
+    soil = {"kind": "observation.soil_exam", "status": "success", "pnu": "4376038025100500000", "axis": "soil_chem", "source": "external:soil_exam",
+            "resolution": "parcel", "observed_at": "2026-03-01", "fetched_at": "2026-09-19T00:00:00", "values": {"ph": 6.1}, "units": {}}
+    res = fz.collect_for_parcel("p001", "x", "쪽파", "노지", geocode=lambda a: {"lat": 36.8, "lon": 128.0, "pnu": "4376038025100500000"},
+                                fetch_soil=lambda pnu: soil, fetch_use=lambda pnu, code: {"status": "no_data"}, fetch_std=lambda code: {"status": "no_data"})
+    p = parcels.by_id("p001")
+    assert res["registry"].startswith("좌표·PNU 등록부 반영") and p["lat"] == 36.8 and p["lon"] == 128.0 and p["pnu"] == "4376038025100500000"
+    assert "lat" not in parcels.missing_inputs(p) and "lon" not in parcels.missing_inputs(p)
+    res2 = fz.collect_for_parcel("p404", "x", "쪽파", "노지", geocode=lambda a: {"lat": 1.0, "lon": 2.0, "pnu": "1"},
+                                 fetch_soil=lambda pnu: soil, fetch_use=lambda pnu, code: {"status": "no_data"}, fetch_std=lambda code: {"status": "no_data"})
+    assert res2["registry"].startswith("등록부 미반영") and res2["pnu"] == "1"                       # 등록부에 없는 필지 — 수집은 계속
+
+
+def test_set_environment_writes_registry_and_refuses_vocab():
+    import pytest
+    from ingest import parcels
+    with pytest.raises(fz.CodeError, match="어휘 밖"):
+        fz.set_environment("p001-jjokpa-2026f", "하우스")
+    fz.set_environment("p001-jjokpa-2026f", "노지")
+    assert parcels.by_id("p001")["environment"] == "노지" and fz.resolve_subject("p001-jjokpa-2026f")["environment"] == "노지"
+
+
 def test_resolve_subject_reads_registries_and_refuses_unknown():
     r = fz.resolve_subject("p001-jjokpa-2026f")
     assert r["parcel"] == "p001" and r["crop"] == "쪽파" and set(r) == {"parcel", "crop", "address", "environment"}

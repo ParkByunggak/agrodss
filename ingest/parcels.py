@@ -59,3 +59,30 @@ def missing_inputs(parcel: dict[str, Any] | None) -> list[str]:
             "microclimate", "night_light", "cert_legal", "seed_source", "soil_exam_ref")
     have = set(parcel or {})
     return [k for k in want if k not in have]
+
+
+class ParcelError(ValueError):
+    pass
+
+
+def set_fields(pid: str, **fields: Any) -> dict[str, Any]:
+    """[I-6 · 발행자 라이브 2026-09-19 21:34] 필지 등록부에 값을 넣는다 — 지오코딩이 얻은 좌표·PNU, 되물은 재배환경.
+    스키마(kind=parcel)가 허용하는 필드만, 값이 None 이면 키를 지운다(대리값 금지). 이미 있는 값은 덮지 않는다(overwrite=True 로만)."""
+    overwrite = bool(fields.pop("overwrite", False))
+    p = parcels_path()
+    data = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"parcels": []}
+    rows = data.setdefault("parcels", [])
+    rec = next((r for r in rows if r.get("id") == pid), None)
+    if rec is None:
+        raise ParcelError(f"없는 필지: {pid}")
+    allowed = sch.KINDS["parcel"].fields
+    for k, v in fields.items():
+        if k not in allowed:
+            raise ParcelError(f"필지 등록부에 없는 필드: {k}")
+        if v is None:
+            rec.pop(k, None)
+        elif k not in rec or overwrite:
+            rec[k] = v
+    sch.validate(rec, kind="parcel")
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return rec

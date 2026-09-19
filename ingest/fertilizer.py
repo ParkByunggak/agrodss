@@ -21,7 +21,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any
 
-from ingest import config, soil_exam, soil_store
+from ingest import config, parcels, soil_exam, soil_store
+from schema import records as sch
 
 SOURCE_USE = "external:heuktoram_frtlzruse"
 SOURCE_STD = "external:heuktoram_frtlzrstduse"
@@ -188,6 +189,14 @@ def collect_for_parcel(parcel_id: str, address: str, crop: str, environment: str
         return out
     pnu = geo["pnu"]
     out["pnu"] = pnu
+    # [발행자 라이브 2026-09-19 21:34] 지오코딩이 좌표·PNU 를 얻었는데 필지 등록부에 쓰지 않아 예보가 "좌표 없음"으로 남았다 —
+    # 검정값처럼 좌표도 등록부에 남긴다(있는 값은 덮지 않는다). 등록부에 없는 필지면 그냥 지나간다(수집은 계속).
+    try:
+        geo_fields = {k: geo.get(k) for k in ("lat", "lon", "pnu") if geo.get(k) is not None}
+        parcels.set_fields(parcel_id, **geo_fields)
+        out["registry"] = "좌표·PNU 등록부 반영"
+    except (parcels.ParcelError, sch.SchemaError) as e:
+        out["registry"] = f"등록부 미반영 — {e}"
     soil = (fetch_soil or soil_exam.fetch_soil_exam)(pnu)
     soil_rec = soil.to_dict() if hasattr(soil, "to_dict") else soil
     out["soil"] = soil_rec
@@ -234,6 +243,14 @@ def resolve_subject(subject_id: str) -> dict[str, str | None]:
     return {"parcel": s.get("parcel"), "crop": s.get("crop"), "address": p.get("address"), "environment": p.get("environment")}
 
 
+def set_environment(subject_id: str, environment: str) -> dict[str, Any]:
+    """되물은 재배환경(노지|시설)을 재배 단위의 필지 등록부에 남긴다 — 어휘 밖은 거부, 있는 값은 덮는다(발행자가 답한 값이 정본)."""
+    if environment not in ENVIRONMENTS:
+        raise CodeError(f"재배환경 어휘 밖: {environment!r} — {' | '.join(ENVIRONMENTS)}")
+    r = resolve_subject(subject_id)
+    return parcels.set_fields(r["parcel"] or "", environment=environment, overwrite=True)
+
+
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -244,6 +261,9 @@ if __name__ == "__main__":
         if not r["address"]:
             print(json.dumps({"status": "error", "message": f"필지 {r['parcel']} 에 주소가 없다 — 등록부(parcels)에 넣는다"}, ensure_ascii=False))
             sys.exit(2)
+        if opts.get("--env"):
+            # 되물은 답(노지|시설)은 등록부에 남긴다 — 다음 수집부터는 묻지 않는다
+            set_environment(opts["--subject"], opts["--env"])
         res = collect_for_parcel(r["parcel"] or "", r["address"], r["crop"] or "", opts.get("--env") or r["environment"])
     elif not args:
         print("사용: python -m ingest.fertilizer <지번 주소> [--parcel=p001] [--crop=쪽파] [--env=노지|시설]  |  --subject=<재배 단위 id>")

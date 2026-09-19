@@ -49,6 +49,13 @@ _LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 VOICE_SILENCE_MS: int = int(os.environ.get("AGRODSS_VOICE_SILENCE_MS", "5000"))   # 이만큼 입력 신호가 없으면 질문 종료
 VOICE_MAX_MS: int = int(os.environ.get("AGRODSS_VOICE_MAX_MS", "90000"))          # 한 질문의 최대 녹음 길이
 MAX_UPLOAD_MB: int = int(os.environ.get("AGRODSS_MAX_UPLOAD_MB", "300"))          # 채팅 반입 한 번의 본문 상한
+# [발행자 2026-09-19 21:40 "수정된 것들은 리프레시하면 반영이 되어야 한다"] 데이터는 요청마다 다시 계산되니 원래 그렇다. 코드는 파이썬이
+# 기동 시점 것을 붙들고 있어 재시작이 필요했다 → 서버가 git HEAD 변화를 스스로 보고 종료 코드 3 으로 나가면 run_frontend.bat 가 새 코드로
+# 다시 띄운다(브라우저 새 창 없이). 끄려면 AGRODSS_RELOAD=0. VELA 의 "--reload 없음" 결정은 uvicorn 파일 감시의 폭주 때문이었고 이것은
+# HEAD 문자열 비교 한 번뿐이다.
+RELOAD_ON_HEAD_CHANGE: bool = os.environ.get("AGRODSS_RELOAD", "1") != "0"
+RELOAD_POLL_SEC: float = float(os.environ.get("AGRODSS_RELOAD_POLL_SEC", "2"))
+RESTART_EXIT_CODE: int = 3
 # [D-16 대기] 휴대폰 동기화 — 같은 Wi-Fi 안에서만 · 토큰 없이는 절대 열리지 않는다. 기본은 루프백(D-6).
 BIND: str = os.environ.get("AGRODSS_BIND") or HOST
 LAN_TOKEN: str = os.environ.get("AGRODSS_LAN_TOKEN", "").strip()

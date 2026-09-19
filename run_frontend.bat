@@ -25,7 +25,17 @@ if errorlevel 1 (
     exit /b 1
   )
 )
-%PY% frontend\serve.py
+set "BROWSER="
+:again
+%PY% frontend\serve.py %BROWSER%
+set "RC=%errorlevel%"
+if "%RC%"=="3" (
+  REM [publisher 2026-09-19 21:40 "changes must show up right away"] the server saw git HEAD change - git pull landed - and
+  REM shut itself down with code 3. Restart on the new code without opening another browser window; the page just reloads.
+  echo [agrodss] code changed - restarting on new HEAD ...
+  set "BROWSER=--no-browser"
+  goto again
+)
 echo.
-echo [agrodss] server stopped (exit code %errorlevel%)
+echo [agrodss] server stopped - exit code %RC%
 pause
