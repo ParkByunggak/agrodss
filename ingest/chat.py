@@ -137,6 +137,7 @@ def get_message(msg_id: str) -> dict[str, Any] | None:
 # ── 날짜 ─────────────────────────────────────────────────────────────────────────
 _ISO = re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})")
 _MD = re.compile(r"(\d{1,2})\s*월\s*(\d{1,2})\s*일")
+_SLASH = re.compile(r"(?<![\d/.\-])(\d{1,2})/(\d{1,2})(?![\d/])")   # "9/8 트랩 확인" — 빗금 월/일(걷기 실측 2026-09-20: 날짜로 안 읽혀 관찰 메모가 됐다)
 _AGO = re.compile(r"(\d+)\s*일\s*전")
 _REL = {"오늘": 0, "어제": -1, "그저께": -2, "엊그제": -2, "내일": 1, "모레": 2, "글피": 3}
 
@@ -150,7 +151,7 @@ def parse_day(text: str, today: date, past: bool = False) -> str | None:
             return date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
         except ValueError:
             return None
-    m = _MD.search(text)
+    m = _MD.search(text) or _SLASH.search(text)
     if m:
         try:
             d = date(today.year, int(m.group(1)), int(m.group(2)))
@@ -187,7 +188,7 @@ def _done_evidence(text: str) -> bool:
         return True
     if _DONE_SUFFIX.search(text):
         return True
-    return bool(_ISO.search(text) or _MD.search(text) or _AGO.search(text) or any(w in text for w in _REL))
+    return bool(_ISO.search(text) or _MD.search(text) or _SLASH.search(text) or _AGO.search(text) or any(w in text for w in _REL))
 
 
 # [발행자 2026-09-20 "쪽파 포장에는 웃거름 주지 않고 수분공급만 …. 그 근거는 토양검정 상태를 기준으로 함"]
@@ -201,7 +202,8 @@ _NEG_FOLD = re.compile(rf"(?<![가-힣])(안|못)(?:\s+(?=[{_VERB_HEAD}])|(?=[{_
 # 부정은 사건 어휘 **바로 뒤**의 서술어에 붙어야 한다: 어휘 뒤 한 덩이(조사·어미)에 과거 표지(았/었/했…)가 없고, 사이 토큰은 동사 어간 두 글자까지.
 # "물 줬는데 충분하지 않다" · "수확했는데 많지 않다"는 이미 한 일이다 — 뒤의 '지 않'은 다른 서술어의 부정(검토 2026-09-20 ② 실측)
 _PAST = "았었했줬쳤캤봤뒀냈"
-_NEG_AFTER = re.compile(rf"^(?![^\s]*[{_PAST}])[^\s]*\s*(?:[가-힣]{{1,2}}\s*)?(?:지\s*않|지\s*못|§|않|생략|건너뛰|거른다|걸렀)")
+# 사이 토큰 = 어간 두 글자 + 조사 하나까지("트랩 확인은 §했다" — 걷기 실측 2026-09-20: 조사 '은'이 붙자 창이 못 봐 안 한 예찰이 **사건**이 됐다)
+_NEG_AFTER = re.compile(rf"^(?![^\s]*[{_PAST}])[^\s]*\s*(?:[가-힣]{{1,2}}[은는을를이가도]?\s*)?(?:지\s*않|지\s*못|§|않|생략|건너뛰|거른다|걸렀)")
 _PAST_WORD = re.compile(rf"[{_PAST}]$")
 _ALT_AFTER = re.compile(r"(대신|만\s|만[가-힣]|해\s?줌|해\s?준다|하고 있|하는 중)")   # '했다'는 넣지 않는다 — "생략했다"의 어미가 대신 한 일로 읽힌다(실측)
 

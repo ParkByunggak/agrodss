@@ -122,6 +122,9 @@ def test_dated_sentence_still_links_to_the_nearest_plan_row():
 def test_negation_of_another_predicate_keeps_the_event_and_damage_positive_wins():
     """검토 ②③④: '지 않'이 다른 서술어의 것이면 사건 · '할 수 없다'는 부재가 아니다 · 갈래 하나 부정 + 다른 갈래 긍정은 긍정 갈래."""
     assert chat._negated_task("물 줬는데 충분하지 않다") is None and chat._negated_task("수확했는데 많지 않다") is None
+    assert chat._negated_task("트랩 확인은 안 했다")[0] == "예찰" and chat._negated_task("트랩 확인을 못 했다")[0] == "예찰"   # 조사가 붙은 부정(걷기 실측 — 끝 위치는 계약이 아니다)
+    assert chat.parse_day("9/8 트랩 확인", T, past=True) == "2026-09-08" and chat.parse_day("9/28 예정", T) == "2026-09-28"   # 빗금 월/일
+    assert chat.parse_day("3/4 정도 자랐다", T) == "2026-03-04"                                                            # 한계: 분수도 날짜로 읽는다(드묾 — 확인에서 고친다)
     assert chat._negated_task("웃거름 주지 않고") == ("시비", 8) and chat._negated_task("트랩 확인 안 했다") is not None
     assert chat._damage_risk("서리에 얼어서 상품성이 없다") == "서리" and chat._damage_risk("얼어붙어서 걷을 수 없었다") == "서리"
     assert chat._damage_risk("벌레 먹은 잎은 없고 곰팡이가 폈다") == "병" and chat._damage_risk("벌레 먹은 건 없는데 썩었다") == "부패"

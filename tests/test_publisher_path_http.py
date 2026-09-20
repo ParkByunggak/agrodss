@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import http.client
+from datetime import date
 from urllib.parse import quote, urlencode
 
 from frontend import chat_pages, config, serve
@@ -71,12 +72,24 @@ def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv, mo
     st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m2["id"], "i": "0", "planned_task": "방제(예찰 뒤 필요 시)", "day": "2026-09-10"})
     assert st == 200 and "원장에 들어감" in body
     assert ev.list_records(SID)[-1]["planned_task"] == "방제(예찰 뒤 필요 시)" and ev.list_records(SID)[-1]["planned_day"] == "2026-09-10"
+    # 3c. 발행자의 다음 행위 — 9/8 예찰 한 줄. 부정형은 조사가 붙어도 불이행 사유이고 계획표의 예찰 줄(09-08 · 미이행)에 이어진다(걷기 실측 2026-09-20:
+    #     "트랩 확인은 안 했다"가 예찰 **사건**이었다). 긍정형은 사건 예찰 09-08 → 확인 → 계획 대 실제 '예찰(트랩 · 육안)' 이행 — 농가 행위로 생긴 첫 이행 사례
+    neg = chat.classify("트랩 확인은 안 했다", date.fromisoformat(TODAY))[0]
+    assert neg["kind"] == "decision.noncompliance" and neg["task_type"] == "예찰"
+    row = chat._plan_row_for(SID, "예찰", date.fromisoformat(TODAY))
+    assert row and row["task"] == "예찰(트랩 · 육안)" and row["work_date"] == "2026-09-08" and row["status"] == "미이행"
+    st, loc, _ = _post(srv, f"/c/{quote(SID)}/send", {"text": "9월 8일에 트랩 확인했다"})
+    m3 = [x for x in chat.list_messages(SID) if x.get("role") == "farmer"][-1]
+    assert m3["drafts"][0]["kind"] == "event" and m3["drafts"][0]["type"] == "예찰" and m3["drafts"][0]["observed_at"] == "2026-09-08"
+    st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m3["id"], "i": "0", "type": "예찰", "day": "2026-09-08"})
+    assert st == 200 and "원장에 들어감" in body
     # 4. 판단 화면 — 웃거름 1회 카드(등록부 이름)가 '사유 기록됨'을 요약으로 보이고 사유가 붙는다(전에는 M-10 카드가 배지와 축 표뿐이었다 — 2026-09-20 실측).
     #    계획 대 실제 표의 근거 칸에도 같은 문장이 있으므로 카드 요약의 변별 표지 '사유: ' 로 본다(§7.1 4번 겹침)
     st, _, body = _get(srv, "/judge")
     assert st == 200 and "<h2>웃거름 1회 " in body and "top_dressing_1" not in body
     assert "사유 기록됨 — 작업일 2026-09-16 · 마감 2026-09-24" in body and "· 사유: 쪽파 포장에는 웃거름 주지 않고" in body
     assert "<h2>병해충 경보(칸 3) " in body and "<h2>배수 경보(칸 4) " in body
+    assert "사건 예찰 2026-09-08" in body and "이행 <b>2</b>" in body                  # 3c 의 예찰 한 줄이 계획 대 실제의 이행이 됐다(기준점 1 + 농가 행위 1)
     # 4b. 처방 정본이 있으면 웃거름 카드가 **양**을 낸다(추비 N·K, kg/10a) — 발행자 2회차 live_check 뒤 화면에서 보라고 한 그 값
     assert "양 추비 N 7.6" in body and "K₂O 5.5" in body and "정본 대기" not in body[body.index("<h2>웃거름 1회 "):body.index("<h2>웃거름 2회")]
     assert f"오늘이 {TODAY} 로 고정돼 있다" in body                                     # 고정은 화면이 말한다(잊힌 고정 방지)

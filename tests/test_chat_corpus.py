@@ -99,6 +99,11 @@ CORPUS = [
     ("오늘 파종", "event", None),
     ("방제 완료", "event", None),
     ("9월 10일 방제", "event", None),
+    # 발행자 다음 행위(9/8 예찰 한 줄)를 걷다 잡힌 것(2026-09-20): 조사가 붙은 부정 · 빗금 날짜
+    ("9월 8일에 트랩 확인했다", "event", None),
+    ("9/8 트랩 확인", "event", None),                                                 # 빗금 월/일도 날짜(한 일의 표지)
+    ("트랩 확인은 안 했다", "decision.noncompliance", None),                          # '확인은' — 조사가 붙어도 부정
+    ("트랩 확인을 못 했다", "decision.noncompliance", None),
 ]
 
 
