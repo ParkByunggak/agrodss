@@ -36,6 +36,8 @@ def test_end_declaration_closes_the_plan_after_that_day_and_nothing_before_it():
     assert c["종료 뒤"] == 1 and c["미이행"] == 0 and c["놓침"] == 12 and sum(c.values()) == len(after.result["rows"])
     assert all(a["work_date"] <= "2026-11-03" for a in after.result["ask_reason"])       # 종료 뒤 줄은 사유를 묻지 않는다
     assert all(r["status"] != "종료 뒤" for r in after.result["rows"] if r["work_date"] <= "2026-11-03")   # 종료 전 줄은 그대로
+    side = chat_pages.sidebar(f"/c/{SID}", [], date(2026, 11, 23))
+    assert 'class="pill end">종료</span>' in side and 'pill plan">종료' not in side          # 목록 배지: 종료는 계획 색이 아니다
     alerts = next(e for e in judge_run.judgments_for(SID, today=date(2026, 11, 23)) if e.decision_id == "risk_alert")
     assert all("수확 지연" not in (a.get("risk") or "") for a in (alerts.result.get("alerts") or []))   # B1: 종료면 수확 지연 경보 없음
 

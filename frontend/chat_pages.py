@@ -52,7 +52,7 @@ aside.side { background:var(--side); border-right:1px solid var(--line); padding
 .chat:hover { background:var(--panel); } .chat.on { background:var(--panel); border:1px solid var(--line); }
 .chat b { display:block; font-weight:600; font-size:13.5px; } .chat span { color:var(--muted); font-size:12px; }
 .pill { display:inline-block; font-size:11px; padding:0 7px; border-radius:9px; background:var(--chip); color:var(--muted); margin-left:4px; }
-.pill.run { background:var(--ok); color:var(--ok-fg); } .pill.plan { background:var(--warn); color:var(--warn-fg); }
+.pill.run { background:var(--ok); color:var(--ok-fg); } .pill.plan { background:var(--warn); color:var(--warn-fg); } .pill.end { background:var(--chip); color:var(--muted); }
 .side .lnk { display:block; padding:5px 10px; font-size:13px; color:var(--muted); text-decoration:none; } .side .lnk:hover { color:var(--fg); }
 aside.side { display:flex; flex-direction:column; }
 """ + render.USER_MENU_CSS + """
@@ -122,7 +122,8 @@ def sidebar(current: str, docs: list[str], today: date) -> str:
         st = s.get("status") or ("재배 중" if s.get("anchor") else "계획")
         meta = f"{_e(s.get('season'))}" + (f" · 기준점 후 {(today - date.fromisoformat(s['anchor'])).days}일" if s.get("anchor") else " · 파종 전")
         cls = ' on' if current == f"/c/{s['id']}" else ""
-        out.append(f'<a class="chat{cls}" href="/c/{quote(s["id"])}"><b>{_e(s.get("crop"))}<span class="pill {"run" if st == "재배 중" else "plan"}">{_e(st)}</span></b><span>{meta}</span></a>')
+        pill = {"재배 중": "run", "종료": "end"}.get(st, "plan")          # 종료(작기 종료 경로 2026-09-20)는 계획 색이 아니라 회색
+        out.append(f'<a class="chat{cls}" href="/c/{quote(s["id"])}"><b>{_e(s.get("crop"))}<span class="pill {pill}">{_e(st)}</span></b><span>{meta}</span></a>')
     out.append('<div class="grp">화면</div>')
     first = subs[0]["id"] if subs else ""
     for href, label in (("/improve", "개선 · 자율진화"), ("/judge", "판단 봉투 전체"), ("/media", "영상 반입"), ("/events", "사건 · 사유(표)"),
