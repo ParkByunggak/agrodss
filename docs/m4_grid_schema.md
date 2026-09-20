@@ -50,11 +50,15 @@ variety_correction time_shift_days · cell_overrides   트리 D 보정 2종
 
 | 필드 | 규칙 |
 |---|---|
-| `name` · `work_day` | 작업일(기준점 상대) |
-| `lead_days` | `{own, rental}` — 조달 경로별 리드타임. 준비 착수일 = work_day − lead. 다른 단계로 넘어갈 수 있다 → F 선제 발화 |
+| `name` · `work_day` | 이름(계획표가 이 키로 사건을 잇는다) · 작업일(기준점 상대 정수). 둘 다 필수 |
+| `lead_days` | `{own, rental}` **정수** — 조달 경로별 리드타임. 준비 착수일 = work_day − lead. 다른 단계로 넘어갈 수 있다 → F 선제 발화 |
 | `tools[]` | |
 | `materials` | `{"관행": [...], "유기": [...]}` — **인증 유형별 분리**(H). 한쪽이 없으면 빈 목록이 아니라 `"N/A"` |
-| `retry` | `{possible, deadline_day}` — 재시도 가능 여부 + 마감일 |
+| `retry` | `{possible, deadline_day}` — `possible` 은 bool, `deadline_day` 는 정수 또는 **`null`**. 두 키 다 **있어야** 한다 |
+
+> **마감을 모르면 `deadline_day: null` 로 적는다 — 키를 빼지 않는다**(2026-09-20). 빼면 관문이 통과시키고, 그 뒤
+> 결정기가 창 끝으로 마감을 지어낸다(대리값 금지 위반). `null` 이면 그 작업을 쓰는 결정이 **판단 불가(지식)** 로 나간다.
+> 모른다고 적을 자리가 스키마에 있어야 격자를 쓰는 사람이 숫자를 지어내지 않는다.
 
 ## 3. 빈칸 3종
 

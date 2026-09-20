@@ -40,6 +40,23 @@ def _task(stage: dict[str, Any], key: str) -> dict[str, Any] | None:
     return next((t for t in tasks if key in t.get("name", "")), None)
 
 
+def _deadline_day(task: dict[str, Any] | None) -> int | None:
+    """격자 작업의 마감(일). 없으면 None — **창 끝으로 메우지 않는다**.
+
+    [대리값 전수 2026-09-20] B6 에서 출하 마감의 기본값 63 을 없앴는데, 같은 지식(retry.deadline_day)을 읽는
+    자리가 넷이었고 처방은 한 곳에만 닿아 있었다(§7.5 지점 축). 나머지 셋은 `stage["window"]["to_day"]` 로
+    메우고 있었다 — 리터럴이 아니라 **식**이라 직전 회차의 숫자 축 전수가 못 봤다. 읽는 법을 한 벌로 세운다.
+    """
+    d = ((task or {}).get("retry") or {}).get("deadline_day")
+    return int(d) if d is not None else None
+
+
+def _no_deadline(did: str, sid: str, as_of: str, task_name: str) -> Envelope:
+    return Envelope("판단 불가(지식)", did, sid, as_of,
+                    result={"why": f"격자 작업 '{task_name}' 에 마감(retry.deadline_day)이 없다 — 창 끝으로 지어내지 않는다",
+                            "summary": f"{task_name} 마감 미채움"})
+
+
 def _need_cert(did: str, sid: str, as_of: str) -> Envelope:
     """[코드 평가 B2] cert 는 시비 결정의 필요 축 — 없으면 판단 불가(데이터). 전에는 mats.get(None, []) 로 빈 자재를 들고 '판단함'이 나갔다."""
     return Envelope("판단 불가(데이터)", did, sid, as_of,
@@ -167,7 +184,9 @@ def judge_base_fertilization(subject, today: date, prescriptions: list[dict[str,
     a = date.fromisoformat(anchor)
     day = (today - a).days
     t = _task(stage, "밑거름")
-    deadline = int((t or {}).get("retry", {}).get("deadline_day", stage["window"]["to_day"]))
+    deadline = _deadline_day(t)
+    if deadline is None:
+        return _no_deadline("base_fertilization", sid, as_of, "밑거름")
     if day > deadline:
         return Envelope("해당 없음", "base_fertilization", sid, as_of,
                         result={"why": f"밑거름 창(파종 마감 {deadline}일)을 지났다 — 이후는 웃거름", "summary": "창 지남 — 웃거름 결정으로"})
@@ -209,7 +228,9 @@ def judge_replant(subject, today: date, observations: list[dict[str, Any]] | Non
     a = date.fromisoformat(anchor)
     day = (today - a).days
     t = _task(stage, "보식")
-    deadline = int((t or {}).get("retry", {}).get("deadline_day", stage["window"]["to_day"]))
+    deadline = _deadline_day(t)
+    if deadline is None:
+        return _no_deadline("replant", sid, as_of, "보식")
     w0 = stage["window"]["from_day"]
     if day < w0 or day > deadline:
         return Envelope("해당 없음", "replant", sid, as_of, result={"why": f"보식 창({w0}~{deadline}일) 밖 — 오늘 {day}일", "summary": "창 밖"})
@@ -268,7 +289,9 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
     if t is None:
         return Envelope("판단 불가(지식)", did, sid, as_of, result={"why": "격자에 그 작업 칸이 없다"})
     wd = int(t["work_day"])
-    deadline = int((t.get("retry") or {}).get("deadline_day", stage["window"]["to_day"]))
+    deadline = _deadline_day(t)
+    if deadline is None:
+        return _no_deadline(did, sid, as_of, str(t.get("name", d.params["task_key"])))
     cert = subject.get("cert")
     if not cert:
         return _need_cert(did, sid, as_of)                                   # [B2] 필요 축 부재는 데이터 미비 — 빈 자재로 판단하지 않는다
@@ -327,12 +350,11 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
     h_end = date.fromisoformat(harvest.result["window_end"])
     store_days = (target - h_end).days
     t = _task(stage, "출하")
-    deadline_raw = (t.get("retry") or {}).get("deadline_day") if t else None
-    if deadline_raw is None:
+    deadline = _deadline_day(t)   # 마감을 읽는 법은 한 벌 — 네 결정이 같은 함수를 쓴다
+    if deadline is None:
         # [B6 코드 쪽 2026-09-20] 전에는 63 을 기본값으로 메웠다(하드코딩 · 대리값 금지 위반) — 격자에 마감이 없으면 지식 미비다
         return Envelope("판단 불가(지식)", "ship_or_store", sid, as_of,
                         result={"why": "격자 칸 5 '출하 또는 단기 저장' 작업에 마감(retry.deadline_day)이 없다 — 값을 지어내지 않는다", "summary": "출하 마감 미채움"})
-    deadline = int(deadline_raw)
     a = date.fromisoformat(subject["anchor"])
     caps = []
     if target > a + timedelta(days=deadline):
@@ -344,7 +366,7 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
         # 고치지 않고(검토지 ⓓ B6 발행자 답), 봉투에 그 사실을 남긴다 — 상한 제약이 그 모순에서 나온 것임을 읽는 쪽이 알게
         notes.append(f"격자 자체 모순(B6): 출하 마감 {deadline}일 < 수확 창 끝 {h_to}일 — 창 끝 수확분은 마감을 넘긴다. 검토지 ⓓ B6 답 대기")
     verdict = "출하(저장 없이)" if store_days <= 0 else f"단기 저장 {store_days}일 뒤 출하"
-    return Envelope("판단함", "ship_or_store", sid, as_of, inputs=list(harvest.inputs), grade=weakest([harvest.grade or "추정", _grid_grade(unit)]), caps=caps,
+    return Envelope("판단함", "ship_or_store", sid, as_of, inputs=list(harvest.inputs), grade=weakest([str(harvest.grade), _grid_grade(unit)]), caps=caps,
                     result={"target_date": target.isoformat(), "harvest_window_end": h_end.isoformat(), "store_days": store_days, "ship_deadline_day": deadline,
                             "summary": f"{verdict} — 계획일 {target}"}, notes=notes)
 

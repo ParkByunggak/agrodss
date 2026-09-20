@@ -14,8 +14,12 @@ GRADES = ("계산", "관측", "추정")   # E 3분류 — 가장 약한 축이 �
 
 
 def weakest(grades: list[str]) -> str:
+    # [대리값 전수 2026-09-20] 빈 목록에 '추정' 을 돌려주던 자리 — 축이 하나도 없는데 등급을 지어낸다(대리값 금지).
+    # 축 없이 '판단함' 은 성립하지 않으므로 값을 메우지 않고 깨뜨린다(봉투 __post_init__ 가 종류를 깨뜨리는 것과 같은 급).
+    if not grades:
+        raise ValueError("등급을 셀 축이 없다 — 빈 목록에 등급을 지어내지 않는다")
     order = {g: i for i, g in enumerate(GRADES)}
-    return max(grades, key=lambda g: order[g]) if grades else "추정"
+    return max(grades, key=lambda g: order[g])
 
 
 @dataclass

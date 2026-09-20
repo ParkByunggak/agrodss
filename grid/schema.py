@@ -119,17 +119,30 @@ def validate(unit: dict[str, Any], canonical: set[str] | None = None) -> Report:
                 err(f"{rt}: parcel_correction 은 병해충·미기상 축이 있는 위험만")
         for t in (s.get("tasks") or []) if s.get("tasks") != NA else []:
             tt = f"{tag} task {t.get('name')!r}"
+            # [대리값 전수 2026-09-20 · 처방 직후 전수] 마감 키를 고친 자리에서 같은 형태를 셌다 — **문면은 키를 요구하는데 값을 안 보는**
+            # 자리가 이 함수 안에 셋 더 있었다(작업명 · lead_days 값 · retry.possible 값). 셋 다 소비자가 그 값을 믿고 쓴다(A5 전례와 같은 축).
+            if not t.get("name"):
+                err(f"{tt}: name 없음 — 계획표가 작업명으로 사건을 잇는다")
             if not isinstance(t.get("work_day"), int):
                 err(f"{tt}: work_day 정수 필수")
             ld = t.get("lead_days")
-            if not (isinstance(ld, dict) and "own" in ld and "rental" in ld):
-                err(f"{tt}: lead_days {{own, rental}} 필수")
+            if not (isinstance(ld, dict) and isinstance(ld.get("own"), int) and isinstance(ld.get("rental"), int)):
+                err(f"{tt}: lead_days {{own, rental}} 정수 필수")
             m = t.get("materials")
             if not (m == NA or (isinstance(m, dict) and set(m) <= {"관행", "유기"} and m)):
                 err(f"{tt}: materials 는 {{관행,유기}} dict 또는 N/A")
             rt_ = t.get("retry")
-            if not (isinstance(rt_, dict) and "possible" in rt_):
-                err(f"{tt}: retry {{possible, deadline_day}} 필수")
+            # [대리값 전수 2026-09-20] 문면은 두 키를 요구하는데 검사는 possible 만 봤다 — deadline_day 가 빠진 격자가 관문을 통과했고,
+            # 그 뒤 결정기 셋이 창 끝으로 마감을 지어냈다. 키는 **있어야** 하되 값은 null 을 허용한다: 모르는 것을 null 로 적을 자리가
+            # 없으면 격자 저자가 숫자를 지어내게 된다(그쪽이 더 나쁘다). null 이면 소비자가 판단 불가(지식)로 간다.
+            if not (isinstance(rt_, dict) and "possible" in rt_ and "deadline_day" in rt_):
+                err(f"{tt}: retry {{possible, deadline_day}} 필수 (모르면 deadline_day: null — 키를 빼지 않는다)")
+            else:
+                if not (rt_["deadline_day"] is None or isinstance(rt_["deadline_day"], int)):
+                    err(f"{tt}: retry.deadline_day 는 정수 또는 null")
+                # possible 은 bool — "false" 문자열이 통과하면 계획표의 `bool(rt.get("possible"))` 가 **재시도 가능**으로 읽는다(A5 와 같은 형태)
+                if not isinstance(rt_["possible"], bool):
+                    err(f"{tt}: retry.possible 은 bool")
         wt = s.get("water")
         if isinstance(wt, dict):
             for k in ("demand", "deficit_sensitivity", "excess_sensitivity"):
