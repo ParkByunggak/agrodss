@@ -4,6 +4,7 @@
 # 기본 인자에 경로를 묶어 두면 monkeypatch 가 안 닿는다. 경로는 호출 시점에 env 로 푼다.
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -21,9 +22,11 @@ def _isolate_media_dir(tmp_path, monkeypatch):
     reg.write_text(_REAL_SUBJECTS.read_text(encoding="utf-8"), encoding="utf-8")   # 운영 등록부의 사본 — 읽기는 같고 쓰기는 tmp
     monkeypatch.setenv("AGRODSS_SUBJECTS_PATH", str(reg))
     parcels = tmp_path / "parcels.json"                                            # [코드 평가 C4] 필지 등록부 — R-4 전수에서 빠졌던 한 곳
-    parcels.write_text((_REAL_SUBJECTS.parent / "parcels.json").read_text(encoding="utf-8"), encoding="utf-8")
+    parcels.write_text((_REAL_SUBJECTS.parent / "parcels_seed.json").read_text(encoding="utf-8"), encoding="utf-8")   # [U-18 2단계] 씨앗(PII 없음)의 사본
     monkeypatch.setenv("AGRODSS_PARCELS_PATH", str(parcels))
-    monkeypatch.setenv("AGRODSS_PARCELS_LOCAL_PATH", str(tmp_path / "parcels_local.json"))   # [U-18] 덮개(PII · 런타임 기록) — 쓰기 통로가 생기는 순간이 격리를 넣을 순간
+    local = tmp_path / "parcels_local.json"                                        # [U-18] 덮개(PII · 런타임 기록) — 검사용 가짜 지번, 실제 주소는 어디에도 없다
+    local.write_text(json.dumps({"parcels": [{"id": "p001", "address": "검사용 지번 1"}]}, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("AGRODSS_PARCELS_LOCAL_PATH", str(local))
     monkeypatch.setenv("AGRODSS_PARCELS_LEGACY_PATH", str(tmp_path / "parcels_legacy.json"))  # 옛 추적 파일(이주 원천) — 검사는 운영 파일을 읽지 않는다(없는 경로)
     monkeypatch.setenv("AGRODSS_PROFILE_PATH", str(tmp_path / "profile.json"))   # 사용자 등록부도 쓰기 대상 — 격리 짝(R-4)
     monkeypatch.setenv("AGRODSS_SOIL_DIR", str(tmp_path / "soil"))               # 토양 원천 저장소(PII) — 격리 짝

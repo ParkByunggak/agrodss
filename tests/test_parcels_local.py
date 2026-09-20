@@ -16,10 +16,17 @@ def _seed_bytes() -> bytes:
     return Path(parcels.parcels_path()).read_bytes()
 
 
-def test_ensure_local_moves_pii_to_overlay_without_touching_seed():
+def test_ensure_local_moves_pii_to_overlay_without_touching_seed(monkeypatch, tmp_path):
+    """씨앗에 PII 가 남아 있는 옛 형태(1단계 이전 사본)를 검사용으로 만들어 둔다 — 실제 씨앗에는 없다(아래 별도 검사)."""
+    seed_path = tmp_path / "seed_with_pii.json"
+    seed_path.write_text(json.dumps({"parcels": [{"id": "p001", "source": "publisher", "recorded_at": "2026-09-19T00:00:00+00:00",
+                                                   "observed_at": "2026-09-18", "resolution": "parcel", "address": "검사용 지번 2", "environment": "노지"}]},
+                                    ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("AGRODSS_PARCELS_PATH", str(seed_path))
+    monkeypatch.setenv("AGRODSS_PARCELS_LOCAL_PATH", str(tmp_path / "no_overlay_yet.json"))
     seed_before = _seed_bytes()
     seed = json.loads(seed_before.decode("utf-8"))["parcels"][0]
-    assert "address" in seed                                                        # 격리 사본의 씨앗에는 아직 주소가 있다(2단계에서 뺀다)
+    assert "address" in seed
     lp = parcels.ensure_local()
     assert lp == Path(parcels.local_path()) and lp.exists() and lp != Path(parcels.parcels_path())
     over = json.loads(lp.read_text(encoding="utf-8"))["parcels"]
@@ -69,8 +76,9 @@ def test_legacy_tracked_file_is_migration_source_only_and_real_seed_has_no_pii(m
 
 def test_overlay_is_ignored_by_git_and_created_at_server_start():
     assert "data/parcels_local.json" in (ROOT / ".gitignore").read_text(encoding="utf-8").split()
-    tracked = subprocess.run(["git", "ls-files", "data"], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace", timeout=30).stdout
-    assert "parcels_local" not in tracked
+    tracked = subprocess.run(["git", "ls-files", "data"], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace", timeout=30).stdout.split()
+    assert "data/parcels_local.json" not in tracked and "data/parcels.json" not in tracked     # [U-18 2단계] 옛 추적 파일도 git 밖(발행자 덮개 확인 2026-09-20)
+    assert "data/parcels_seed.json" in tracked
     src = (ROOT / "frontend" / "serve.py").read_text(encoding="utf-8")
     body = src[src.index("def make_server"):src.index("def watch_head")]
     assert ".ensure_local()" in body                                                # 발행자 PC 는 pull 뒤 첫 기동에서 덮개를 얻는다
