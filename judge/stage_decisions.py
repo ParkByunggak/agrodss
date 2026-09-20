@@ -327,14 +327,26 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
     h_end = date.fromisoformat(harvest.result["window_end"])
     store_days = (target - h_end).days
     t = _task(stage, "출하")
-    deadline = int((t.get("retry") or {}).get("deadline_day", 63)) if t else 63
+    deadline_raw = (t.get("retry") or {}).get("deadline_day") if t else None
+    if deadline_raw is None:
+        # [B6 코드 쪽 2026-09-20] 전에는 63 을 기본값으로 메웠다(하드코딩 · 대리값 금지 위반) — 격자에 마감이 없으면 지식 미비다
+        return Envelope("판단 불가(지식)", "ship_or_store", sid, as_of,
+                        result={"why": "격자 칸 5 '출하 또는 단기 저장' 작업에 마감(retry.deadline_day)이 없다 — 값을 지어내지 않는다", "summary": "출하 마감 미채움"})
+    deadline = int(deadline_raw)
     a = date.fromisoformat(subject["anchor"])
     caps = []
     if target > a + timedelta(days=deadline):
         caps.append({"name": "단기 저장 한계", "basis": f"칸 5 '출하 또는 단기 저장' 마감 {deadline}일({(a + timedelta(days=deadline)).isoformat()})을 계획일이 넘는다"})
+    notes = []
+    h_to = int(stage["window"]["to_day"])
+    if deadline < h_to:
+        # 격자 자체 모순(코드 평가 B6): 출하 마감이 수확 창 끝보다 앞이면 창 끝에 수확한 것은 출하 마감을 이미 넘긴다. 지식 결함이라 여기서
+        # 고치지 않고(검토지 ⓓ B6 발행자 답), 봉투에 그 사실을 남긴다 — 상한 제약이 그 모순에서 나온 것임을 읽는 쪽이 알게
+        notes.append(f"격자 자체 모순(B6): 출하 마감 {deadline}일 < 수확 창 끝 {h_to}일 — 창 끝 수확분은 마감을 넘긴다. 검토지 ⓓ B6 답 대기")
     verdict = "출하(저장 없이)" if store_days <= 0 else f"단기 저장 {store_days}일 뒤 출하"
     return Envelope("판단함", "ship_or_store", sid, as_of, inputs=list(harvest.inputs), grade=weakest([harvest.grade or "추정", _grid_grade(unit)]), caps=caps,
-                    result={"target_date": target.isoformat(), "harvest_window_end": h_end.isoformat(), "store_days": store_days, "summary": f"{verdict} — 계획일 {target}"})
+                    result={"target_date": target.isoformat(), "harvest_window_end": h_end.isoformat(), "store_days": store_days, "ship_deadline_day": deadline,
+                            "summary": f"{verdict} — 계획일 {target}"}, notes=notes)
 
 
 def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pest=None, harvest: Envelope | None = None,
