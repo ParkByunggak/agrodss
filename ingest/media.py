@@ -360,7 +360,14 @@ def _safe(s: str) -> str:
 
 def register(key: str, subject: str, observed_at: str | None = None, note: str = "",
              now: datetime | None = None) -> dict[str, Any]:
-    """inbox(옮김) 또는 감시 폴더(복사) → media/<subject>/<observed_at>_<sha8>.<ext> + index.jsonl 레코드."""
+    """inbox(옮김) 또는 감시 폴더(복사) → media/<subject>/<observed_at>_<sha8>.<ext> + index.jsonl 레코드.
+    [C17] sha 중복 거부가 읽고-검사하고-쓰는 꼴이라 동시 등록 둘이 둘 다 통과한다 — 한 덩이로(파일 이동까지)."""
+    with sch.ledger_lock:
+        return _register_locked(key, subject, observed_at, note, now)
+
+
+def _register_locked(key: str, subject: str, observed_at: str | None, note: str,
+                     now: datetime | None) -> dict[str, Any]:
     origin, src = _resolve_key(key)
     if not src.is_file():
         raise RegisterError(f"그런 파일이 없다: {key!r}")

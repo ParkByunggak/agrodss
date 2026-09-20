@@ -104,11 +104,19 @@ def test_events_ledger_writes_go_through_schema_stamp():
     assert r2["schema_version"] == sch.SCHEMA_VERSION
 
 
+def _block_containing(src: str, needle: str) -> str:
+    """그 문장을 품은 최상위 함수 본문. [2026-09-20] 전에는 `def register(` 로 잘랐는데, 그 함수가 잠금 겉껍질이 되고
+    본문이 옮겨가자 **배선은 멀쩡한데 래칫만** 깨졌다 — 이름이 아니라 **검사 대상 문장**으로 구역을 찾는다(형태 독립)."""
+    i = src.index(needle)
+    start = src.rindex("\ndef ", 0, i)
+    end = src.find("\ndef ", i)
+    return src[start:end if end != -1 else len(src)]
+
+
 def test_media_register_stamps_before_write():
     # 구역(함수 본문)을 잘라 본다 — stamp 호출이 index 쓰기보다 앞
     src = (ROOT / "ingest" / "media.py").read_text(encoding="utf-8")
-    body = src[src.index("def register("):]
-    body = body[:body.index("\ndef ", 10)]
+    body = _block_containing(src, 'index_path().open("a"')
     assert body.index("sch.stamp(") < body.index('index_path().open("a"')
     src_e = (ROOT / "ingest" / "events.py").read_text(encoding="utf-8")
     body_e = src_e[src_e.index("def _append("):]

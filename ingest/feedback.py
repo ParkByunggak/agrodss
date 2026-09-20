@@ -111,7 +111,14 @@ def set_request_status(req_id: str, status: str, response: str = "", item_ref: s
 # ── 예측 원장 ─────────────────────────────────────────────────────────────────────────
 def record_prediction(subject: str, decision_id: str, envelope_kind: str, payload: dict[str, Any], as_of: str,
                       grade: str | None = None, code_head: str | None = None, now: datetime | None = None) -> dict[str, Any] | None:
-    """판단함의 대조 가능한 주장을 한 줄로. 같은 (subject, decision) 의 직전 줄과 payload 가 같으면 안 쓴다(바뀔 때만)."""
+    """판단함의 대조 가능한 주장을 한 줄로. 같은 (subject, decision) 의 직전 줄과 payload 가 같으면 안 쓴다(바뀔 때만).
+    [C17] 직전 줄을 읽어 견주고 쓰는 꼴이라 겹치면 같은 주장이 두 줄 — 한 덩이로."""
+    with sch.ledger_lock:
+        return _record_prediction_locked(subject, decision_id, envelope_kind, payload, as_of, grade, code_head, now)
+
+
+def _record_prediction_locked(subject: str, decision_id: str, envelope_kind: str, payload: dict[str, Any], as_of: str,
+                              grade: str | None, code_head: str | None, now: datetime | None) -> dict[str, Any] | None:
     h = sch.payload_hash(payload)
     prev = [r for r in list_records("feedback.prediction", subject) if r.get("decision_id") == decision_id]
     if prev and prev[-1].get("payload_hash") == h:
@@ -143,10 +150,16 @@ def latest_predictions(subject: str) -> dict[str, dict[str, Any]]:
 # ── 대조 결과 ─────────────────────────────────────────────────────────────────────────
 def add_outcome(prediction: dict[str, Any], verdict: str, detail: str, actual_ref: str | None = None,
                 observed_at: str | None = None, now: datetime | None = None) -> dict[str, Any] | None:
-    """한 예측에 같은 판정·같은 실제를 두 번 적지 않는다."""
-    for o in list_records("feedback.outcome", prediction["subject"]):
-        if o["prediction_id"] == prediction["id"] and o["verdict"] == verdict and o.get("actual_ref") == actual_ref:
-            return None
+    """한 예측에 같은 판정·같은 실제를 두 번 적지 않는다. [C17] 검사와 쓰기를 한 덩이로 — 겹치면 둘 다 '없다'를 본다."""
+    with sch.ledger_lock:
+        for o in list_records("feedback.outcome", prediction["subject"]):
+            if o["prediction_id"] == prediction["id"] and o["verdict"] == verdict and o.get("actual_ref") == actual_ref:
+                return None
+        return _add_outcome_locked(prediction, verdict, detail, actual_ref, observed_at, now)
+
+
+def _add_outcome_locked(prediction: dict[str, Any], verdict: str, detail: str, actual_ref: str | None,
+                        observed_at: str | None, now: datetime | None) -> dict[str, Any] | None:
     ts = _now(now)
     rec: dict[str, Any] = {"id": f"out_{uuid.uuid4().hex[:12]}", "kind": "feedback.outcome", "subject": prediction["subject"],
                            "decision_id": prediction["decision_id"], "prediction_id": prediction["id"], "verdict": verdict,
@@ -162,7 +175,15 @@ def propose(origin_kind: str, origin_ref: str, target: str, proposal: str, direc
             subject: str | None = None, target_ref: str | None = None, auto_apply: bool = False,
             applied_ref: str | None = None, now: datetime | None = None) -> dict[str, Any] | None:
     """개선 항목 1건. 같은 출처(origin)로 이미 살아 있는 항목이 있으면 안 만든다(중복 제안 금지).
-    auto_apply 는 보수 방향에서만 — 확장은 '제안'으로 남고 사람이 채택한다(D-14)."""
+    auto_apply 는 보수 방향에서만 — 확장은 '제안'으로 남고 사람이 채택한다(D-14). [C17] 검사와 쓰기를 한 덩이로."""
+    with sch.ledger_lock:
+        return _propose_locked(origin_kind, origin_ref, target, proposal, direction, source, subject, target_ref,
+                               auto_apply, applied_ref, now)
+
+
+def _propose_locked(origin_kind: str, origin_ref: str, target: str, proposal: str, direction: str, source: str,
+                    subject: str | None, target_ref: str | None, auto_apply: bool,
+                    applied_ref: str | None, now: datetime | None) -> dict[str, Any] | None:
     for it in latest_by_id("improvement.item").values():
         if it["origin"].get("kind") == origin_kind and it["origin"].get("ref") == origin_ref and it["status"] not in ("거부",):
             return None

@@ -531,7 +531,18 @@ def choose_kind(msg_id: str, kind: str, today: date | None = None) -> dict[str, 
 
 def confirm(msg_id: str, draft_index: int = 0, day: str | None = None, event_type: str | None = None,
             now: datetime | None = None, risk: str | None = None, planned_task: str | None = None) -> dict[str, Any]:
-    """초안 → 원장. 날짜가 없으면 여기서 받은 day 가 필요하다. 확인된 레코드 id 가 메시지에 붙는다."""
+    """초안 → 원장. 날짜가 없으면 여기서 받은 day 가 필요하다. 확인된 레코드 id 가 메시지에 붙는다.
+
+    [C17] 재확인 방지(C7)는 **읽고 → 검사하고 → 쓰는** 꼴이라 동시 요청 둘이 둘 다 "아직 안 썼다"를 본다
+    (실측 2026-09-20: 같은 예찰 사건이 원장에 두 줄). 화면 서버가 요청마다 스레드를 세우므로 확인 단추
+    더블탭·재전송이 그 형태다 — 검사부터 표시까지 한 덩이로 묶는다(정본 `sch.ledger_lock`).
+    """
+    with sch.ledger_lock:
+        return _confirm_locked(msg_id, draft_index, day, event_type, now, risk, planned_task)
+
+
+def _confirm_locked(msg_id: str, draft_index: int = 0, day: str | None = None, event_type: str | None = None,
+                    now: datetime | None = None, risk: str | None = None, planned_task: str | None = None) -> dict[str, Any]:
     m = get_message(msg_id)
     if not m:
         raise ChatError("없는 메시지")

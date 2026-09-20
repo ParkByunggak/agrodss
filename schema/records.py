@@ -13,11 +13,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
 SCHEMA_VERSION = 1
+
+# [칸 3 재측정 2026-09-20 · C17] 화면 서버는 ThreadingHTTPServer — 요청마다 스레드가 선다. 원장 가드는 대부분
+# **읽고 → 검사하고 → 덧붙이는** 꼴(재확인 방지 · sha 중복 · 예측 payload 대조 · 개선 항목 중복)이라 두 요청이 겹치면
+# 둘 다 "없다"를 보고 둘 다 쓴다. 실측(2026-09-20): 확인 단추를 동시에 두 번 누르면 같은 예찰 사건이 원장에 **두 줄**.
+# 그 한 벌이 계획 대 실제와 되먹임 대조에서 두 번 세어진다. 검사·덧붙이기를 한 덩이로 묶는다.
+#   재진입(RLock)인 이유: 가드가 다시 원장 함수를 부른다(confirm → add_event → _append) — 같은 스레드가 두 번 잡는다.
+#   범위: 한 프로세스 안의 스레드. 프로세스끼리(서버 + CLI)는 파일 잠금이 필요하고 발행자 PC(Windows)에서 재야 한다 — 등재.
+ledger_lock = threading.RLock()
 
 # 공통 필드(I-3 §0) — 농가·몰이 쓰는 입력형은 다섯을 다 가진다. 외부 원천 레코드는 subject 가 없다(원천은 필지를 모른다).
 COMMON_INPUT_FIELDS: tuple[str, ...] = ("source", "recorded_at", "observed_at", "resolution", "subject")

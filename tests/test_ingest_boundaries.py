@@ -34,9 +34,13 @@ def test_confirm_twice_is_refused():
 
 
 def test_register_stamps_before_moving_file():
+    # [2026-09-20] 구역을 `def register(` 이름으로 자르던 것 → **파일을 옮기는 문장**으로 찾는다. register 가 잠금
+    # 겉껍질이 되자 본문이 옮겨가 배선은 멀쩡한데 래칫만 깨졌다(약화가 아니라 형태 독립으로 강화).
     src = Path(media.__file__).read_text(encoding="utf-8")
-    blk = src[src.index("def register("):]
-    blk = blk[:blk.index("\ndef ", 10)]
+    i = src.index("shutil.move(")
+    blk = src[src.rindex("\ndef ", 0, i):]
+    end = blk.find("\ndef ", 10)
+    blk = blk[:end if end != -1 else len(blk)]
     assert blk.index("sch.stamp(rec)") < blk.index("shutil.move(") and blk.index("sch.stamp(rec)") < blk.index("shutil.copy2(")
 
 
