@@ -174,6 +174,40 @@ def user_tab_html(current: str) -> str:
             f'<div class="ulist"><div class="uhead">{_e(name)} · {_e(role)}</div>{"".join(items)}</div></details>')
 
 
+# [발행자 2026-09-21 "필지 3문항과 토성·경사가 비어 있어서 병해충 필지 보정과 과습 판정이 막혀 있다"]
+# 실측 ①: `missing_inputs` 는 **보여 주기만** 했고 쓰는 길은 CLI 뿐이었다 — 밭에서 답을 받아 와도 JSON 을 손으로 고쳐야 했다.
+#         그래서 답이 들어갈 자리를 만든다. 규율 셋: **PII 는 폼에도 없다**(주소 · PNU · 좌표 — D-1 · U-18) ·
+#         빈 칸은 빈 채로 둔다(대리값 금지) · 쓰기는 덮개에만(`parcels.set_fields`).
+# 실측 ②: 그 값을 **읽는 쪽**을 같은 자리에서 셌더니 use · environment 둘뿐이었다(parcels.FIELDS_READ_BY_JUDGMENT 의 G1 전수).
+#         미기상은 격자 칸 3 축에 이름만 있고 값을 읽는 코드가 없다 — 채워도 오늘은 병해충 판정이 달라지지 않는다.
+#         그래서 화면이 그렇게 **말한다**. 열리지 않을 판정을 열린다고 하면 밭에 헛걸음을 시킨다.
+# 어휘 목록은 여기 두지 않는다 — 등록부(ingest.parcels.FIELD_CHOICES)가 정본이고 CLI 도 같은 것을 본다.
+READS_LABEL = "판정이 읽는 값"
+STORED_ONLY_LABEL = "지금은 등록부에만 쌓인다(읽는 판정 없음)"
+
+
+def _parcel_note(key: str) -> str:
+    tag = READS_LABEL if key in parcels.FIELDS_READ_BY_JUDGMENT else STORED_ONLY_LABEL
+    return f' <span style="color:var(--muted)">— {tag}</span>'
+
+
+def parcel_form(p: dict[str, Any]) -> str:
+    """밭에서 받아 온 답이 들어갈 자리. 주소·PNU·좌표는 **폼에도 없다**(PII)."""
+    rows = ['<form method="post" action="/me/parcel" style="margin-top:8px">'
+            f'<input type="hidden" name="id" value="{_e(p["id"])}">']
+    for key, opts in parcels.FIELD_CHOICES.items():
+        cur = p.get(key)
+        sel = "".join(f'<option value="{_e(o)}"{" selected" if cur == o else ""}>{_e(o)}</option>' for o in opts)
+        rows.append(f'<label>{_e(key)}{_parcel_note(key)}</label>'
+                    f'<select name="{key}"><option value="">— 모름(비워 둔다)</option>{sel}</select>')
+    for key, label in parcels.FIELD_LABELS:
+        rows.append(f'<label>{_e(label)}{_parcel_note(key)}</label><input name="{key}" value="{_e(p.get(key) or "")}">')
+    rows.append('<div style="margin-top:8px"><button class="btn pri" type="submit">필지 저장</button>'
+                '<span style="color:var(--muted)"> — 빈 칸은 건드리지 않는다(모르는 것을 지어내지도, 있는 값을 지우지도 않는다). '
+                '주소·좌표는 이 화면에 없다(PII)</span></div></form>')
+    return '<div class="form">' + "".join(rows) + "</div>"
+
+
 def me_main(message: str = "", error: str = "", form: dict[str, str] | None = None) -> str:
     u = profile.load()
     f = form or {}
@@ -193,7 +227,8 @@ def me_main(message: str = "", error: str = "", form: dict[str, str] | None = No
         v = parcels.public_view(p)
         miss = parcels.missing_inputs(p)
         out.append(f'<div class="card"><b>{_e(p["id"])}</b> · 용도 {_e(v.get("use") or "미기재")} · 위치 {_e(v["location"])} · 인증 주장 {_e(v.get("cert_claimed") or "없음")}'
-                   f'<div style="color:var(--muted)">입력 대기 {len(miss)}: {_e(", ".join(miss))}</div></div>')
+                   f'<div style="color:var(--muted)">입력 대기 {len(miss)}: {_e(", ".join(miss))}</div>'
+                   + parcel_form(p) + "</div>")
     out.append('<h2 id="sync" style="font-size:14px">설정 · 동기화</h2>')
     lan = "켜짐(같은 Wi-Fi, 토큰 필요)" if config.BIND == config.LAN_BIND and config.LAN_TOKEN else "꺼짐(이 PC 에서만 — D-6)"
     out.append(f'<div class="card"><b>휴대폰 동기화(D-16)</b> {_e(lan)}<div style="color:var(--muted)">켜려면 <code>.env</code> 에 <code>AGRODSS_BIND=0.0.0.0</code> 과 <code>AGRODSS_LAN_TOKEN=(16자 이상)</code> 을 넣고 재시작, 휴대폰은 같은 Wi-Fi 에서 <code>http://&lt;PC IP&gt;:{config.PORT}/?t=&lt;토큰&gt;</code>. '
@@ -534,6 +569,27 @@ def handle_improve_status(form: dict[str, str]) -> str:
         return f"라이브 확인 기록 {item}"
     fb.set_item_status(item, st, by="publisher", note=form.get("note", ""))
     return f"{item} → {st}"
+
+
+def handle_parcel_form(form: dict[str, str]) -> str:
+    """필지 폼 처리 — 채운 것만 쓴다. 빈 칸은 **보내지 않는다**(지우지도, 메우지도 않는다).
+
+    발행자가 고쳐 적은 값은 덮는다(overwrite=True) — 안 그러면 화면이 새 값을 받아 놓고 조용히 버린다
+    (전례: `set_environment` 도 사람 답은 덮는다). 값이 안 바뀐 칸은 같은 값이 다시 써질 뿐이라 해가 없다.
+    """
+    pid = (form.get("id") or "").strip()
+    if not pid:
+        raise parcels.ParcelError("필지 id 가 없다")
+    keys = tuple(parcels.FIELD_CHOICES) + tuple(k for k, _ in parcels.FIELD_LABELS)
+    vals = {k: (form.get(k) or "").strip() for k in keys}
+    filled = {k: v for k, v in vals.items() if v}
+    if not filled:
+        raise parcels.ParcelError("채운 칸이 없다 — 빈 폼은 아무것도 바꾸지 않는다")
+    rec = parcels.set_fields(pid, overwrite=True, **filled)
+    left = parcels.missing_inputs(rec)
+    reads = [k for k in filled if k in parcels.FIELDS_READ_BY_JUDGMENT]
+    tail = f" · 판정이 읽는 값 {', '.join(reads)}" if reads else " · 판정이 읽는 값은 없다(등록부에 남는다)"
+    return f"필지 {pid} 저장 — {', '.join(sorted(filled))}{tail} · 입력 대기 {len(left)}"
 
 
 def run_cycle(today: date, head: str) -> dict[str, Any]:

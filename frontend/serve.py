@@ -28,6 +28,7 @@ from frontend import chat_pages, config, render  # noqa: E402
 from ingest import chat, feedback as fb, profile, subjects  # noqa: E402  — [M-13] 채팅 원장 · 되먹임 · 재배 단위·사용자 등록부도 ingest 를 통해서만
 from ingest import events as ev  # noqa: E402  — 사건 원장도 ingest 를 통해서만
 from ingest import media  # noqa: E402  — 입력 화면은 ingest 를 통해서만 1층에 쓴다(원장 파일을 직접 열지 않는다)
+from ingest import parcels  # noqa: E402  — 필지 등록부 쓰기(/me/parcel)도 ingest 를 통해서만
 from grid import capture as grid_capture  # noqa: E402  — 촬영 시점 알림(격자 지식, 원장 아님)
 from judge import run as judge_run  # noqa: E402  — 4층은 3층 봉투만 받는다
 
@@ -604,6 +605,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             except chat.ChatError as e:
                 status, body = chat_page(sid, error=str(e))
+        elif p == "/me/parcel":
+            # [발행자 2026-09-21] 밭에서 받아 온 필지 답이 들어가는 자리 — 전에는 CLI 뿐이었다. 쓰기는 덮개에만, PII 는 폼에 없다.
+            try:
+                status, body = me_page(message=chat_pages.handle_parcel_form(form))
+            except parcels.ParcelError as e:
+                status, body = me_page(error=str(e))
         elif p == "/me":
             try:
                 u = profile.save(form.get("name", ""), form.get("role", "farmer"), note=form.get("note", ""))

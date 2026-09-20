@@ -158,8 +158,63 @@ def missing_inputs(parcel: dict[str, Any] | None) -> list[str]:
     return [k for k in want if k not in have]
 
 
+# [발행자 2026-09-21 "필지 3문항과 토성·경사가 비어 있다 — 나가서 보면 답이 나오는 것들"] 밭에서 받아 온 답이 들어갈 자리를
+# 화면에 만들면서, 고를 말(어휘)을 **여기 한 곳**에 둔다. 화면과 CLI 가 각자 목록을 들면 두 벌이 되고 어긋난다
+# (재배환경이 그럴 뻔했다 — ingest.fertilizer.ENVIRONMENTS 가 먼저 있었고, 이제 그것이 이 정본을 가리킨다).
+FIELD_CHOICES: dict[str, tuple[str, ...]] = {
+    "environment": ("노지", "시설"),          # 작물코드가 갈린다(fertilizer.CROP_CODES) — 이 어휘는 API 코드표와 맞물려 있다
+    "soil_texture": ("사토", "사양토", "양토", "식양토", "식토"),
+    "slope": ("평지", "완경사", "급경사"),
+    "drainage": ("좋음", "보통", "나쁨"),
+    "irrigation": ("없음", "점적", "스프링클러", "관수 호스", "수동"),
+    "night_light": ("없음", "약함", "강함"),
+}
+FIELD_LABELS: tuple[tuple[str, str], ...] = (        # 고르는 것이 아니라 적는 값 — 순서가 화면 순서다
+    ("area_m2", "면적(㎡ — 지적 면적이나 걸음 측정)"),
+    ("use", "용도(자가 · 판매 · 몰 납품)"),
+    ("microclimate", "미기상 3문항 — 주변 개방도 · 안개 빈도 · 바람길(본 대로 짧게)"),
+    ("seed_source", "종구 출처"),
+    ("cert_legal", "인증 근거(인증서 번호 · 기관)"),
+)
+NUMERIC_FIELDS = ("area_m2",)
+
+# [G1 전수 2026-09-21 — 처방 직후 그 자리에서 셌다] 입력 자리를 만들면서 **그 값을 읽는 쪽**을 전수로 셌다. 입력 대기 필드 중
+# 판정·수집이 실제로 값을 읽는 것은 **둘뿐**이다. 나머지는 등록부에 쌓이기만 한다 — 값이 흐르는데 소비자가 없는 G1 형태.
+#
+#   use          judge.stage_decisions.judge_ship_or_store  — '자가 · 시험' 이면 해당 없음(D-8)
+#   environment  ingest.fertilizer.crop_code                — 노지/시설로 작물코드가 갈린다
+#   microclimate **선언만 있다** — 격자 칸 3 required_axes 와 pest_alert optional_axes 에 이름이 있고
+#                docs/i4_axes_minimal.md 는 "병해충 칸 필지 보정 ②" 라고 적었는데, 값을 읽는 코드가 없다(실측 소비자 0).
+#   soil_texture · slope · drainage · irrigation · night_light · area_m2 · seed_source · cert_legal · soil_exam_ref  소비자 0
+#
+# 그래서 화면은 이 사실을 **말한다** — "채우면 판정이 열린다" 고 하면 밭에 헛걸음을 시킨다(조건 없는 안내는 다른 사실이다).
+# 보정 규칙 자체는 여기서 짓지 않는다: 임계가 정본에 미채움이고(격자 '고자리파리 유충' = NCPMS 대조 대기 · M-15 ②)
+# 없는 임계를 지어내는 것이 대리값이다. 대장에 등재하고 정본이 도착하면 잇는다.
+FIELDS_READ_BY_JUDGMENT = ("use", "environment")
+
+
 class ParcelError(ValueError):
     pass
+
+
+def check_vocab(key: str, value: Any) -> Any:
+    """어휘가 선언된 필드면 그 어휘 안인지 본다. 숫자 필드는 숫자로 바꾼다(빈 값은 여기 오지 않는다 — 호출부가 거른다).
+
+    [§7.5 관문의 입력] 어휘 검사가 fertilizer 쪽에만 있었다(재배환경). 화면이 생기면서 두 번째 입력 경로가 열리므로
+    검사를 **값이 등록부에 닿는 자리**(set_fields)로 내린다 — 경로가 늘어도 같은 관문을 지난다.
+    """
+    if key in NUMERIC_FIELDS:
+        try:
+            n = float(value)
+        except (TypeError, ValueError):
+            raise ParcelError(f"{key} 는 숫자여야 한다: {value!r}") from None
+        if n <= 0:
+            raise ParcelError(f"{key} 는 0 보다 커야 한다: {value!r}")
+        return int(n) if n.is_integer() else n
+    opts = FIELD_CHOICES.get(key)
+    if opts and value not in opts:
+        raise ParcelError(f"{key} 어휘 밖: {value!r} — {' | '.join(opts)}")
+    return value
 
 
 def set_fields(pid: str, **fields: Any) -> dict[str, Any]:
@@ -183,7 +238,7 @@ def set_fields(pid: str, **fields: Any) -> dict[str, Any]:
         if v is None:
             over[k] = None                                    # 덮개의 None = 씨앗 값도 가린다(키 삭제와 같은 뜻)
         elif k not in rec or rec.get(k) is None or overwrite:
-            over[k] = v
+            over[k] = check_vocab(k, v)                       # 어휘·형 관문은 여기 하나 — 화면이든 CLI 든 같은 자리를 지난다
     merged = {**rec, **{k: v for k, v in over.items() if k != "id"}}
     merged = {k: v for k, v in merged.items() if v is not None}
     sch.validate(merged, kind="parcel")
