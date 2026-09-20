@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -103,9 +103,15 @@ def test_ship_or_store_with_target_date_for_supplying_subject():
     assert e.kind == "판단 불가(데이터)" and e.missing[0]["axis"] == "plan.target_date"
     from judge import harvest_timing
     h = harvest_timing.judge(SUBJ, today=T25)
-    e = SD.judge_ship_or_store(s, T25, targets=[{"kind": "plan.target_date", "target_date": "2026-11-10"}], harvest=h)
-    assert e.kind == "판단함" and e.result["store_days"] == 7 and e.caps and "63" in e.caps[0]["basis"]
-    e = SD.judge_ship_or_store(s, T25, targets=[{"kind": "plan.target_date", "target_date": "2026-10-20"}], harvest=h)
+    # [미리 걷기 2026-09-20] 전에는 계획일 2026-11-10 · store_days 7 · 마감 "63" 을 박아 두었다 — 셋 다 검토지 ⓓ(W · B6)의
+    # 답이 바꿀 지식이라, 답이 오는 날 이 검사까지 따라 고쳐야 했다. 계약은 **"저장 일수 = 계획일 − 수확 창 끝"이고
+    # 마감은 격자에서 온다** 이므로 기대값을 판정에서 만든다. 창 뒤/앞 두 방향은 창 끝을 기준으로 잡는다.
+    end = date.fromisoformat(h.result["window_end"])
+    late, early = (end + timedelta(days=7)).isoformat(), (end - timedelta(days=14)).isoformat()
+    e = SD.judge_ship_or_store(s, T25, targets=[{"kind": "plan.target_date", "target_date": late}], harvest=h)
+    assert e.kind == "판단함" and e.result["store_days"] == 7
+    assert e.caps and str(e.result["ship_deadline_day"]) in e.caps[0]["basis"]
+    e = SD.judge_ship_or_store(s, T25, targets=[{"kind": "plan.target_date", "target_date": early}], harvest=h)
     assert e.result["store_days"] < 0 and "출하(저장 없이)" in e.result["summary"] and not e.caps
 
 

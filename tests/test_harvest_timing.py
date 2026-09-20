@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -53,8 +53,15 @@ def test_judges_window_from_anchor_and_grid():
     env = H.judge(SUBJ, today=TODAY)
     assert env.kind == "판단함" and env.grade == "추정"          # 격자가 추론 초안 → 추정을 넘지 못한다
     r = env.result
-    assert (r["window_start"], r["window_end"]) == ("2026-10-14", "2026-11-03")
-    assert r["error_days"] == 10.0 and r["days_since_anchor"] == 24 and r["position"] == "창 이전"
+    # [발행자 몫 ③ 미리 걷기 2026-09-20] 전에는 ("2026-10-14", "2026-11-03") 을 박아 두었다 — 수확 창은 **검토지 W 의 답이
+    # 바꿀 지식**이라, 답이 오는 날 이 검사도 손봐야 했다(대장이 "격자 한 수정으로 끝난다"고 적은 것과 어긋난다).
+    # 검사가 지킬 계약은 값이 아니라 **"창은 기준점 + 격자 창에서 나온다"** 다 — 기대값을 격자에서 계산한다.
+    w = H._harvest_stage(H._load_unit(SUBJ))["window"]
+    a = date.fromisoformat(SUBJ["anchor"])
+    assert (r["window_start"], r["window_end"]) == ((a + timedelta(days=w["from_day"])).isoformat(),
+                                                    (a + timedelta(days=w["to_day"])).isoformat())
+    assert r["error_days"] == (w["to_day"] - w["from_day"]) / 2
+    assert r["days_since_anchor"] == (TODAY - a).days and r["position"] == "창 이전"
     assert env.revisit_at == "2026-09-25" and env.consumer_visible is False
     assert [i.axis for i in env.inputs] == ["anchor"] and env.caps == []
     assert any("품종 미확인" in n for n in env.notes)

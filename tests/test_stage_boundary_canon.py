@@ -15,7 +15,24 @@ UNIT = grid_schema.load(grid_schema.GRID_DIR / "jjokpa_autumn.json")
 INCLUSIVE = re.compile(r'\["from_day"\]\s*<=\s*\w+\s*<=\s*\w+\["to_day"\]')
 
 
-def test_boundary_day_belongs_to_the_earlier_stage_and_both_are_open():
+def test_the_promise_when_two_stages_overlap_is_the_earlier_one():
+    """**계약**만 본다 — 겹치는 창 둘이면 앞 칸이 이긴다. 합성 격자로 재므로 **B4 답이 무엇이든 이 검사는 남는다**.
+
+    [미리 걷기 2026-09-20] 전에는 계약과 **지금 격자의 상태**(경계일이 10·30·50·70 이고 칸 이름이 이것이다)를 한 검사에
+    섞어 두었다. B4 답이 와서 겹침을 없애면 깨지는데, 깨진 이유가 '계약이 무너져서'가 아니라 '전제가 사라져서'다 —
+    다음 사람이 계약을 약화하기 쉬운 형태다. 계약과 상태를 가른다.
+    """
+    synth = {"stages": [{"order": 1, "name": "앞 칸", "window": {"basis": "anchor", "from_day": 0, "to_day": 10}},
+                        {"order": 2, "name": "뒤 칸", "window": {"basis": "anchor", "from_day": 10, "to_day": 20}}]}
+    assert [s["name"] for s in capture.stages_open(synth, 10)] == ["앞 칸", "뒤 칸"]      # 양끝 포함이라 둘 다 열린다
+    assert capture.stage_for_day(synth, 10)["name"] == "앞 칸"                            # 약속: 앞 칸
+    assert capture.stage_for_day(synth, 11)["name"] == "뒤 칸"
+    assert capture.stages_open(synth, 21) == [] and capture.stage_for_day(synth, 21) is None
+
+
+def test_the_real_grid_today_still_has_overlapping_boundaries():
+    """**상태**를 적어 둔다 — 지금 격자는 겹친다(검토지 ⓓ B4 미회신). 답이 와서 겹침이 사라지면 **이 검사만** 고친다.
+    위 계약 검사는 그대로 선다 — 어느 쪽이 깨졌는지로 '지식이 바뀐 것'과 '계약이 무너진 것'을 가른다."""
     for day, earlier, later in ((10, "발아 · 출현", "생육 초기 (잎 2~4매)"), (30, "생육 초기 (잎 2~4매)", "생육 중기 · 비대"),
                                 (50, "생육 중기 · 비대", "수확"), (70, "수확", "수확 후 · 후작")):
         open_ = [s["name"] for s in capture.stages_open(UNIT, day)]

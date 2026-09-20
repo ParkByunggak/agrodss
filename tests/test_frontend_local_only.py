@@ -136,7 +136,14 @@ def test_judge_page_shows_kind_first(monkeypatch):
         resp = conn.getresponse()
         page = resp.read().decode("utf-8")
         assert resp.status == 200
-        assert "판단함" in page and "수확 창 2026-10-14 ~ 2026-11-03" in page and "신뢰 등급" in page
+        # [미리 걷기 2026-09-20] 날짜를 박지 않는다 — 수확 창은 검토지 W 의 답이 바꿀 지식이고, 이 검사의 계약은
+        # "화면이 판정의 창을 그대로 싣는가" 다. 기대 문자열을 판정에서 받아 만든다.
+        from datetime import date
+        from judge import harvest_timing as _H
+        from ingest import media as _media
+        _subj = [s for s in _media.load_subjects() if s["id"] == "p001-jjokpa-2026f"][0]
+        _r = _H.judge(_subj, today=date(2026, 9, 19)).result
+        assert "판단함" in page and f"수확 창 {_r['window_start']} ~ {_r['window_end']}" in page and "신뢰 등급" in page
         assert "위험 경보" in page and "회복 가능 위험" in page      # M-10 ② 도 같은 화면에
         assert "사실 인용" in page and "공시" in page                 # M-15 ④ 자재 인용
         assert "계획 대 실제" in page and "이행" in page              # M-10 ③

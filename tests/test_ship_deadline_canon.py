@@ -18,12 +18,31 @@ SUBJ = {**parcels.enrich_subject(_RAW, parcels.by_id("p001")), "use": "몰 납�
 T25 = date(2026, 9, 19)
 
 
-def test_contradiction_is_reported_not_silently_capped_and_deadline_comes_from_grid():
+def _ship_stage_and_deadline():
+    unit = harvest_timing._load_unit(SUBJ)
+    stage = SD._stage(unit, "ship_or_store")
+    dl = int(next(t for t in stage["tasks"] if "출하" in t["name"])["retry"]["deadline_day"])
+    return stage, dl
+
+
+def test_deadline_comes_from_the_grid_whatever_its_value_is():
+    """**계약** — 마감은 격자에서 온다. [미리 걷기 2026-09-20] 전에는 63 을 박아 두어, 검토지 B6 답이 오는 날 이 검사도
+    손봐야 했다(대장이 "격자 한 수정으로 끝난다"고 적은 것과 어긋난다). 값이 아니라 출처를 고정한다."""
+    _, want = _ship_stage_and_deadline()
     h = harvest_timing.judge(SUBJ, today=T25)
     e = SD.judge_ship_or_store(SUBJ, T25, targets=[{"kind": "plan.target_date", "target_date": "2026-11-10"}], harvest=h)
-    assert e.kind == "판단함" and e.result["ship_deadline_day"] == 63                   # 격자 값(칸 5 retry.deadline_day)
-    assert e.caps and "63" in e.caps[0]["basis"]
-    assert any("격자 자체 모순(B6)" in n and "63" in n and "70" in n for n in e.notes)  # 모순을 봉투가 말한다
+    assert e.kind == "판단함" and e.result["ship_deadline_day"] == want
+    assert e.caps and str(want) in e.caps[0]["basis"]
+
+
+def test_the_grid_today_still_contradicts_itself_on_b6():
+    """**상태** — 지금 격자는 출하 마감 < 수확 창 끝이다(검토지 ⓓ B6 미회신). 답이 와서 모순이 풀리면 **이 검사만** 고치고,
+    위 계약 검사는 그대로 선다 — 어느 쪽이 깨졌는지로 '지식이 바뀐 것'과 '계약이 무너진 것'을 가른다."""
+    stage, dl = _ship_stage_and_deadline()
+    assert dl < int(stage["window"]["to_day"]), "모순이 풀렸다 — 이 검사와 봉투의 모순 고지를 함께 거둔다"
+    h = harvest_timing.judge(SUBJ, today=T25)
+    e = SD.judge_ship_or_store(SUBJ, T25, targets=[{"kind": "plan.target_date", "target_date": "2026-11-10"}], harvest=h)
+    assert any("격자 자체 모순(B6)" in n and str(dl) in n for n in e.notes)              # 모순을 봉투가 말한다
 
 
 def test_missing_grid_deadline_is_a_knowledge_gap_not_a_default(monkeypatch):

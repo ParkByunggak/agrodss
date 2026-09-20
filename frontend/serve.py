@@ -62,6 +62,20 @@ def git_log_lines(n: int = 20) -> list[tuple[str, str, str]]:
 RUNNING_HEAD = git_head_short()   # 프로세스가 기동한 코드. 저장소 HEAD 가 앞서가면 watch_head 가 재기동한다(RELOAD_ON_HEAD_CHANGE) — 이 둘의 차이가 '반영 여부'다
 
 
+def footer_text() -> str:
+    """모든 화면의 꼬리 한 줄. **실행 중인 코드**를 찍고, 저장소가 앞서면 그 자리에서 '뒤처짐'이라고 말한다.
+
+    [발행자 화면 2026-09-21] 꼬리가 매 요청마다 `git_head_short()`(=저장소 HEAD)를 찍고 있었다 — 그래서 프로세스가
+    옛 코드를 돌고 있어도 꼬리는 **늘 최신처럼 보인다**. 발행자가 온종일 보는 자리에서 드리프트 지표가 눈을 감고 있던 것이다
+    (VELA "커밋 완료 ≠ 반영 완료"의 화면 판). /changes 에만 있던 대조를 꼬리로 내린다.
+    """
+    head = git_head_short()
+    if head == RUNNING_HEAD:
+        return f"실행 중 {RUNNING_HEAD} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
+    return (f"실행 중 {RUNNING_HEAD} · 저장소 {head} — 뒤처짐(/changes) · "
+            f"{config.HOST}:{config.PORT} · 외부 배포 없음(D-6)")
+
+
 def changes_page() -> tuple[int, str]:
     """[발행자 2026-09-20 메뉴 '변경 로그 보기'] 커밋 이력 + **실행 중 코드가 저장소와 같은가**. CLAUDE.md 라이브 반영 규율의 화면판."""
     head = git_head_short()
@@ -78,7 +92,7 @@ def changes_page() -> tuple[int, str]:
             f"<table><thead><tr><th>커밋</th><th>날짜</th><th>제목</th></tr></thead><tbody>{rows or '<tr><td colspan=3>git 이력을 읽지 못했다</td></tr>'}</tbody></table>"
             "<p style='color:var(--muted)'>저장소 정본 <code>git log</code> 의 제목 20건 — 무엇이 언제 바뀌었는지. 반영 상태는 위 한 줄이다(커밋 완료 ≠ 반영 완료).</p>")
     meta = "실행 중 코드와 저장소 HEAD 를 대조한다 — 뒤처지면 자동 재기동(run_frontend.bat) 뒤 새로고침"
-    footer = f"HEAD {head} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
+    footer = footer_text()
     return 200, render.page("AGRODSS —변경 로그", nav_html("/changes"), body, meta, footer)
 
 
@@ -203,7 +217,7 @@ def judge_page() -> tuple[int, str]:
             # "자재 인용(유기 공시)" 는 PSIS(관행 등록약제)가 붙기 전 이름이라, 관행 인용까지 싣는 지금은 틀린 말이다.
             _render_env(out, e, chat_pages.DECISION_LABEL.get(e["decision_id"], e["decision_id"]))
         out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 예찰: {_e(info.get('pest', ''))}</p>")
-    footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
+    footer = footer_text()
     return 200, render.page("AGRODSS —판단", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)
 
 
@@ -240,7 +254,7 @@ def events_page(message: str = "", error: str = "") -> tuple[int, str]:
     style = ("<style>.reg{border:1px solid var(--line);border-radius:6px;padding:10px;margin:8px 0;display:grid;gap:6px}"
              ".reg label{display:block}.err{color:var(--drop-fg);background:var(--drop);padding:6px 10px;border-radius:4px}"
              ".ok{color:var(--done-fg);background:var(--done);padding:6px 10px;border-radius:4px}</style>")
-    footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
+    footer = footer_text()
     return (400 if error else 200), render.page("AGRODSS —사건", nav_html("/events"), style + "".join(out),
                                                 "사건(I-3 §2) · 결정(§5 불이행 사유) — 대상 시각 없이는 기록되지 않는다", footer)
 
@@ -316,7 +330,7 @@ def media_page(message: str = "", error: str = "") -> tuple[int, str]:
              ".reg label{display:block}.err{color:var(--drop-fg);background:var(--drop);padding:6px 10px;border-radius:4px}"
              ".ok{color:var(--done-fg);background:var(--done);padding:6px 10px;border-radius:4px}</style>")
     meta = "1층 관찰(영상) — 촬영 시각 · 출처 · 해상도가 붙어야 등록된다. 좌표는 화면에 내지 않는다"
-    footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
+    footer = footer_text()
     return (400 if error else 200), render.page("AGRODSS —영상 반입", nav_html("/media"), style + "".join(out), meta, footer)
 
 
@@ -332,13 +346,13 @@ def render_page(name: str) -> tuple[int, str]:
         meta += ' · <span class="counts">' + "".join(
             f'<span class="st st-{s}">{s} {n}</span>' for s, n in counts.items()
         ) + "</span>"
-    footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
+    footer = footer_text()
     return 200, render.page(f"AGRODSS —{name}", nav_html(name), body, meta, footer)
 
 
 # ── [M-13] Claude 형식 채팅 화면 ─────────────────────────────────────────────────────
 def _shell(current: str, main_html: str, panel_html: str | None, title: str) -> str:
-    return chat_pages.shell(title, chat_pages.sidebar(current, doc_list(), config.today()), main_html, panel_html, git_head_short())
+    return chat_pages.shell(title, chat_pages.sidebar(current, doc_list(), config.today()), main_html, panel_html, footer_text())
 
 
 def chat_home() -> tuple[int, str, str | None]:
