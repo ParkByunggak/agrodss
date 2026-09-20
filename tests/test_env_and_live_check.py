@@ -53,8 +53,13 @@ def test_live_check_bat_is_ascii_uses_subject_and_delayed_expansion():
 def test_every_bat_block_has_balanced_unquoted_parens():
     # 같은 형태 전수(§7.5 지점 축): diag_frontend.bat 의 bind check 줄도 같은 괄호를 들고 있었다. 큰따옴표 밖 괄호는 줄 안에서 짝이 맞아야 한다
     import re
-    for name in ("scripts/live_check.bat", "scripts/diag_frontend.bat"):
-        lines = (ROOT / name).read_text(encoding="utf-8", errors="replace").splitlines()
+    bats = sorted(ROOT.glob("*.bat")) + sorted((ROOT / "scripts").glob("*.bat"))
+    assert len(bats) >= 5, bats                                                     # [2026-09-20] 고정 목록 둘 → 전수(새 배치가 검사 밖에 있었다 — §7.5 지점)
+    for path in bats:
+        name = path.relative_to(ROOT).as_posix()
+        raw = path.read_bytes()
+        assert all(b < 128 for b in raw), f"{name}: 배치는 ASCII 만 — cmd 가 cp949 로 읽어 UTF-8 한글이 깨진다"
+        lines = raw.decode("ascii").splitlines()
         inside = False
         for i, ln in enumerate(lines, 1):
             if ln.strip() == "(":
