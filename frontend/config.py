@@ -57,6 +57,10 @@ MAX_UPLOAD_MB: int = int(os.environ.get("AGRODSS_MAX_UPLOAD_MB", "300"))        
 RELOAD_ON_HEAD_CHANGE: bool = os.environ.get("AGRODSS_RELOAD", "1") != "0"
 RELOAD_POLL_SEC: float = float(os.environ.get("AGRODSS_RELOAD_POLL_SEC", "2"))
 RESTART_EXIT_CODE: int = 3
+# [발행자 환경 2026-09-21] 재기동 루프가 **래퍼(run_frontend.bat)에만** 있었다. 발행자는 PowerShell 을 쓰고 배치를 건너뛰어
+# `python frontend\serve.py` 로 켤 수 있는데, 그러면 코드가 바뀌어도 서버가 그냥 멈추고 **조용히 옛 코드에 머문다** —
+# 이번 27커밋 드리프트를 만든 바로 그 구멍이다. 래퍼가 없으면 스스로 다시 뜬다(배치가 이 값을 세워 옛 방식을 그대로 쓴다).
+WRAPPED: bool = os.environ.get("AGRODSS_WRAPPED", "") == "1"
 # [D-16 대기] 휴대폰 동기화 — 같은 Wi-Fi 안에서만 · 토큰 없이는 절대 열리지 않는다. 기본은 루프백(D-6).
 BIND: str = os.environ.get("AGRODSS_BIND") or HOST
 LAN_TOKEN: str = os.environ.get("AGRODSS_LAN_TOKEN", "").strip()

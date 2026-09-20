@@ -25,6 +25,9 @@ if errorlevel 1 (
     exit /b 1
   )
 )
+REM [2026-09-21] tell serve.py a wrapper loop exists, so it exits with code 3 instead of re-execing itself.
+REM Without this flag (e.g. PowerShell running serve.py directly) the server restarts itself on new code.
+set "AGRODSS_WRAPPED=1"
 set "BROWSER="
 :again
 %PY% frontend\serve.py %BROWSER%

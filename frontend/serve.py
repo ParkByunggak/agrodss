@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import email.policy
 import html
+import os
 import subprocess
 import sys
 import threading
@@ -710,7 +711,16 @@ def main(open_browser: bool = True) -> int:
     finally:
         stop.set()
         srv.server_close()
-    return config.RESTART_EXIT_CODE if restarted["v"] else 0
+    if not restarted["v"]:
+        return 0
+    if config.WRAPPED:
+        return config.RESTART_EXIT_CODE          # 배치 루프가 새 코드로 다시 띄운다(옛 방식 그대로)
+    # 래퍼가 없다 — 스스로 새 코드로 갈아탄다. 안 그러면 여기서 서버가 그냥 멈추고 **사람은 옛 코드가 멎은 줄 모른다**
+    # (PowerShell 에서 `python frontend\serve.py` 로 켜면 그 형태가 된다 — 이번 27커밋 드리프트를 만든 구멍).
+    print(f"[agrodss] 코드가 바뀌었다 — 새 코드로 갈아탄다(재기동 · 브라우저 새 창 없음)")
+    args = [a for a in sys.argv if a != "--no-browser"] + ["--no-browser"]
+    os.execv(sys.executable, [sys.executable, *args])
+    return config.RESTART_EXIT_CODE              # execv 가 성공하면 여기 안 온다
 
 
 if __name__ == "__main__":
