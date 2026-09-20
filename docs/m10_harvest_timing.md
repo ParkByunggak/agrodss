@@ -143,7 +143,8 @@ cert=유기만 대상, 관행은 해당 없음(PSIS 인용 M-15 ⑤ 전). 목록
 | 흙토람 FrtlzrStdUse `getSoilFrtlzrQyList` | 작물 표준 시비량 | national | **안 쓴다** — 필지값이 아니다. 대조·표시용으로만 저장 |
 
 ```
-python -m ingest.fertilizer "충청북도 괴산군 연풍면 갈금리 50" --parcel=p001 --crop=쪽파
+python -m ingest.fertilizer --subject=p001-jjokpa-2026f          # 작목·주소는 등록부에서(주소 리터럴을 문서·배치에 두지 않는다 — PII)
+python -m ingest.fertilizer "<지번 주소>" --parcel=<필지 id> --crop=<작목>   # 등록 전 필지 — 둘 다 명시(기본값 없음)
   주소 → PNU(VWorld) → 토양검정(SoilExam) + 처방(FrtlzrUse) + 표준(FrtlzrStdUse) → data/soil/ (git 제외 · PII)
   success 인 것만 저장한다 — 실패를 정본으로 남기지 않는다
 ```

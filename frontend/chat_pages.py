@@ -418,7 +418,7 @@ def new_main(error: str = "", form: dict[str, str] | None = None) -> str:
             f'<label>상태</label><select name="status">{st_opts}</select>'
             f'<label>기준점 — 파종·정식일 (재배 중일 때, YYYY-MM-DD)</label><input name="anchor" value="{_e(f.get("anchor", ""))}" placeholder="비우면 계획">'
             f'<label>인증 (유기 · 무농약 · 관행 — 없으면 비움)</label><input name="cert" value="{_e(f.get("cert", ""))}">'
-            f'<label>필지</label><input name="parcel" value="{_e(f.get("parcel", subjects.DEFAULT_PARCEL))}">'
+            f'<label>필지</label><input name="parcel" value="{_e(f.get("parcel") or subjects.default_parcel() or "")}" placeholder="필지 id(등록부)">'
             '<div style="margin-top:14px"><button class="btn pri" type="submit">목록 만들기</button></div></form></div>')
 
 

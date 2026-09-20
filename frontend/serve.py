@@ -542,7 +542,7 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/c/new":
             try:
                 s = subjects.add(form.get("crop", ""), form.get("season", ""), status=form.get("status") or "계획",
-                                 parcel=form.get("parcel") or subjects.DEFAULT_PARCEL, anchor=form.get("anchor") or None,
+                                 parcel=form.get("parcel") or None, anchor=form.get("anchor") or None,   # 비면 등록부가 하나일 때만 그것(subjects.default_parcel)
                                  cert=form.get("cert") or None)
                 self._send(302, "", f"/c/{quote(s['id'])}")
                 return

@@ -265,11 +265,13 @@ if __name__ == "__main__":
             # 되물은 답(노지|시설)은 등록부에 남긴다 — 다음 수집부터는 묻지 않는다
             set_environment(opts["--subject"], opts["--env"])
         res = collect_for_parcel(r["parcel"] or "", r["address"], r["crop"] or "", opts.get("--env") or r["environment"])
-    elif not args:
-        print("사용: python -m ingest.fertilizer <지번 주소> [--parcel=p001] [--crop=쪽파] [--env=노지|시설]  |  --subject=<재배 단위 id>")
+    elif not args or not opts.get("--parcel") or not opts.get("--crop"):
+        # [발행자 2026-09-20 "쪽파는 사례"] 주소 모드는 필지 · 작목을 **명시**한다 — 전에는 p001 · 쪽파가 기본값이라 다른 필지의 검정값이
+        # 첫 농가 필지에 저장될 수 있었다(fallback 대표값 금지). 등록된 재배 단위면 --subject 가 정본이다
+        print("사용: python -m ingest.fertilizer <지번 주소> --parcel=<필지 id> --crop=<작목> [--env=노지|시설]  |  --subject=<재배 단위 id>")
         sys.exit(2)
     else:
-        res = collect_for_parcel(opts.get("--parcel", "p001"), " ".join(args), opts.get("--crop", "쪽파"), opts.get("--env"))
+        res = collect_for_parcel(opts["--parcel"], " ".join(args), opts["--crop"], opts.get("--env"))
     if "--summary" in sys.argv:
         # 상태만(PII 없음) — 채팅에 붙여도 되는 형태. 값은 data/soil/ 에만
         print(json.dumps(summary(res), ensure_ascii=False, indent=2))

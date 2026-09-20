@@ -16,7 +16,12 @@ from ingest import media
 from names import resolve as names
 from schema import records as sch
 
-DEFAULT_PARCEL = "p001"
+def default_parcel() -> str | None:
+    """필지 등록부에 필지가 **하나뿐이면** 그것, 아니면 None(사람이 고른다). [발행자 2026-09-20 "쪽파는 사례"] 전에는 상수 "p001" 이라
+    둘째 필지가 생겨도 새 재배 단위가 조용히 첫 농가 필지에 붙었다(fallback 대표값 금지)."""
+    from ingest import parcels   # 호출 시점에 — 등록부 경로는 env 로 격리된다(R-4)
+    ps = parcels.load()
+    return ps[0]["id"] if len(ps) == 1 else None
 
 
 def path() -> Path:
@@ -67,10 +72,13 @@ def _slug(s: str) -> str:
     return re.sub(r"[^0-9A-Za-z가-힣]+", "", s)
 
 
-def add(crop: str, season: str, status: str = "계획", parcel: str = DEFAULT_PARCEL, anchor: str | None = None,
+def add(crop: str, season: str, status: str = "계획", parcel: str | None = None, anchor: str | None = None,
         anchor_kind: str | None = None, cert: str | None = None, source: str = "farmer", note: str = "",
         now: datetime | None = None) -> dict[str, Any]:
     p = path()
+    parcel = (parcel or "").strip() or default_parcel()
+    if not parcel:
+        raise SubjectError("필지를 지정한다 — 등록된 필지가 하나가 아니라 기본값을 두지 않는다(fallback 대표값 금지)")
     crop_c = resolve_crop(crop)
     season = (season or "").strip()
     if not season:
