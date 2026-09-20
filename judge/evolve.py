@@ -148,19 +148,24 @@ def _measure_risk(subject: str, today: date, events: list[dict[str, Any]]) -> li
             o = None
         if o:
             out.append(o)
-    latest = preds[-1]
-    start, end = _pred_window(latest)
-    if today > end:
-        for a in latest["payload"].get("alerts", []):
+    # [칸 3 재측정 2026-09-20 · A10] 전에는 `preds[-1]` 하나만 봤다. 원장은 payload 가 바뀔 때만 한 줄이고 같은 주장이 서 있는
+    # 동안은 last_seen_at 만 나아가므로(A2), **창이 지난 예측은 언제나 마지막 줄이 아니다** — 경보가 사라진 날 새 줄이 생겨 그것이
+    # 마지막이 된다. 그래서 과경보는 정상 운영에서 한 번도 안 재졌다. 창이 지난 주장을 전부 본다.
+    # 줄은 주장이 **바뀔 때만** 생기므로 이 반복은 서로 다른 주장만큼이고, add_outcome 이 (예측·판정·실제)로 중복을 막는다.
+    for pred in preds:
+        start, end = _pred_window(pred)
+        if today <= end:
+            continue                                        # 아직 서 있는 주장은 판정하지 않는다
+        for a in pred["payload"].get("alerts", []):
             if a.get("level") not in ALERT_LEVELS_COUNT:
                 continue
             if any(start <= date.fromisoformat(e["observed_at"][:10]) <= end and match_risk(e.get("risk"), a.get("risk")) for e in damages):
                 continue
             if a.get("recoverable"):
-                o = fb.add_outcome(latest, "빗나감", f"{a.get('level')} {a.get('risk')} — 창({start}~{end}) 안 피해 없음(과경보 · 회복 가능 위험은 신호 있을 때만)",
+                o = fb.add_outcome(pred, "빗나감", f"{a.get('level')} {a.get('risk')} — 창({start}~{end}) 안 피해 없음(과경보 · 회복 가능 위험은 신호 있을 때만)",
                                    actual_ref=f"alert:{a.get('risk')}", observed_at=today.isoformat())
             else:
-                o = fb.add_outcome(latest, "대조 불가", f"{a.get('level')} {a.get('risk')} — 창 안 피해 없음. 회복 불가 위험은 과경보 허용(H) — 빗나감으로 세지 않는다",
+                o = fb.add_outcome(pred, "대조 불가", f"{a.get('level')} {a.get('risk')} — 창({start}~{end}) 안 피해 없음. 회복 불가 위험은 과경보 허용(H) — 빗나감으로 세지 않는다",
                                    actual_ref=f"alert:{a.get('risk')}", observed_at=today.isoformat())
             if o:
                 out.append(o)

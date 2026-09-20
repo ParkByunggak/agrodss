@@ -251,7 +251,7 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
     for m in msgs:
         if m.get("role") == "system":
             out.append(f'<div class="msg sys"><div class="av">a</div><div><div class="bub" id="t-{_e(m["id"])}">{_e(m["text"])}</div>'
-                       f'<div class="ts">{_e(m.get("recorded_at", "")[:16])}{" · 개선 요구 " + _e(m["request_ref"]) if m.get("request_ref") else ""}</div>'
+                       f'<div class="ts">{_e(render.local_time(m.get("recorded_at")))}{" · 개선 요구 " + _e(m["request_ref"]) if m.get("request_ref") else ""}</div>'
                        f'{_answer_actions(m)}</div></div>')
         else:
             tags = []
@@ -263,7 +263,7 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
                 tags.append("편집")
             tag = (" · " + " · ".join(tags)) if tags else ""
             out.append(f'<div class="msg me"><div><div class="bub" id="t-{_e(m["id"])}">{_e(m["text"])}</div>'
-                       f'<div class="ts" style="text-align:right">{_e(m.get("recorded_at", "")[:16])}{_e(tag)}</div>{_question_actions(m)}</div></div>')
+                       f'<div class="ts" style="text-align:right">{_e(render.local_time(m.get("recorded_at")))}{_e(tag)}</div>{_question_actions(m)}</div></div>')
             drafts = m.get("drafts") or []
             if drafts:
                 for i, d in enumerate(drafts):

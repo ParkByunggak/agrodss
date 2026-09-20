@@ -6,11 +6,32 @@ from __future__ import annotations
 
 import html
 import re
+from datetime import datetime
 
 try:
     import markdown
 except ImportError:                     # [2026-09-19 발행자 PC] markdown 이 없어 채팅 화면까지 못 떴다 — 문서 렌더만 원문으로 대체
     markdown = None
+
+def local_time(ts: str | None) -> str:
+    """원장의 기록 시각(오프셋 붙은 ISO)을 **보는 사람의 시각**으로. 화면에 시각을 찍는 자리는 전부 이 함수를 쓴다.
+
+    [칸 3 재측정 2026-09-20 · C16] 전에는 각 화면이 `ts[:16]` 으로 잘라 찍었다. 오프셋을 버리고 앞부분만 쓰는 것이라
+    UTC 로 적힌 원장(사건 · 영상 · 되먹임)은 **아홉 시간 어긋난 채** 보였다 — 아침에 적은 한 줄이 어제 날짜로 뜬다(실측
+    2026-09-20, KST 기준: 09-21 08:00 기록이 '09-20 23:00'). 채팅 원장이 지역 시각으로 저장하고 있던 것은 바로 이
+    표기를 피하려던 우회였다(`ingest/chat._now` 주석) — 저장을 바꾸지 않고 **표기를 고친다**. 두 저장형 다 오프셋을
+    싣고 있으므로 이 함수 하나로 옛 기록까지 바르게 보인다(이관 없음).
+    """
+    if not ts:
+        return ""
+    try:
+        d = datetime.fromisoformat(str(ts))
+    except ValueError:
+        return str(ts)[:16]                      # 형식이 낯설면 원문 — 화면은 시각 하나로 깨지지 않는다
+    if d.tzinfo is not None:
+        d = d.astimezone()
+    return d.strftime("%Y-%m-%d %H:%M")
+
 
 STATES: tuple[str, ...] = ("대기", "진행", "완료", "보류", "폐기")
 _STATE_CELL = re.compile(r"<td>(대기|진행|완료|보류|폐기)([^<]*)</td>")

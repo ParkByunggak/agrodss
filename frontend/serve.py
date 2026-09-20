@@ -231,7 +231,7 @@ def events_page(message: str = "", error: str = "") -> tuple[int, str]:
     if recs:
         out.append("<table><tr><th>종류</th><th>재배 단위</th><th>대상 시각</th><th>내용</th><th>기록 시각</th></tr>" + "".join(
             f"<tr><td>{_e(r.get('type') or r.get('kind'))}</td><td>{_e(r.get('subject'))}</td><td>{_e(r.get('observed_at'))}</td>"
-            f"<td>{_e(r.get('reason') or r.get('note') or '')} {_e(', '.join(r.get('materials') or []))}</td><td>{_e(r.get('recorded_at', '')[:16])}</td></tr>"
+            f"<td>{_e(r.get('reason') or r.get('note') or '')} {_e(', '.join(r.get('materials') or []))}</td><td>{_e(render.local_time(r.get('recorded_at')))}</td></tr>"
             for r in reversed(recs)) + "</table>")
     else:
         out.append("<p>아직 없다. 파종은 기준점(재배 단위 등록부)이 사건을 대신한다.</p>")

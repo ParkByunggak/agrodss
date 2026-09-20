@@ -14,14 +14,19 @@ from judge import boundary, evolve, harvest_timing, material_citation, plan_vs_a
 from judge.envelope import Envelope
 
 
-def gather_pest(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:
-    """작목의 NCPMS 예찰(올해). 키·코드 없으면 (None, 이유)."""
+def gather_pest(subject: dict[str, Any], today: date) -> tuple[list[dict[str, Any]] | None, str]:
+    """작목의 NCPMS 예찰(판정하는 해). 키·코드 없으면 (None, 이유).
+
+    [칸 3 재측정 2026-09-20 · A11] 전에는 연도를 `date.today().year` 로 스스로 정했다 — 판정의 '오늘'이
+    고정돼도(AGRODSS_TODAY · 재현 · 과거 판정) 예찰만 실제 연도를 물어 같은 회차 안에 **연도가 둘**이었다.
+    오늘은 위에서 정해 내려온다(§7.5 관문의 입력 — frontend 에서 닫은 형태가 한 층 아래에 그대로 있었다).
+    """
     crop = subject.get("crop")
     if not crop:
         return None, "재배 단위에 작목이 없다"
     if not ncpms.api_key():
         return None, "예찰 키 없음(.env NCPMS_API_KEY)"
-    r = ncpms.fetch_forecast(crop, year=date.today().year)
+    r = ncpms.fetch_forecast(crop, year=today.year)
     if r.get("status") != "success":
         return None, f"예찰 원천 {r.get('status')}: {r.get('message', '')}"
     return r["records"], ("대리 작물 " + r["proxy"] if r.get("proxy") else "")
@@ -54,6 +59,7 @@ def judgments_for(subject_id: str, today: date | None = None) -> list[Envelope]:
 
 def all_judgments(today: date | None = None, only: str | None = None) -> list[tuple[dict[str, Any], list[Envelope], dict[str, str]]]:
     """재배 단위마다 [수확 시기, 위험 경보, 자재 인용, 계획 대 실제] 봉투 — 원천은 한 번만 모은다."""
+    today = today or date.today()   # [A11] 이 회차의 '오늘'은 여기서 한 번 정하고 아래로만 내려간다 — 판정기·원천이 따로 묻지 않는다
     out = []
     for s_reg in media.load_subjects():
         if only and s_reg.get("id") != only:
@@ -66,7 +72,7 @@ def all_judgments(today: date | None = None, only: str | None = None) -> list[tu
             s0["soil_chem"], s0["soil_exam_at"] = dict(soil["values"]), soil.get("observed_at")
         prescriptions = soil_store.prescriptions_for(s_reg.get("parcel", ""))
         forecast, why = gather_forecast(s0)
-        pest, pwhy = gather_pest(s0)
+        pest, pwhy = gather_pest(s0, today)
         evts = ev.list_records(s0.get("id"), "event")
         ledger = ev.list_records(s0.get("id"))                 # 관찰 · 농가 계획 · 납품 계획일까지(M-10 결정 등록이 쓴다)
         reasons = ev.list_records(s0.get("id"), "decision.noncompliance")
@@ -80,7 +86,7 @@ def all_judgments(today: date | None = None, only: str | None = None) -> list[tu
                 material_citation.judge(s, today=today),
                 plan_vs_actual.judge(s, today=today, evts=recs["events"], videos=recs["videos"], reasons=recs["reasons"])]
         # [M-10 결정 등록] 격자 칸이 선언한 나머지 8 결정 — 같은 입력, 같은 게이트 뒤
-        envs += stage_decisions.judge_all(s, today or date.today(), evts=recs["ledger"], forecast=recs["forecast"], pest=recs["pest"], harvest=envs[0],
+        envs += stage_decisions.judge_all(s, today, evts=recs["ledger"], forecast=recs["forecast"], pest=recs["pest"], harvest=envs[0],
                                           prescriptions=recs["prescriptions"])
         # [M-6 · D-14] 자율진화 보수 상한 — 판정기 뒤, 돌려주기 전, 한 번. 규칙은 안 바꾸고 등급만 낮춘다
         envs = evolve.apply_caps(s["id"], envs, caps=recs["caps"])
