@@ -121,6 +121,21 @@ CORPUS = [
     ("작기 끝나기 전에 웃거름을 줬다", "event", None),                                  # 종료 문구가 종속절 — 선언이 아니다
     # "다음 주에 트랩 확인하겠습니다" 는 이미 위에 있다 — **그 문장이 이번 회귀를 잡았다**('겠'의 받침 ㅆ 를 과거로 읽던 것).
     ("9월 8일에 트랩 확인했습니다", "event", None),
+    # [발행자 2026-09-21 지시의 다음 층] 종류를 **정하기는 하는데 틀리게** 정하던 자리 — 물음표 없는 농가 물음 15 중 8이
+    # 관찰 메모로 떨어졌다(물음이 원장에 관찰로 쌓이고 답은 안 나온다). 간접 의문 어미(-는지 · -은지 · -ㄴ지 · -을지)를 본다.
+    ("웃거름 지금 줘도 되는지", "question", "top_dressing_1"),
+    ("지금 웃거름 시기 맞는지", "question", "top_dressing_1"),
+    ("벌레 약 쳐야 하는지", "question", "pest_alert"),
+    ("고랑 물 빠짐 괜찮은지", "question", "drainage_alert"),
+    ("지금 상태 어떤지", "question", None),
+    ("수확하고 나서 뭐 심을지", "question", None),
+    ("비 오면 어떡하지", "question", None),
+    ("오늘 할 일", "question", "plan_vs_actual"),
+    # 경계 — **과거 서술의 '지'** 는 물음이 아니다(받침 ㅆ·ㅎ 로 끝나 조건에 안 든다)
+    ("물 줬지", "event", None),
+    ("비료 남았지", "event", None),
+    ("그렇지", "observation.note", None),
+    ("잎이 노랗지", "observation.note", None),
 ]
 
 
@@ -132,7 +147,7 @@ def test_corpus_kind_and_topic(text, kind, topic):
         assert chat.topic_of(text) == topic, (text, chat.topic_of(text))
 
 
-CORPUS_MIN = 92   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
+CORPUS_MIN = 104   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
 
 
 def test_corpus_is_append_only():
