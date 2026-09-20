@@ -80,6 +80,8 @@ def _indirect_question(t: str) -> bool:
     if prev in ("는", "은", "을"):
         return True
     return "가" <= prev <= "힣" and (ord(prev) - 0xAC00) % 28 in (4, 8)      # 받침 ㄴ · ㄹ
+
+
 TOPIC: tuple[tuple[str, tuple[str, ...]], ...] = (
     # [M-10 결정 등록] 구체 결정이 일반 결정보다 앞 — "웃거름 줘야 하나"가 자재 인용으로 새지 않게
     ("ship_or_store", ("출하", "저장할까", "납품할까", "저장")),
@@ -443,6 +445,20 @@ def answer(subject: dict[str, Any], text: str, today: date) -> str:
     return summarize_envelope(e)
 
 
+def _with_stage(row: dict[str, Any]) -> str:
+    """작업명 앞에 **칸 번호**를 붙인다 — "촬영" 처럼 여러 칸에 같은 이름이 있는 작업은 칸 없이는 구별이 안 된다.
+
+    [발행자 화면 판독 2026-09-21] 촬영이 '지금 할 것 · 다음 예정 · 놓침' 세 곳에 동시에 나왔다. 실제로는 서로 다른 칸의
+    서로 다른 줄인데(칸 1 기록 없음 · 칸 2 놓침 · 칸 3 마감 안 · 칸 4·5 예정) 목록에 칸이 없어 **같은 일이 세 번 밀린 것처럼**
+    읽혔다. 발행자가 그 화면을 보고 "칸 1 촬영이 놓침 — B13 회귀"라고 판정했는데, 재니 칸 1 은 '기록 없음'이고 놓침은 칸 2 였다.
+    **표기가 없어서 정확한 독자가 없는 회귀를 봤다** — 읽는 사람이 구별할 수 없으면 화면이 답을 못 한 것과 같다(G1 표현 층).
+    """
+    task = str(row.get("task") or "")
+    stage = str(row.get("stage") or "")
+    num = stage.split(".", 1)[0].strip()
+    return f"{task}(칸 {num})" if num.isdigit() else task
+
+
 def summarize_envelope(e: Any) -> str:
     r = e.result or {}
     head = f"[{e.kind}]"
@@ -470,12 +486,12 @@ def summarize_envelope(e: Any) -> str:
         by = {k: [x for x in rows if x.get("status") == k] for k in ("미이행", "예정", "놓침")}
         parts = []
         if by["미이행"]:
-            parts.append(f"지금 할 것(마감 안) {len(by['미이행'])}: " + " · ".join(f"{x.get('task')}(~{(x.get('deadline_date') or '')[5:]})" for x in by["미이행"]))
+            parts.append(f"지금 할 것(마감 안) {len(by['미이행'])}: " + " · ".join(f"{_with_stage(x)}(~{(x.get('deadline_date') or '')[5:]})" for x in by["미이행"]))
         if by["예정"]:
-            parts.append(f"다음 예정 {len(by['예정'])}: " + " · ".join(f"{x.get('task')}({(x.get('work_date') or '')[5:]})" for x in by["예정"][:3]))
+            parts.append(f"다음 예정 {len(by['예정'])}: " + " · ".join(f"{_with_stage(x)}({(x.get('work_date') or '')[5:]})" for x in by["예정"][:3]))
         ask = r.get("ask_reason") or []
         if by["놓침"]:
-            parts.append(f"놓침 {len(by['놓침'])}" + (f" — 사유를 묻는다: {', '.join(a.get('task', '') for a in ask)}" if ask else ""))
+            parts.append(f"놓침 {len(by['놓침'])}" + (f" — 사유를 묻는다: {', '.join(_with_stage(a) for a in ask)}" if ask else ""))
         return f"{head} " + (" / ".join(parts) or "밀린 것 없음 · 다음 예정 없음")
     return f"{head} {json.dumps(r, ensure_ascii=False)[:300]}"
 
