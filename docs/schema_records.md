@@ -6,7 +6,7 @@
 
 | 종류 | 층 | 3층 입력 | 출처 | 필수 | 선택 | PII |
 |---|---|---|---|---|---|---|
-| `subject` | 등록부 | 예 | `d1_first_farm.md (발행자 2026-09-18)`, `farmer`, `publisher` | id, parcel, label, crop, season, source | anchor, anchor_kind, grid_unit, cert, status, recorded_at, note | — |
+| `subject` | 등록부 | 예 | `d1_first_farm.md (발행자 2026-09-18)`, `farmer`, `publisher` | id, parcel, label, crop, season, source | anchor, anchor_kind, grid_unit, cert, status, recorded_at, note, ended_at | — |
 | `user` | 등록부 | — | `farmer`, `publisher` | id, name, role, parcels, source, recorded_at | note | — |
 | `parcel` | 등록부 | — | `farmer`, `publisher` | id, source, recorded_at, observed_at, resolution | address, pnu, lat, lon, area_m2, area_source, use, mall_supply, environment, soil_texture, slope, drainage, irrigation, microclimate, night_light, cert_claimed, cert_legal, cert_since, seed_source, variety, soil_exam_ref, note | address, pnu, lat, lon |
 | `observation.video` | 1층 사실 | 예 | `farmer` | id, subject, observed_at, observed_at_source, recorded_at, source, resolution, origin, file, sha256, bytes | width, height, duration_sec, gps, note | gps |

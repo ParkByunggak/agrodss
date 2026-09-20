@@ -18,7 +18,8 @@ BRAND = "AGRODSS"
 BRAND_HTML = f'<a class="brand" href="/" id="brand" title="홈 — 첫 채팅으로">{BRAND} <small>내부 화면</small></a>'
 DECISION_LABEL = {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용", "plan_vs_actual": "계획 대 실제"}
 DECISION_LABEL.update({k: d.name for k, d in registry.all_decisions().items() if k not in DECISION_LABEL})   # M-10 등록분은 등록부 이름
-CHOOSABLE = (("event", "사건"), ("observation.note", "관찰"), ("plan.farmer", "계획"), ("decision.noncompliance", "불이행 사유"), ("feedback.request", "개선 요구"))
+CHOOSABLE = (("event", "사건"), ("observation.note", "관찰"), ("plan.farmer", "계획"), ("decision.noncompliance", "불이행 사유"), ("feedback.request", "개선 요구"),
+             ("subject.end", "작기 종료"))
 
 
 def _e(v: Any) -> str:

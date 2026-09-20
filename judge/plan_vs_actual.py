@@ -100,7 +100,8 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
     evts = list(evts) + [{"type": "파종", "observed_at": anchor, "id": "anchor", "source": subject.get("source", "farmer")}]
     tol = int(d.params["tolerance_days"])
     rows = []
-    counts = {"이행": 0, "예정": 0, "미이행": 0, "놓침": 0, "사유 기록됨": 0, "조건부": 0, "기록 없음": 0}
+    counts = {"이행": 0, "예정": 0, "미이행": 0, "놓침": 0, "사유 기록됨": 0, "조건부": 0, "기록 없음": 0, "종료 뒤": 0}
+    ended = subject.get("ended_at") if subject.get("status") == "종료" else None   # [시점 걷기 2026-09-20] 작기 종료 뒤 계획은 놓침이 아니다
     ask = []
     prep = []
     for p in plan.from_unit(unit, anchor_d, subject.get("cert")):
@@ -122,6 +123,8 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
         elif status is None and p["kind"] == "plan.capture" and wd < anchor_d:
             # 기준점 이전 촬영(종구 준비 칸) — 기준점을 뒤에 등록한 재배 단위는 소급 촬영이 있을 수 없다. 놓침이 아니라 기록 없음
             status, evidence = "기록 없음", "기준점 이전 작업 — 소급 촬영 불가, 사유를 묻지 않는다"
+        if status is None and ended and p["work_date"] > ended:
+            status, evidence = "종료 뒤", f"작기 종료({ended}) 뒤의 계획 — 놓침으로 세지 않고 사유를 묻지 않는다"
         if status is None:
             rec = reason_for(reasons, p["task"], p["work_date"])
             if rec:

@@ -71,7 +71,7 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
     # ── 등록부 ──────────────────────────────────────────────────────────────────────
     _k("subject", "등록부",   # 채팅 목록의 단위(M-13) — 작목을 추가하거나 계획이 생길 때 만들어진다. 파종 전이면 anchor 없음.
        ("id", "parcel", "label", "crop", "season", "source"),
-       ("anchor", "anchor_kind", "grid_unit", "cert", "status", "recorded_at", "note"),
+       ("anchor", "anchor_kind", "grid_unit", "cert", "status", "recorded_at", "note", "ended_at"),   # ended_at: 종료일(작기 종료 — 시점 걷기 2026-09-20)
        sources=("farmer", "publisher", "d1_first_farm.md (발행자 2026-09-18)"), layer3_input=True),
     _k("user", "등록부",     # 사용자 정보 탭(M-13) — 표시명 · 역할 · 필지 id 목록. 연락처·주소는 두지 않는다(PII)
        ("id", "name", "role", "parcels", "source", "recorded_at"), ("note",),

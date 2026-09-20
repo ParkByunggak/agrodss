@@ -123,3 +123,25 @@ def set_anchor(sid: str, anchor: str, anchor_kind: str = "파종") -> dict[str, 
             p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             return s
     raise SubjectError(f"없는 재배 단위: {sid}")
+
+
+def set_status(sid: str, status: str, ended_at: str | None = None) -> dict[str, Any]:
+    """[시점 걷기 2026-09-20] 작기 종료 — 시즌이 끝난 뒤에도 계획 대 실제가 '놓침 — 사유를 묻는다'를 계속 냈다. 상태를 바꾸는 길이 없었다
+    (set_anchor 뿐). '종료'는 ended_at(YYYY-MM-DD)을 같이 받는다 — 그날 뒤 계획은 놓침이 아니라 '종료 뒤'다. 시스템이 대신 닫지 않는다 — 채팅 확인이 부른다."""
+    if status not in sch.SUBJECT_STATUS:
+        raise SubjectError(f"상태는 {' · '.join(sch.SUBJECT_STATUS)} 중 하나")
+    if status == "종료" and not ended_at:
+        raise SubjectError("종료에는 종료일(YYYY-MM-DD)이 있어야 한다 — 그날 뒤 계획을 놓침으로 세지 않기 위해")
+    p = path()
+    data = json.loads(p.read_text(encoding="utf-8"))
+    for s in data.get("subjects", []):
+        if s["id"] == sid:
+            s["status"] = status
+            if status == "종료":
+                s["ended_at"] = str(ended_at)[:10]
+            else:
+                s.pop("ended_at", None)
+            sch.validate(s, kind="subject")
+            p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            return s
+    raise SubjectError(f"없는 재배 단위: {sid}")

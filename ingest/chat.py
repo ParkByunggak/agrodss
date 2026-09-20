@@ -41,6 +41,8 @@ OBS_WORDS = ("보인다", "보여", "보임", "생겼", "누렇", "누래", "시
              "줄기", "뿌리", "잎 ", "잎은", "잎도", "싹", "꽃", "알이", "구가", "왕성", "모습", "상태", "자랐", "자라", "컸다", "크다",
              "작다", "웃자", "쓰러", "누웠", "빽빽", "성글", "고르", "듬성")
 PLAN_WORDS = ("예정", "할 것", "하려고", "하려 한다", "계획", "할까 한다", "할 생각", "하겠다", "할게", "해야겠")
+# [시점 걷기 2026-09-20] 작기 종료 선언 — 사건 어휘('정리했' · '수확')보다 앞에서 본다. 명시 문구만(원문 '끝났다'류는 사건·관찰과 겹친다)
+END_WORDS = ("작기 종료", "작기 끝", "재배 종료", "농사 끝", "농사 종료", "올해 농사 마", "이번 작기 마", "작기를 마", "작기 마감")
 _PLAN_RE = re.compile(r"(려고|려 한다|려한다|할 예정|예정|계획|할 것|겠다|겠습니다|겠어요|겠음|할게|해야겠|할 생각|생각\s*(이다|입니다|이에요|임)?\s*$)")
 REQ_WORDS = ("틀렸", "틀린", "틀려", "잘못", "고쳐", "바꿔", "개선", "불편", "너무 넓", "너무 좁", "안 맞", "맞지 않", "원한다", "해 줬으면", "해줬으면")
 # '이상하' 는 뺐다 — "잎이 이상하다" 는 작물 상태 서술(관찰)이지 시스템 교정 요구가 아니다 (발행자 2026-09-19 "내부 로직으로 분류")
@@ -73,7 +75,7 @@ DAMAGE_WORDS: dict[str, tuple[str, ...]] = {
     "병": ("병 걸", "병에 걸", "병이 났", "반점이", "곰팡이", "잎마름", "노균", "탄저"),
 }
 KIND_LABEL = {"event": "사건", "observation.note": "관찰", "plan.farmer": "계획", "plan.target_date": "납품 계획일",
-              "feedback.request": "개선 요구", "decision.noncompliance": "불이행 사유", "observation.video": "영상",
+              "feedback.request": "개선 요구", "decision.noncompliance": "불이행 사유", "subject.end": "작기 종료", "observation.video": "영상",
               "question": "질문", "subject.new": "새 목록"}
 
 
@@ -316,6 +318,11 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
                      "needs": [] if day else ["target_date"]}]
         return [{"kind": "plan.farmer", "task": et or t[:60], "planned_day": day, "note": t, "why": "계획 어휘",
                  "needs": [] if day else ["planned_day"]}]
+    if any(w in t for w in END_WORDS):
+        # [시점 걷기 2026-09-20] 작기 종료 — 상태를 바꾸는 길이 없어 시즌 뒤에도 '놓침 — 사유를 묻는다'가 계속 났다. 사건(정리·수확)과 다르다:
+        # 그 재배 단위의 계획 대 실제를 닫는 선언이다. 종료일은 말한 날짜, 없으면 오늘(확인에서 고친다)
+        return [{"kind": "subject.end", "ended_at": day_past or today.isoformat(), "note": t,
+                 "why": "작기 종료 어휘 — 확인하면 이 목록이 '종료'가 되고 그날 뒤 계획은 놓침으로 세지 않는다", "needs": []}]
     neg = _negated_task(t)
     if neg:
         # 사건 어휘 + 부정 = 하지 않았다는 사실과 그 이유(원문이 사유다). 종류만 정하고 계획 작업·계획일은 send() 가 계획표에서 잇는다
@@ -512,6 +519,8 @@ def choose_kind(msg_id: str, kind: str, today: date | None = None) -> dict[str, 
         et = _event_type(_NEG_FOLD.sub("", t)) or t[:60]
         d = {"kind": "decision.noncompliance", "task_type": et, "planned_task": et, "planned_day": day_past, "reason": t, "why": "사람이 고름",
              "needs": [] if day_past else ["planned_day"]}
+    elif kind == "subject.end":
+        d = {"kind": "subject.end", "ended_at": day_past or today.isoformat(), "note": t, "why": "사람이 고름", "needs": []}
     else:
         raise ChatError(f"고를 수 없는 종류: {kind}")
     rec = dict(m)
@@ -557,9 +566,12 @@ def confirm(msg_id: str, draft_index: int = 0, day: str | None = None, event_typ
         elif k == "decision.noncompliance":
             rec = ev.add_noncompliance(sid, (planned_task or d.get("planned_task") or "").strip() or d.get("task_type", ""), d["reason"],
                                        day or d.get("planned_day") or "", now=now)
+        elif k == "subject.end":
+            s = subjects.set_status(sid, "종료", ended_at=day or d.get("ended_at") or "")
+            rec = {"id": s["id"], "kind": "subject", "observed_at": s["ended_at"], "status": s["status"]}   # 등록부 갱신 — 원장 레코드가 아니라 상태
         else:
             raise ChatError(f"확인할 수 없는 종류: {k}")
-    except (ev.EventError, fb.FeedbackError) as e:
+    except (ev.EventError, fb.FeedbackError, subjects.SubjectError) as e:
         raise ChatError(str(e))
     upd = dict(m)
     upd["confirmed_refs"] = list(m.get("confirmed_refs", [])) + [rec["id"]]

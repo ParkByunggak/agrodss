@@ -104,6 +104,11 @@ CORPUS = [
     ("9/8 트랩 확인", "event", None),                                                 # 빗금 월/일도 날짜(한 일의 표지)
     ("트랩 확인은 안 했다", "decision.noncompliance", None),                          # '확인은' — 조사가 붙어도 부정
     ("트랩 확인을 못 했다", "decision.noncompliance", None),
+    # 작기 종료 선언(시점 걷기 2026-09-20: 시즌 뒤에도 '놓침 — 사유를 묻는다'가 계속 났다 — 상태를 바꾸는 길이 없었다)
+    ("작기 종료", "subject.end", None),
+    ("올해 농사 끝났다", "subject.end", None),
+    ("11월 5일 쪽파 재배 종료", "subject.end", None),
+    ("잔사 정리했다", "event", None),                                                # 정리 사건은 종료가 아니다 — 종료는 명시 문구만
 ]
 
 
@@ -124,5 +129,5 @@ def test_corpus_is_append_only():
 
 def test_corpus_covers_every_kind_and_has_no_duplicates():
     kinds = {c[1] for c in CORPUS}
-    assert kinds == {"question", "event", "observation.note", "plan.farmer", "plan.target_date", "feedback.request", "decision.noncompliance"}
+    assert kinds == {"question", "event", "observation.note", "plan.farmer", "plan.target_date", "feedback.request", "decision.noncompliance", "subject.end"}
     assert len({c[0] for c in CORPUS}) == len(CORPUS)
