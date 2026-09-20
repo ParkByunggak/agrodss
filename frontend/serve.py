@@ -649,6 +649,8 @@ class Handler(BaseHTTPRequestHandler):
 def make_server() -> ThreadingHTTPServer:
     host = config.assert_local(config.BIND)  # [D-6] 루프백 검증이 서버 생성보다 앞에 있다 (D-16 옵트인만 0.0.0.0 + 토큰)
     config.check_today()                     # [검토 ⑤] 잘못된 AGRODSS_TODAY 는 기동에서 막는다 — 요청마다 500 이 나고 원인이 숨던 형태
+    from ingest import parcels as _parcels   # [U-18] 첫 기동에 씨앗의 PII 를 덮개(git 밖)로 옮긴다 — 발행자 PC 에서 pull 뒤 자동
+    _parcels.ensure_local()
     return ThreadingHTTPServer((host, config.PORT), Handler)
 
 

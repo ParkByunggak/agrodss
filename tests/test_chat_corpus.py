@@ -110,6 +110,13 @@ def test_corpus_kind_and_topic(text, kind, topic):
         assert chat.topic_of(text) == topic, (text, chat.topic_of(text))
 
 
+CORPUS_MIN = 75   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
+
+
+def test_corpus_is_append_only():
+    assert len(CORPUS) >= CORPUS_MIN, (len(CORPUS), CORPUS_MIN)
+
+
 def test_corpus_covers_every_kind_and_has_no_duplicates():
     kinds = {c[1] for c in CORPUS}
     assert kinds == {"question", "event", "observation.note", "plan.farmer", "plan.target_date", "feedback.request", "decision.noncompliance"}
