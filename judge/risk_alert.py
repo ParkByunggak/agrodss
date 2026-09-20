@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from grid import schema as grid_schema
+from grid import capture, schema as grid_schema   # capture.is_open — '오늘 칸' 경계 약속의 정본(B4)
 from judge import registry
 from judge.envelope import AxisUse, Envelope, weakest
 from judge.harvest_timing import GRID_GRADE, _load_unit
@@ -51,12 +51,13 @@ def _now() -> str:
 
 
 def _stages_in_scope(unit: dict[str, Any], day: int, horizon: int) -> list[dict[str, Any]]:
+    """열린 칸(정본 capture.is_open — 경계일 약속은 거기 하나) + 지평 안에 열릴 칸."""
     out = []
     for s in unit.get("stages", []):
         w = s.get("window")
         if not isinstance(w, dict):
             continue
-        if w["from_day"] <= day <= w["to_day"] or day < w["from_day"] <= day + horizon:
+        if capture.is_open(w, day) or day < w["from_day"] <= day + horizon:
             out.append(s)
     return out
 
@@ -163,7 +164,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         if risks == grid_schema.NA or not risks:
             continue
         w = s["window"]
-        stage_open = w["from_day"] <= day <= w["to_day"]
+        stage_open = capture.is_open(w, day)           # 정본 하나(B4) — 판정기마다 창을 따로 비교하지 않는다
         for r in risks:
             unrec = r.get("recoverable") is False
             basis = (_risk_signal(r, sig, d.params) if sig else None) or _pest_signal(r, pest or [], d.params)
