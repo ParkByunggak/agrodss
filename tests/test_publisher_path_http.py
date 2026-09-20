@@ -46,6 +46,14 @@ def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv, mo
     assert "불이행 사유" in body and "각각 따로 확인한다" in body
     m = chat.list_messages(SID)[0]
     assert m["text"] == SENTENCE and [d["kind"] for d in m["drafts"]] == ["decision.noncompliance", "observation.note"]
+    assert m["observed_at"] == TODAY and m["drafts"][1]["observed_at"] == TODAY      # 고정한 오늘이 send 까지 닿는다(실제 날짜면 다르다 — 관문의 입력)
+    # 1b. '다른 종류' 선택도 같은 오늘로 — 서술문을 관찰로 고르면 관찰일이 고정한 오늘
+    _post(srv, f"/c/{quote(SID)}/send", {"text": "특별한 일 없음"})
+    m0 = [x for x in chat.list_messages(SID) if x.get("role") == "farmer"][-1]
+    _post(srv, f"/c/{quote(SID)}/choose", {"msg": m0["id"], "kind": "observation.note"})
+    assert chat.get_message(m0["id"])["drafts"][0]["observed_at"] == TODAY
+    st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m0["id"], "i": "0", "day": ""})
+    assert st == 200 and ev.list_records(SID)[-1]["observed_at"] == TODAY
     # 3. 초안 0 확인(폼이 보내는 그대로: planned_task · day) → 원장. 같은 초안 재확인은 거부, 초안 1 은 따로 확인
     st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m["id"], "i": "0", "planned_task": "웃거름 1회", "day": "2026-09-16"})
     assert st == 200 and "원장에 들어감" in body and "불이행 사유" in body
@@ -53,7 +61,7 @@ def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv, mo
     assert st == 400 and "이미 확인된 초안" in body
     st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m["id"], "i": "1", "day": ""})
     assert st == 200 and "원장에 들어감" in body
-    recs = ev.list_records(SID)
+    recs = ev.list_records(SID)[-2:]                                                  # 앞에 1b 의 관찰 한 줄
     assert [r["kind"] for r in recs] == ["decision.noncompliance", "observation.note"]
     assert recs[0]["planned_task"] == "웃거름 1회" and recs[0]["planned_day"] == "2026-09-16" and recs[0]["reason"] == SENTENCE
     # 3b. 계획표에 없는 종류("약 안 쳤다" → 방제) — 사람이 폼에서 계획 작업명·계획일을 채워 확인한다(폼 값이 원장에 실린다)

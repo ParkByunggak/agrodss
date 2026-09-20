@@ -555,8 +555,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not files and not (form.get("text") or "").strip():
                     raise chat.ChatError("빈 발화 — 글이나 파일이 있어야 보낸다")
                 if recs or (form.get("text") or "").strip():
-                    chat.send(sid, form.get("text", ""), retry_of=form.get("retry_of") or None, edit_of=form.get("edit_of") or None,
-                              input_mode=form.get("input_mode") or "text", media_refs=recs)
+                    chat.send(sid, form.get("text", ""), today=config.today(), retry_of=form.get("retry_of") or None, edit_of=form.get("edit_of") or None,
+                              input_mode=form.get("input_mode") or "text", media_refs=recs)   # 오늘은 화면 정본 하나(§7.5 관문의 입력 — 고정이 여기 안 닿았다)
                 if errs:
                     status, body = chat_page(sid, error="; ".join(errs) + " — 파일은 반입 대기함(inbox)에 남았다. 촬영일을 넣어 다시 올리거나 /media 에서 등록한다")
                 else:
@@ -582,7 +582,7 @@ class Handler(BaseHTTPRequestHandler):
         elif p.startswith("/c/") and p.endswith("/choose"):
             sid = unquote(p[len("/c/"):-len("/choose")])
             try:
-                chat.choose_kind(form.get("msg", ""), form.get("kind", ""))
+                chat.choose_kind(form.get("msg", ""), form.get("kind", ""), today=config.today())
                 self._send(302, "", f"/c/{quote(sid)}")
                 return
             except chat.ChatError as e:
