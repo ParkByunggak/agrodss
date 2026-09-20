@@ -689,7 +689,12 @@ def main(open_browser: bool = True) -> int:
     srv = make_server()
     url = f"http://{config.HOST}:{config.PORT}/"
     head = git_head_short()
-    print(f"[agrodss 내부 화면] {url}  HEAD {head}  (Ctrl+C 로 종료 · git pull 이 오면 스스로 다시 뜬다)")
+    # [발행자 화면 2026-09-21] 기동 줄도 저장소 해시를 찍고 있었다 — 꼬리와 같은 형태다. **실행 중 코드**를 찍는다.
+    # 발행자 PC 실측 추정: 프로세스가 259fcfd(요청형 질문 어휘) **이전**에 떴고 watch_head(b17814d)도 없어,
+    # pull 을 해도 스스로 다시 뜨지 않았고 화면 어디에도 그 사실이 안 보였다. 다시 뜬 것을 이 줄로 확인한다.
+    print(f"[agrodss 내부 화면] {url}  실행 중 {RUNNING_HEAD}"
+          + (f"  ※ 저장소는 {head} — 뒤처짐" if head != RUNNING_HEAD else "")
+          + "  (Ctrl+C 로 종료 · git pull 이 오면 스스로 다시 뜬다)")
     if open_browser:
         webbrowser.open(url)
     stop = threading.Event()

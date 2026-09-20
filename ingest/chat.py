@@ -513,7 +513,15 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         if len(drafts) > 1:
             reply_text += " 초안 " + " · ".join(f"{n + 1}) {KIND_LABEL.get(x['kind'], x['kind'])}" for n, x in enumerate(drafts)) + " — 각각 따로 확인한다."
     else:
-        reply_text = "분류 안 됨(빈 발화) — 사건 · 관찰 · 계획 · 개선 요구 중 골라 주면 그 종류로 초안을 만든다."   # 서술문은 관찰 메모로 제안되므로 여기 오는 것은 빈 발화뿐
+        # [발행자 2026-09-21] 종류를 **사람에게 묻지 않는다** — 규칙이 못 고르면 시스템이 관찰 메모로 정한다(내용은 원문 그대로,
+        # 지어내지 않는다). 사람은 초안의 '다른 종류' 로 고친다. 빈 발화는 위에서 이미 거부되므로 여기는 사실상 닿지 않지만,
+        # **닿더라도 묻지 않는다**는 것이 이 자리의 약속이다(규칙이 넓어질 때 조용히 물음으로 되돌아가지 않게).
+        drafts = [{"kind": "observation.note", "text": text, "observed_at": today.isoformat(),
+                   "why": "규칙이 종류를 못 정했다 — 관찰 메모로 둔다(원문 그대로). 다른 종류로 고칠 수 있다", "needs": []}]
+        msg["drafts"] = drafts
+        _append(dict(msg))
+        d = drafts[0]
+        reply_text = f"{KIND_LABEL[d['kind']]}(으)로 읽었다 — {d['why']}. 확인하면 원장에 들어간다."
     if media_refs and drafts:
         reply_text = media_line + reply_text
     reply = _append({"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": "system", "text": reply_text,

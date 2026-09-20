@@ -232,9 +232,10 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
     return "".join(parts)
 
 
-def _choose_html(m: dict[str, Any]) -> str:
-    return ('<div class="draft"><b>분류 안 됨</b> — 종류를 고른다 <form method="post" action="/c/' + quote(m["subject"]) + '/choose"><input type="hidden" name="msg" value="' + _e(m["id"]) + '">'
-            + "".join(f'<button class="btn" name="kind" value="{kk}">{lab}</button>' for kk, lab in CHOOSABLE) + '</form></div>')
+# [발행자 2026-09-21] "분류 안 됨 — 종류를 고른다 … 이는 사용자에게 묻는 것은 옳지 않다. 질문의 내용을 분석하고
+# 시스템에서 어떻게 분류할 것인지를 확정해야 한다." 2026-09-19 에 같은 말을 듣고 **서술문은 관찰 메모로 제안**하게
+# 고쳤는데, 사람에게 되묻는 **화면**은 그대로 남아 있었다(규칙은 고치고 물음은 안 치웠다). 여기서 없앤다 —
+# 종류는 언제나 시스템이 정하고, 사람은 제안된 초안의 **'다른 종류'** 로 고친다(그것은 묻는 것이 아니라 고치는 것이다).
 
 
 def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = "") -> str:
@@ -265,11 +266,8 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
             out.append(f'<div class="msg me"><div><div class="bub" id="t-{_e(m["id"])}">{_e(m["text"])}</div>'
                        f'<div class="ts" style="text-align:right">{_e(render.local_time(m.get("recorded_at")))}{_e(tag)}</div>{_question_actions(m)}</div></div>')
             drafts = m.get("drafts") or []
-            if drafts:
-                for i, d in enumerate(drafts):
-                    out.append(_draft_html(m, i, d))
-            elif not m.get("confirmed_refs"):
-                out.append(_choose_html(m))
+            for i, d in enumerate(drafts):
+                out.append(_draft_html(m, i, d))
     out.append("</div>")
     out.append(f'<div class="composer"><form method="post" action="/c/{quote(s["id"])}/send" id="composer" enctype="multipart/form-data">'
                '<input type="hidden" name="input_mode" id="input_mode" value="text"><input type="hidden" name="edit_of" id="edit_of" value="">'
