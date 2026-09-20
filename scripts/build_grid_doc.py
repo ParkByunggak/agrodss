@@ -20,7 +20,7 @@ def _lvl(v):
 def build(unit: dict) -> str:
     u = unit["unit"]
     rep = schema.validate(unit)
-    out = [f"# 격자 — {u['crop']} × {u.get('season') or u.get('variety')} (정본: `data/grid/{u['id'].replace('-', '_')}.json`)\n"]
+    out = [f"# 격자 — {u['crop']} × {u.get('season') or u.get('variety')} (정본: `{schema.unit_path(u['id']).relative_to(schema.ROOT).as_posix()}`)\n"]
     out.append("**이 문서는 생성물이다.** 고치려면 JSON 을 고치고 `python scripts/build_grid_doc.py` 를 돌린다.\n")
     out.append(f"- 기준점: **{u['anchor_kind']}** (0일) · 작형 결정권: {u['kind']} · 출처: {u['source']} · 확신 {u.get('confidence', '—')}")
     out.append(f"- 검증: {'통과' if rep.ok else '실패 ' + str(rep.errors)} · 완성도: 값 {rep.filled} · 해당없음 {rep.na} · 미채움 {rep.unfilled}")

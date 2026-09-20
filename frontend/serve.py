@@ -198,8 +198,10 @@ def judge_page() -> tuple[int, str]:
         out.append(f"<h1 style=\"font-size:17px;margin-top:24px\">{_e(s['label'])}</h1>")
         for env in envs:
             e = env.to_dict()
-            _render_env(out, e, {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용(유기 공시)",
-                                 "plan_vs_actual": "계획 대 실제"}.get(e["decision_id"], chat_pages.DECISION_LABEL.get(e["decision_id"], e["decision_id"])))   # M-10 은 등록부 이름
+            # [칸 3 재측정 2026-09-20 · A13/D13] 여기 인라인 사전이 정본(`chat_pages.DECISION_LABEL`)을 **가리고** 있었다 —
+            # 사본이 먼저 걸리니 정본을 고쳐도 이 화면만 안 바뀐다(정본 역전). 그리고 실제로 어긋나 있었다: 사본의
+            # "자재 인용(유기 공시)" 는 PSIS(관행 등록약제)가 붙기 전 이름이라, 관행 인용까지 싣는 지금은 틀린 말이다.
+            _render_env(out, e, chat_pages.DECISION_LABEL.get(e["decision_id"], e["decision_id"]))
         out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 예찰: {_e(info.get('pest', ''))}</p>")
     footer = f"HEAD {git_head_short()} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
     return 200, render.page("AGRODSS —판단", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)

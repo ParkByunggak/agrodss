@@ -278,7 +278,8 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
                '<div class="row"><span class="hint" id="hint">사건 · 관찰 · 계획 · 개선 요구 · 질문 — 날짜는 "9월 20일" · "어제" · "2026-09-20"</span>'
                '<span><input type="file" name="file" id="file" accept="image/*,video/*" multiple hidden>'
                '<button class="btn" type="button" id="attach" title="사진 · 영상 올리기 — 촬영 시각은 메타(EXIF · mvhd)에서 읽고 없으면 촬영일을 묻는다">📎 사진·영상</button> '
-               '<button class="btn" type="button" id="mic" title="음성으로 질문 — 말이 끝나거나 5초 조용하면 글로 바꿔 보낸다(D-15: 크롬 내장 인식, 구글 서버 경유)">🎤 음성</button> '
+               # [칸 3 재측정 2026-09-20 · D15] 툴팁만 '5초' 가 박혀 있었다 — 설정(AGRODSS_VOICE_SILENCE_MS)을 바꾸면 화면이 거짓말을 한다
+               f'<button class="btn" type="button" id="mic" title="음성으로 질문 — 말이 끝나거나 {config.VOICE_SILENCE_MS // 1000}초 조용하면 글로 바꿔 보낸다(D-15: 크롬 내장 인식, 구글 서버 경유)">🎤 음성</button> '
                '<button class="btn pri" type="submit">보내기</button></span></div></form></div>')
     out.append(ACTION_JS.replace("__SILENCE_MS__", str(config.VOICE_SILENCE_MS)).replace("__MAX_MS__", str(config.VOICE_MAX_MS)))
     return "".join(out)

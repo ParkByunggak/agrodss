@@ -17,6 +17,8 @@ from judge.envelope import AxisUse, Envelope, weakest
 
 DECISION_ID = "harvest_timing"
 GRID_GRADE = {"상": "관측", "중": "추정", "하": "추정"}   # 격자 출처 확신 → 등급. 추론 초안은 '추정'을 넘지 못한다
+# [A13] 수확 창의 허용 오차 키 — 싣는 쪽(여기)이 정본이고 읽는 쪽(evolve 대조 · 화면)이 가져온다. 두 벌이면 어긋나는 날 0 으로 읽힌다
+TOLERANCE_DAYS_KEY = "error_days"
 
 
 def _now() -> str:
@@ -27,7 +29,7 @@ def _load_unit(subject: dict[str, Any]) -> dict[str, Any] | None:
     uid = subject.get("grid_unit")
     if not uid:
         return None
-    p = grid_schema.GRID_DIR / f"{uid.replace('-', '_')}.json"
+    p = grid_schema.unit_path(uid)
     return grid_schema.load(p) if p.exists() else None
 
 
@@ -99,7 +101,8 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
             v = r.get("values", {})
             tmin = v.get("tmin") if v.get("tmin") is not None else v.get("tmin_from_tmp")
             fd = r.get("for_day")
-            if tmin is not None and fd and tmin < thr and start <= date.fromisoformat(fd) <= end + timedelta(days=0):
+            # [B17] `end + timedelta(days=0)` 이었다 — 값은 end 그대로인데 **여유 폭이 있는 것처럼 읽힌다**. 사문을 지운다(동작 불변)
+            if tmin is not None and fd and tmin < thr and start <= date.fromisoformat(fd) <= end:
                 caps.append({"name": "첫 서리 예보", "basis": f"{fd} 예보 최저 {tmin}℃ < {thr}℃ — 수확 앞당김 판단(격자 위험 '첫 서리·한파')"})
         if forecast:
             f0 = forecast[0]
@@ -120,7 +123,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         grade=weakest(grades),
         result={
             "window_start": start.isoformat(), "window_end": end.isoformat(), "center": center.isoformat(),
-            "error_days": half, "days_since_anchor": day, "position": position,
+            TOLERANCE_DAYS_KEY: half, "days_since_anchor": day, "position": position,
             "basis": f"기준점 {anchor}({unit['unit'].get('anchor_kind')}) + 격자 창 {w['from_day']}~{w['to_day']}일",
             "final_say": "잎 길이·상태는 농가 관찰이 최종 심급(격자 수확 작업 출처)",
         },

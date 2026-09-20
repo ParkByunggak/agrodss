@@ -16,11 +16,15 @@ from typing import Any
 
 from ingest import events as ev
 from ingest import feedback as fb
+from judge import harvest_timing
 from judge.envelope import Envelope, weakest
 
 CAP_GRADE = "추정"
-HARVEST_TOLERANCE_DAYS_KEY = "error_days"
-DAMAGE_TYPE = "피해"
+# [칸 3 재측정 2026-09-20 · A13 중복 진실] 두 값이 각각 두 벌이었다. 지금은 글자가 같지만 **어긋나는 날 조용히 죽는다** —
+# 피해 종류가 어긋나면 `_measure_risk` 가 피해를 하나도 못 찾아 되먹임의 대조 축이 멎고(A10 에서 막 고친 그 고장 방식),
+# 허용 오차 키가 어긋나면 `p.get(...) or 0` 이 0 으로 읽혀 창이 좁아진다. 값을 쓰는 쪽에서 **만들지 말고 가져온다**.
+HARVEST_TOLERANCE_DAYS_KEY = harvest_timing.TOLERANCE_DAYS_KEY
+DAMAGE_TYPE = ev.DAMAGE_TYPE
 ALERT_LEVELS_COUNT = ("경보", "주의")          # 예고는 아직 창이 안 열린 것 — 대조에 안 센다
 # [U-16] 피해 사건의 risk 와 격자 위험 이름을 잇는 갈래 — 양쪽을 갈래로 바꿔 비교하고, 갈래가 없으면 부분 일치
 RISK_FAMILIES: dict[str, tuple[str, ...]] = {

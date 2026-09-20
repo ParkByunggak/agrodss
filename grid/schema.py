@@ -47,6 +47,12 @@ def load(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def unit_path(unit_id: str) -> Path:
+    """재배 단위 id → 격자 파일 경로. [A13] 이 규칙(붙임표→밑줄)이 세 곳에 따로 적혀 있었다 —
+    어긋나면 격자를 못 찾아 판단 불가가 되고, 원인은 파일 이름 한 글자다. 규칙은 여기 하나."""
+    return GRID_DIR / f"{unit_id.replace('-', '_')}.json"
+
+
 def _canonical_names() -> set[str]:
     from names import resolve as R
     return set(R.load().canonical)

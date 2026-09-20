@@ -35,7 +35,7 @@ def hint_for(subject: dict[str, Any], today: date) -> dict[str, Any] | None:
     anchor = subject.get("anchor")
     if not unit_id or not anchor:
         return None
-    path = schema.GRID_DIR / f"{unit_id.replace('-', '_')}.json"
+    path = schema.unit_path(unit_id)
     if not path.exists():
         return None
     unit = schema.load(path)
