@@ -105,6 +105,55 @@ def test_damage_negation_is_a_note_and_never_feeds_alert_matching():
     assert chat._damage_risk("피해가 컸다") == "피해" and chat._damage_risk("날씨 좋다") is None
 
 
+def test_dated_sentence_still_links_to_the_nearest_plan_row():
+    """검토 ①(2026-09-20): 날짜를 말하면 계획표 잇기를 건너뛰어 작업명이 '시비'로 남았고 사유가 계획표 줄·단계 결정과 영영 안 맞았다."""
+    m, _ = chat.send(SID, "9월 16일에 웃거름 안 줬다. 토양검정 기준", today=T, now=NOW)
+    d = m["drafts"][0]
+    assert d["planned_task"] == "웃거름 1회" and d["planned_day"] == "2026-09-16" and d["needs"] == []
+    m2, _ = chat.send(SID, "9월 18일에 웃거름 안 줬다", today=T, now=NOW)          # 말한 날짜에 가장 가까운 줄(09-16) — 계획일은 줄의 것
+    assert m2["drafts"][0]["planned_task"] == "웃거름 1회" and m2["drafts"][0]["planned_day"] == "2026-09-16"
+    rec = chat.confirm(m["id"], 0, now=NOW)
+    e = SD.judge_top_dressing(_subject(), "top_dressing_1", T, evts=ev.list_records(SID))
+    assert e.result["status"] == "사유 기록됨" and e.result["reason_ref"] == rec["id"]
+    m3, _ = chat.send(SID, "9월 10일에 약 안 쳤다", today=T, now=NOW)              # 계획표에 없는 종류 + 날짜 → 말한 날짜가 계획일, 작업명은 종류
+    assert m3["drafts"][0]["planned_task"] == "방제" and m3["drafts"][0]["planned_day"] == "2026-09-10" and m3["drafts"][0]["needs"] == []
+
+
+def test_negation_of_another_predicate_keeps_the_event_and_damage_positive_wins():
+    """검토 ②③④: '지 않'이 다른 서술어의 것이면 사건 · '할 수 없다'는 부재가 아니다 · 갈래 하나 부정 + 다른 갈래 긍정은 긍정 갈래."""
+    assert chat._negated_task("물 줬는데 충분하지 않다") is None and chat._negated_task("수확했는데 많지 않다") is None
+    assert chat._negated_task("웃거름 주지 않고") == ("시비", 8) and chat._negated_task("트랩 확인 안 했다") is not None
+    assert chat._damage_risk("서리에 얼어서 상품성이 없다") == "서리" and chat._damage_risk("얼어붙어서 걷을 수 없었다") == "서리"
+    assert chat._damage_risk("벌레 먹은 잎은 없고 곰팡이가 폈다") == "병" and chat._damage_risk("벌레 먹은 건 없는데 썩었다") == "부패"
+    assert chat._damage_risk("서리 맞았는데 피해는 없다") == chat.NO_DAMAGE and chat._damage_risk("얼어 죽은 게 없다") == chat.NO_DAMAGE
+
+
+def test_choose_kind_refused_once_a_draft_is_in_the_ledger_and_legacy_rule_is_single_draft():
+    """검토 ⑥: 초안 일부가 원장에 들어간 뒤 종류를 바꾸면 확인 표지가 사라져 새 초안이 '이미 확인됨'이 됐다(영영 확인 불가)."""
+    m, _ = chat.send(SID, "웃거름 안 주고 물만 줬다", today=T, now=NOW)
+    assert len(m["drafts"]) == 2
+    chat.confirm(m["id"], 0, now=NOW)
+    with pytest.raises(chat.ChatError, match="이미 원장에 들어간 초안"):
+        chat.choose_kind(m["id"], "event", today=T)
+    assert chat.confirm(m["id"], 1, now=NOW)["kind"] == "observation.note"          # 둘째 초안은 여전히 확인된다
+    legacy = {"drafts": [{"kind": "event"}, {"kind": "observation.note"}], "confirmed_refs": ["evt_x"]}
+    assert chat.confirmed_ref(legacy, 1) is None and chat.confirmed_ref({"drafts": [{"kind": "event"}], "confirmed_refs": ["evt_x"]}, 0) == "evt_x"
+
+
+def test_bad_today_env_refuses_at_startup_not_per_request(monkeypatch):
+    """검토 ⑤: 잘못된 AGRODSS_TODAY 가 요청마다 500 을 내고 /changes 만 멀쩡해 원인이 숨었다 → 기동에서 막는다."""
+    from frontend import config, serve
+    monkeypatch.setenv(config.TODAY_ENV, "2026-9-1x")
+    with pytest.raises(RuntimeError, match="AGRODSS_TODAY"):
+        config.today()
+    with pytest.raises(RuntimeError, match="AGRODSS_TODAY"):
+        serve.make_server()
+    monkeypatch.setenv(config.TODAY_ENV, "2026-09-19")
+    assert config.today().isoformat() == "2026-09-19" and config.check_today() == config.today()
+    monkeypatch.delenv(config.TODAY_ENV)
+    assert config.check_today() is None
+
+
 def test_wiring_ratchets_no_crop_branch_and_one_key():
     src = (ROOT / "ingest" / "chat.py").read_text(encoding="utf-8")
     body = src[src.index("def _negated_task"):src.index("def _damage_risk")]

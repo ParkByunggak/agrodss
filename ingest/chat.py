@@ -181,8 +181,14 @@ def _event_type(text: str) -> str | None:
 # EVENT_SYNONYMS(작목 공통), 계획 작업·계획일은 그 재배 단위의 격자 계획표에서 잇는다(_attach_plan). 작목별 분기는 없다.
 #   · 부정은 사건 어휘 **바로 뒤**에서만 본다 — "비가 안 와서 물 줬다"의 '안'은 관수를 부정하지 않는다.
 #   · '안/못 + 동사' 는 표지(§)로 접어 "약 안 쳤다"에서도 방제 어휘가 잡히게 한다(어휘 사이에 부정이 끼는 한국어 형태).
-_NEG_FOLD = re.compile(r"(?<![가-힣])(안|못)(?:\s+(?=[가-힣])|(?=[했줬쳤함줌하주치뿌심캐뽑걷]))")
-_NEG_AFTER = re.compile(r"^[^\s]*\s*(?:[가-힣]{1,4}\s*)?(?:지\s*않|지\s*못|§|않|생략|건너뛰|거른다|걸렀)")
+# [검토 2026-09-20 ②] 접기는 '안/못 + **동사**'에만 — "비료 상태가 안 좋다"의 '안 좋'을 접으면 시비 부정이 된다. 동사 첫 글자 목록(보 는 피해 "안 보인다")
+_VERB_HEAD = "했줬쳤함줌하주치뿌심캐뽑걷보되돼썼쓰넣넜줍얼썩먹물녹걸맞"   # 뒤 여덟은 피해 동사(얼었 · 썩었 · 먹 · 물러 · 녹 · 걸 · 맞)
+_NEG_FOLD = re.compile(rf"(?<![가-힣])(안|못)(?:\s+(?=[{_VERB_HEAD}])|(?=[{_VERB_HEAD}]))")
+# 부정은 사건 어휘 **바로 뒤**의 서술어에 붙어야 한다: 어휘 뒤 한 덩이(조사·어미)에 과거 표지(았/었/했…)가 없고, 사이 토큰은 동사 어간 두 글자까지.
+# "물 줬는데 충분하지 않다" · "수확했는데 많지 않다"는 이미 한 일이다 — 뒤의 '지 않'은 다른 서술어의 부정(검토 2026-09-20 ② 실측)
+_PAST = "았었했줬쳤캤봤뒀냈"
+_NEG_AFTER = re.compile(rf"^(?![^\s]*[{_PAST}])[^\s]*\s*(?:[가-힣]{{1,2}}\s*)?(?:지\s*않|지\s*못|§|않|생략|건너뛰|거른다|걸렀)")
+_PAST_WORD = re.compile(rf"[{_PAST}]$")
 _ALT_AFTER = re.compile(r"(대신|만\s|만[가-힣]|해\s?줌|해\s?준다|하고 있|하는 중)")   # '했다'는 넣지 않는다 — "생략했다"의 어미가 대신 한 일로 읽힌다(실측)
 
 
@@ -196,15 +202,18 @@ def _negated_task(text: str) -> tuple[str, int] | None:
                 continue
             if "§" in m.group(0):
                 return et, m.end()
+            if _PAST_WORD.search(w):
+                continue                     # "물 줬" · "약 쳤" — 이미 한 일. 뒤에 오는 '지 않'은 다른 서술어의 부정이다(§ 가 안에 끼는 형태만 부정)
             a = _NEG_AFTER.match(norm[m.end():])
             if a:
                 return et, m.end() + a.end()
     return None
 
 
-def _plan_row_for(subject_id: str, et: str, today: date) -> dict[str, Any] | None:
+def _plan_row_for(subject_id: str, et: str, today: date, stated: str | None = None) -> dict[str, Any] | None:
     """부정된 작업 종류 → 그 재배 단위의 계획표(계획 대 실제 봉투)에서 같은 종류의 미완 작업 한 줄. 작목 무관 — 격자가 무엇이든 그 격자의 줄이다.
-    이행된 줄은 제외. 지난 것(놓침·미이행)을 먼저, 없으면 가장 가까운 예정. 계획표가 없으면(기준점 없음 등) None."""
+    이행된 줄은 제외. 농가가 날짜를 말했으면(stated) 그 날에 가장 가까운 줄, 아니면 지난 것(놓침·미이행)을 먼저, 없으면 가장 가까운 예정.
+    계획표가 없으면(기준점 없음 등) None."""
     from judge import run as judge_run   # answer() 와 같은 규율 — 3층 봉투만 받는다
     e = next((x for x in judge_run.judgments_for(subject_id, today=today) if x.decision_id == "plan_vs_actual"), None)
     if e is None or e.kind != "판단함":
@@ -213,21 +222,26 @@ def _plan_row_for(subject_id: str, et: str, today: date) -> dict[str, Any] | Non
     rows = [r for r in (e.result or {}).get("rows", []) if r.get("status") not in ("이행", "사유 기록됨") and any(w in (r.get("task") or "") for w in words)]
     if not rows:
         return None
+    if stated:
+        sd = date.fromisoformat(stated)
+        return min(rows, key=lambda r: abs((date.fromisoformat(r["work_date"]) - sd).days))
     past = [r for r in rows if (r.get("work_date") or "") <= today.isoformat()]
     return max(past, key=lambda r: r["work_date"]) if past else min(rows, key=lambda r: r["work_date"])
 
 
 def _attach_plan(subject_id: str, drafts: list[dict[str, Any]], today: date) -> list[dict[str, Any]]:
-    """불이행 초안에 계획표의 작업명·계획일을 잇는다(분류기는 재배 단위를 모른다 — 여기서만 잇는다). 계획표에 없으면 needs 로 남긴다."""
+    """불이행 초안에 계획표의 작업명·계획일을 잇는다(분류기는 재배 단위를 모른다 — 여기서만 잇는다). 계획표에 없으면 needs 로 남긴다.
+    [검토 2026-09-20 ①] 날짜를 말한 발화("9월 16일에 … 안 줬다")도 잇는다 — 전에는 날짜가 있으면 건너뛰어 작업명이 종류 이름('시비')으로
+    남았고, 그 사유는 계획표 줄·단계 결정과 영영 안 맞았다. 말한 날짜에 가장 가까운 줄을 잇고 계획일은 그 줄의 것, 말한 날짜는 사유(원문)에 남는다."""
     out = []
     for d in drafts:
-        if d.get("kind") == "decision.noncompliance" and not d.get("planned_day"):
-            row = _plan_row_for(subject_id, d["task_type"], today)
+        if d.get("kind") == "decision.noncompliance" and d.get("planned_task") == d.get("task_type"):
+            row = _plan_row_for(subject_id, d["task_type"], today, stated=d.get("planned_day"))
             d = dict(d)
             if row:
                 d.update(planned_task=row["task"], planned_day=row["work_date"], needs=[],
                          why=d["why"] + f" · 계획표 '{row['task']}'({row['work_date']} · {row.get('status')})에 맞췄다")
-            else:
+            elif not d.get("planned_day"):
                 d["why"] += " · 계획표에 같은 종류의 미완 작업이 없다 — 계획일을 적는다"
         out.append(d)
     return out
@@ -235,26 +249,34 @@ def _attach_plan(subject_id: str, drafts: list[dict[str, Any]], today: date) -> 
 
 NO_DAMAGE = "없음"
 # 피해 어휘 뒤 부정 · '없' — 사건 어휘와 같은 창이되 두 토큰까지 본다("얼어 죽은 게 없다"). 긍정 피해 문장의 뒤에는 이 형태가 없다(말뭉치)
-_NEG_DMG = re.compile(r"^[^\s]*\s*(?:[가-힣]{1,4}\s*){0,2}(?:지\s*않|지\s*못|§|않|없)")
+# [검토 2026-09-20 ③] 사이 토큰은 두 글자짜리 둘까지("얼어 죽은 게 없다") — "얼어서 상품성이 없다"의 '상품성이'는 피해가 **있었다**는 문장이다.
+# '할 수 없다'의 없 은 불능이지 부재가 아니다("얼어붙어서 걷을 수 없었다") — 수 뒤의 없 은 안 본다.
+_NEG_DMG = re.compile(r"^[^\s]*\s*(?:[가-힣]{1,2}\s*){0,2}(?:지\s*않|지\s*못|§|않|(?<!수)(?<!수\s)없)")
 
 
 def _damage_risk(text: str) -> str | None:
     """피해 갈래 · '피해'(갈래 미상) · NO_DAMAGE(피해 어휘 + 부정 — 사건이 아니다) · None.
     [§7.5 처방 직후 전수 2026-09-20] 사건 어휘의 부정을 고친 직후 같은 형태를 세니 피해 갈래 13문장 중 7건이 "서리에 안 얼었다" ·
-    "피해 없음"을 **피해 사건**으로 읽었다 — 그 사건은 경보↔피해 대조(evolve)에 적중으로 들어간다. 같은 규칙을 여기에도 둔다."""
+    "피해 없음"을 **피해 사건**으로 읽었다 — 그 사건은 경보↔피해 대조(evolve)에 적중으로 들어간다. 같은 규칙을 여기에도 둔다.
+    [검토 2026-09-20 ④] 갈래 전부를 본다 — 한 갈래가 부정이고 다른 갈래가 긍정이면("벌레 먹은 잎은 없고 곰팡이가 폈다") 긍정 갈래가 이긴다.
+    전에는 사전 순서에서 먼저 걸린 갈래의 부정으로 끝나 실제 피해를 잃었다."""
     norm = _NEG_FOLD.sub("§", text)
+    m = re.search("피해", norm)
+    if m and _NEG_DMG.match(norm[m.end():]):
+        return NO_DAMAGE                     # "서리 맞았는데 피해는 없다" — 피해 없음을 **명시**한 문장이 갈래 어휘보다 앞선다
+    negated = False
     for fam, words in DAMAGE_WORDS.items():
         for w in words:
-            m = re.search("§?".join(re.escape(ch) for ch in w), norm)
-            if not m:
+            mm = re.search("§?".join(re.escape(ch) for ch in w), norm)
+            if not mm:
                 continue
-            if "§" in m.group(0) or _NEG_DMG.match(norm[m.end():]):
-                return NO_DAMAGE
+            if "§" in mm.group(0) or _NEG_DMG.match(norm[mm.end():]):
+                negated = True
+                break
             return fam
-    m = re.search("피해", norm)
-    if not m:
-        return None
-    return NO_DAMAGE if _NEG_DMG.match(norm[m.end():]) else "피해"
+    if m:
+        return "피해"
+    return NO_DAMAGE if negated else None
 
 
 def classify(text: str, today: date) -> list[dict[str, Any]]:
@@ -450,6 +472,10 @@ def choose_kind(msg_id: str, kind: str, today: date | None = None) -> dict[str, 
     m = get_message(msg_id)
     if not m:
         raise ChatError("없는 메시지")
+    if m.get("confirmed_refs"):
+        # [검토 2026-09-20 ⑥] 초안 일부가 이미 원장에 들어간 발화의 종류를 바꾸면 확인 표지가 사라져 새 초안이 '이미 확인됨'으로 읽혔다(영영 확인 불가).
+        # 원장은 append-only — 들어간 것은 그대로 두고, 다른 종류가 필요하면 새로 보낸다
+        raise ChatError(f"이미 원장에 들어간 초안이 있는 발화 — 원장 {', '.join(m['confirmed_refs'])}. 다른 종류는 새로 보낸다")
     today = today or date.today()
     t = m["text"]
     day = parse_day(t, today)
@@ -530,8 +556,8 @@ def confirmed_ref(m: dict[str, Any], draft_index: int) -> str | None:
     if draft_index < len(drafts) and drafts[draft_index].get("confirmed_ref"):
         return drafts[draft_index]["confirmed_ref"]
     refs = m.get("confirmed_refs") or []
-    if refs and not any(x.get("confirmed_ref") for x in drafts):
-        return refs[0]
+    if refs and len(drafts) <= 1 and not any(x.get("confirmed_ref") for x in drafts):
+        return refs[0]                       # 옛 기록은 초안이 하나뿐이었다 — 둘 이상이면 표지 없는 초안은 열린 것이다(검토 2026-09-20 ⑥)
     return None
 
 

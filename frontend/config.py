@@ -71,11 +71,23 @@ def today() -> date:
     [2026-09-20] 발행자 경로 걷기 검사가 실제 날짜로 판정을 보니 9/24 마감이 지나면 거짓 실패가 난다(시점을 잃은 수치는 인상이 된다).
     운영에서는 비워 둔다 — 고정돼 있으면 /judge · /changes 가 그 사실을 보인다(잊힌 고정이 조용히 옛 판정을 내지 않게)."""
     raw = today_frozen()
-    return date.fromisoformat(raw) if raw else date.today()
+    return check_today(raw) if raw else date.today()
 
 
 def today_frozen() -> str:
     return os.environ.get(TODAY_ENV, "").strip()
+
+
+def check_today(raw: str | None = None) -> date | None:
+    """AGRODSS_TODAY 값 검증 — 기동 때 한 번 부른다(잘못된 값이면 서버가 뜨지 않고 이유를 말한다).
+    [검토 2026-09-20 ⑤] 전에는 요청마다 fromisoformat 이 터져 채팅·판단·반입 화면이 전부 500 이고 /changes 만 멀쩡해 원인이 숨었다."""
+    raw = today_frozen() if raw is None else raw
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise RuntimeError(f"{TODAY_ENV}={raw!r} 는 날짜가 아니다 — YYYY-MM-DD 로 적거나 .env 에서 지운다(검사·재현용 고정값)") from None
 
 
 def assert_local(host: str) -> str:
