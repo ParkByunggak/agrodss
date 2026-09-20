@@ -6,12 +6,14 @@ from __future__ import annotations
 import http.client
 from urllib.parse import quote, urlencode
 
-from frontend import chat_pages, serve
-from ingest import chat, events as ev
+from frontend import chat_pages, config, serve
+from ingest import chat, events as ev, fertilizer as fz, soil_store
 from tests.test_brand_home import srv  # noqa: F401
+from tests.test_fertilizer import PNU, USE_XML
 
 SID = "p001-jjokpa-2026f"
 SENTENCE = "쪽파 포장에는 웃거름 주지 않고 수분공급만 표면이 마르지 않게 해 줌. 그 근거는 토양검증 상태를 기준으로 함"
+TODAY = "2026-09-19"     # 기준점(08-25)+25 — 웃거름 1회 창(09-16~09-24) 안. 실제 날짜로 걸으면 9/25 부터 거짓 실패(시점 축) → 화면의 오늘을 고정한다
 
 
 def _get(port, path):
@@ -28,7 +30,11 @@ def _post(port, path, form):
     return r.status, r.getheader("Location"), r.read().decode("utf-8")
 
 
-def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv):
+def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv, monkeypatch):
+    monkeypatch.setenv(config.TODAY_ENV, TODAY)
+    assert config.today().isoformat() == TODAY
+    # 0. live_check 가 남기는 것 — 필지 처방 정본(흙토람 FrtlzrUse)이 격리 저장소에 있다(발행자 2회차 실측: 처방 success 저장)
+    soil_store.save(fz.parse_prescription_xml(USE_XML, PNU, "07027", fetched_at="2026-09-19T20:17:00+00:00"), "p001", "07027")
     # 1. 채팅 화면 — 메뉴가 있고 항목이 전부 실린다
     st, _, body = _get(srv, f"/c/{quote(SID)}")
     assert st == 200 and 'id="user-tab"' in body and all(f'href="{h}"' in body for h, _, _ in (i for i in chat_pages.USER_MENU if i))
@@ -63,6 +69,10 @@ def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv):
     assert st == 200 and "<h2>웃거름 1회 " in body and "top_dressing_1" not in body
     assert "사유 기록됨 — 작업일 2026-09-16 · 마감 2026-09-24" in body and "· 사유: 쪽파 포장에는 웃거름 주지 않고" in body
     assert "<h2>병해충 경보(칸 3) " in body and "<h2>배수 경보(칸 4) " in body
+    # 4b. 처방 정본이 있으면 웃거름 카드가 **양**을 낸다(추비 N·K, kg/10a) — 발행자 2회차 live_check 뒤 화면에서 보라고 한 그 값
+    assert "양 추비 N 7.6" in body and "K₂O 5.5" in body and "정본 대기" not in body[body.index("<h2>웃거름 1회 "):body.index("<h2>웃거름 2회")]
+    assert f"오늘이 {TODAY} 로 고정돼 있다" in body                                     # 고정은 화면이 말한다(잊힌 고정 방지)
+    assert "기준점 후 25일" in body                                                     # 판정 자체가 고정된 오늘로 났다(실제 날짜면 26일 이상)
     st, _, body = _get(srv, f"/c/{quote(SID)}")
     assert body.count("원장에 들어감") >= 2 and "확인 → 원장" not in body
     # 5. 영농일지에 불이행 사유 줄 · 변경 로그에 실행 중 = HEAD

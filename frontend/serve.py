@@ -14,7 +14,6 @@ import sys
 import threading
 import traceback
 import webbrowser
-from datetime import date
 from email.parser import BytesParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -72,6 +71,8 @@ def changes_page() -> tuple[int, str]:
         state = f'<span class="st st-진행">뒤처짐</span> 실행 중 {html.escape(RUNNING_HEAD)} · 저장소 {html.escape(head)} — 자동 재기동 대기({config.RELOAD_POLL_SEC}초 감시), 새로고침하면 새 코드'
     else:
         state = f'<span class="st st-대기">뒤처짐</span> 실행 중 {html.escape(RUNNING_HEAD)} · 저장소 {html.escape(head)} — AGRODSS_RELOAD=0 이라 수동 재시작'
+    if config.today_frozen():
+        state += f' · <span class="st st-대기">오늘 고정 {html.escape(config.today_frozen())}</span> ({config.TODAY_ENV} — 검사·재현용, 운영이면 지운다)'
     rows = "".join(f"<tr><td><code>{html.escape(h)}</code></td><td>{html.escape(d)}</td><td>{html.escape(s)}</td></tr>" for h, d, s in git_log_lines(20))
     body = (f"<h1>변경 로그</h1><p>{state}</p>"
             f"<table><thead><tr><th>커밋</th><th>날짜</th><th>제목</th></tr></thead><tbody>{rows or '<tr><td colspan=3>git 이력을 읽지 못했다</td></tr>'}</tbody></table>"
@@ -191,7 +192,9 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
 def judge_page() -> tuple[int, str]:
     out = ["<h1>판단 — 3층 산출 봉투</h1>",
            "<p class=\"meta\">화면은 봉투만 받는다(4층). 종류(kind)가 먼저 보이고, 값은 그 다음이다. 소비자 노출은 D-2 전까지 전부 아니오.</p>"]
-    for s, envs, info in judge_run.all_judgments():
+    if config.today_frozen():
+        out.append(f'<p class="err"><b>오늘이 {_e(config.today_frozen())} 로 고정돼 있다</b> ({config.TODAY_ENV} — 검사·재현용. 운영이면 .env 에서 지운다)</p>')
+    for s, envs, info in judge_run.all_judgments(config.today()):
         out.append(f"<h1 style=\"font-size:17px;margin-top:24px\">{_e(s['label'])}</h1>")
         for env in envs:
             e = env.to_dict()
@@ -252,7 +255,7 @@ def media_page(message: str = "", error: str = "") -> tuple[int, str]:
         out.append(f'<p class="ok">{_e(message)}</p>')
     out.append("<h2>지금 찍을 장면 (격자 촬영 칸)</h2><ul>")
     for s in subjects:
-        h = grid_capture.hint_for(s, date.today())
+        h = grid_capture.hint_for(s, config.today())
         if h is None:
             out.append(f"<li><b>{_e(s['label'])}</b> — 격자 또는 기준점 없음</li>")
         elif h["stage"] is None:
@@ -333,7 +336,7 @@ def render_page(name: str) -> tuple[int, str]:
 
 # ── [M-13] Claude 형식 채팅 화면 ─────────────────────────────────────────────────────
 def _shell(current: str, main_html: str, panel_html: str | None, title: str) -> str:
-    return chat_pages.shell(title, chat_pages.sidebar(current, doc_list(), date.today()), main_html, panel_html, git_head_short())
+    return chat_pages.shell(title, chat_pages.sidebar(current, doc_list(), config.today()), main_html, panel_html, git_head_short())
 
 
 def chat_home() -> tuple[int, str, str | None]:
@@ -347,7 +350,7 @@ def chat_page(sid: str, message: str = "", error: str = "") -> tuple[int, str]:
     s = subjects.by_id(sid)
     if not s:
         return 404, _shell("", '<div class="msgs"><h1>없는 목록</h1></div>', None, "없음")
-    today = date.today()
+    today = config.today()
     body = chat_pages.thread_main(s, today, message=message, error=error)
     return (400 if error else 200), _shell(f"/c/{sid}", body, chat_pages.thread_panel(s, today), f"AGRODSS —{s.get('label')}")
 
@@ -356,7 +359,7 @@ def diary_page(sid: str) -> tuple[int, str]:
     s = subjects.by_id(sid)
     if not s:
         return 404, _shell("", '<div class="msgs"><h1>없는 목록</h1></div>', None, "없음")
-    return 200, _shell(f"/c/{sid}", chat_pages.diary_main(s, date.today()), None, f"영농일지 — {s.get('label')}")
+    return 200, _shell(f"/c/{sid}", chat_pages.diary_main(s, config.today()), None, f"영농일지 — {s.get('label')}")
 
 
 def new_page(error: str = "", form: dict[str, str] | None = None) -> tuple[int, str]:
@@ -367,7 +370,7 @@ def mall_page(sid: str) -> tuple[int, str]:
     """[M-11] 몰 상세페이지 목업 — mall.product 가 몰-H 게이트를 지난 뷰만 준다."""
     from mall import product as mall_product
     try:
-        view = mall_product.product_view(sid, today=date.today())
+        view = mall_product.product_view(sid, today=config.today())
     except mall_product.MallBoundaryError as e:
         return 404, _shell("", f'<div class="msgs"><h1>없는 상품</h1><p>{html.escape(str(e))}</p></div>', None, "없음")
     return 200, _shell(f"/mall/{sid}", chat_pages.mall_main(view), None, f"몰 목업 — {view['title']}")
@@ -378,7 +381,7 @@ def me_page(message: str = "", error: str = "", form: dict[str, str] | None = No
 
 
 def improve_page(message: str = "", error: str = "", cycle=None) -> tuple[int, str]:
-    return (400 if error else 200), _shell("/improve", chat_pages.improve_main(date.today(), message, error, cycle), None, "개선 · 자율진화")
+    return (400 if error else 200), _shell("/improve", chat_pages.improve_main(config.today(), message, error, cycle), None, "개선 · 자율진화")
 
 
 def parse_body(content_type: str, raw: bytes) -> tuple[dict[str, str], list[tuple[str, bytes]]]:
@@ -613,7 +616,7 @@ class Handler(BaseHTTPRequestHandler):
             except nc.CandidateError as e:
                 status, body = improve_page(error=str(e))
         elif p == "/improve/cycle":
-            status, body = improve_page(cycle=chat_pages.run_cycle(date.today(), git_head_short()))
+            status, body = improve_page(cycle=chat_pages.run_cycle(config.today(), git_head_short()))
         elif p == "/media/register":
             try:
                 rec = media.register(form.get("key", ""), form.get("subject", ""),

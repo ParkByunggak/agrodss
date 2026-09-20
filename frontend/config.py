@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 from pathlib import Path
 
 
@@ -62,6 +63,19 @@ LAN_TOKEN: str = os.environ.get("AGRODSS_LAN_TOKEN", "").strip()
 LAN_TOKEN_MIN: int = 16
 LAN_BIND = "0.0.0.0"
 COOKIE_NAME = "agrodss_t"
+TODAY_ENV = "AGRODSS_TODAY"
+
+
+def today() -> date:
+    """화면의 '오늘' 정본. AGRODSS_TODAY=YYYY-MM-DD 가 있으면 그 날로 고정한다 — 검사 · 재현(시점 축)용.
+    [2026-09-20] 발행자 경로 걷기 검사가 실제 날짜로 판정을 보니 9/24 마감이 지나면 거짓 실패가 난다(시점을 잃은 수치는 인상이 된다).
+    운영에서는 비워 둔다 — 고정돼 있으면 /judge · /changes 가 그 사실을 보인다(잊힌 고정이 조용히 옛 판정을 내지 않게)."""
+    raw = today_frozen()
+    return date.fromisoformat(raw) if raw else date.today()
+
+
+def today_frozen() -> str:
+    return os.environ.get(TODAY_ENV, "").strip()
 
 
 def assert_local(host: str) -> str:
