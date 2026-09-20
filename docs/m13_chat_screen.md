@@ -76,7 +76,7 @@ LLM 은 여기 없다. 규칙 분류가 못 나누면 못 나눴다고 말한다
 | 채팅 목록 최하단 사용자 정보 탭 | `/me` — 표시명 · 역할 · 필지(공개 뷰 + 입력 대기) · 설정·동기화 상태 · 원장 건수. 등록부 `data/profile.json`(스키마 `user`) | 연락처·주소는 두지 않는다(PII) — 이름·메모에 `@`·`010-` 이 있으면 거부 |
 | **사용자 탭 = 계정 메뉴**(발행자 2026-09-20 스크린샷 형식) | 탭을 누르면 위로 열리는 메뉴(`<details>`, JS 없음 · `chat_pages.USER_MENU` 정본 · 채팅 셸과 표 화면이 `render.USER_MENU_CSS` 한 벌). 스크린샷 → agrodss 대응: 설정→`/me` · 도움 받기→채팅 화면 설명 · 모든 플랜 보기→모든 목록 · 앱/확장 다운로드→휴대폰 동기화(D-16, `/me#sync`) · 변경 로그 보기→**`/changes`**(커밋 제목 20건 + 실행 중 코드 = 저장소 HEAD 인가 — 라이브 반영 규율의 화면판) · 자세히 알아보기→대장. 그 사이에 판단 · 사건/불이행 사유 · 반입 · 개선 | **언어 · 팀 참여 · 로그아웃은 없다** — 언어 전환 · 팀 · 계정이 없다(D-6 이 PC 뿐). 없는 기능은 메뉴에 두지 않는다. 항목 전부 실재 경로(래칫: 200/302 + 고정 집합) |
 
-## 5. 검사 (tests/test_chat_diary.py 23 · test_chat_actions 4 · test_chat_upload_voice_lan 9 · test_profile_tab 3)
+## 5. 검사 (test_chat_diary · test_chat_actions · test_chat_upload_voice_lan · test_profile_tab · test_chat_corpus · test_noncompliance_chat · test_publisher_path_http · test_season_end — 건수는 관문 출력이 정본, 제목에 적지 않는다 U-19)
 
 주입 4(2026-09-19): ① 채팅이 확인 없이 사건을 쓴다 → 2 failed ② 등록부가 사전을 건너뛴다 → 3 failed
 ③ 대응 결정 없는 질문에 수확 봉투로 답한다 → 1 failed ④ 등록부 경로를 import 시점에 묶는다 →
