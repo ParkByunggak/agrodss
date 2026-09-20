@@ -176,6 +176,20 @@ def _event_type(text: str) -> str | None:
     return None
 
 
+# [검토 잔여 2026-09-20] 명사 어휘 하나("비료" · "거름" · "트랩" · "관수")로 사건이 되던 형태 — "비료 상태가 안 좋다"가 시비 사건이었다.
+# 사건은 **한 일**이다: 과거 어미(받침 ㅆ — 았/었/했/줬/쳤/샀/캤…) · 습니다 · 완료/끝/마침 · 날짜(오늘 · 9월 10일 · 3일 전) 중 하나가 있어야 한다.
+# 말뭉치 사건 13문장은 전부 과거 어미가 있었고(실측), "오늘 파종" · "9월 10일 방제" · "방제 완료"는 날짜·완료로 남는다.
+_DONE_SUFFIX = re.compile(r"[가-힣]습니다|완료|끝냈|마쳤|마침|끝\s*$|함\s*$")
+
+
+def _done_evidence(text: str) -> bool:
+    if any((ord(ch) - 0xAC00) % 28 == 20 for ch in text if "가" <= ch <= "힣"):   # 받침 ㅆ = 과거 어미
+        return True
+    if _DONE_SUFFIX.search(text):
+        return True
+    return bool(_ISO.search(text) or _MD.search(text) or _AGO.search(text) or any(w in text for w in _REL))
+
+
 # [발행자 2026-09-20 "쪽파 포장에는 웃거름 주지 않고 수분공급만 …. 그 근거는 토양검정 상태를 기준으로 함"]
 # 사건 어휘 + **부정**은 사건이 아니라 불이행 사유다(I-3 §5 "안 따른 이유가 조언보다 값지다"). 쪽파는 사례일 뿐이다 — 작업 종류는
 # EVENT_SYNONYMS(작목 공통), 계획 작업·계획일은 그 재배 단위의 격자 계획표에서 잇는다(_attach_plan). 작목별 분기는 없다.
@@ -322,9 +336,13 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
         risk = None if dmg == "피해" else dmg
         return [{"kind": "event", "type": ev.DAMAGE_TYPE, "observed_at": day_past or today.isoformat(), "risk": risk, "note": t,
                  "why": f"피해 어휘 → {risk or '갈래 미상'}", "needs": [] if risk else ["risk"]}]
-    if et:
+    if et and _done_evidence(t):
         return [{"kind": "event", "type": et, "observed_at": day_past, "note": t, "why": f"사건 어휘 → {et}",
                  "needs": [] if day_past else ["observed_at"]}]
+    if et:
+        # 사건 어휘는 있는데 한 일의 표지가 없다("비료 상태가 안 좋다" · "웃거름 시기다") — 상태 서술이다. 사건이면 확인에서 '다른 종류'로 바꾼다
+        return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
+                 "why": f"'{et}' 어휘는 있으나 한 일의 표지(과거 어미 · 날짜 · 완료)가 없어 관찰 메모로 제안(사건이면 종류를 바꾼다)", "needs": []}]
     if any(w in t for w in OBS_WORDS):
         return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
                  "why": "관찰 어휘(날짜 없으면 오늘 본 것으로 제안 — 확인에서 고친다)", "needs": []}]

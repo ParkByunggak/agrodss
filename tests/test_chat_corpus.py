@@ -91,6 +91,14 @@ CORPUS = [
     ("얼어붙어서 걷을 수 없었다", "event", None),
     ("벌레 먹은 잎은 없고 곰팡이가 폈다", "event", None),
     ("9월 16일에 웃거름 안 줬다. 토양검정 기준", "decision.noncompliance", None),          # 날짜가 있어도 불이행 사유(계획표 잇기는 send 에서)
+    # 명사 어휘만으로는 사건이 아니다(검토 잔여 2026-09-20) — 한 일의 표지(과거 어미 · 날짜 · 완료)가 있어야 사건
+    ("비료 상태가 안 좋다", "observation.note", None),
+    ("웃거름 시기다", "observation.note", None),
+    ("거름 냄새가 난다", "observation.note", None),
+    ("관수 시설 점검", "observation.note", None),
+    ("오늘 파종", "event", None),
+    ("방제 완료", "event", None),
+    ("9월 10일 방제", "event", None),
 ]
 
 
