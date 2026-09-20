@@ -85,3 +85,70 @@ def test_overlay_is_ignored_by_git_and_created_at_server_start():
     src_p = (ROOT / "ingest" / "parcels.py").read_text(encoding="utf-8")
     sf = src_p[src_p.index("def set_fields"):]
     assert "parcels_path()" not in sf and "lp.write_text(" in sf                     # 쓰기는 덮개에만
+
+
+# ── 복구 절차의 순서 함정(미리 걷기 2026-09-21) ────────────────────────────────────
+def _write(p: Path, rows: list[dict]) -> None:
+    p.write_text(json.dumps({"parcels": rows}, ensure_ascii=False), encoding="utf-8")
+
+
+def _base(**extra) -> dict:
+    return {"id": "p001", "source": "publisher", "recorded_at": "2026-09-19T00:00:00+00:00",
+            "observed_at": "2026-09-18", "resolution": "parcel", **extra}
+
+
+def test_overlay_backfills_values_that_only_the_legacy_file_has(monkeypatch, tmp_path):
+    """발행자 PC 복구의 실제 순서 — pull 과 사본 되돌리기 **사이에** 서버가 뜨면 덮개가 좌표 없이 만들어진다
+    (HEAD 가 바뀌면 스스로 다시 뜨므로 사람이 순서를 지키기 어렵다). 실측: 좌표·PNU 는 커밋된 적 없는 런타임 값이라
+    그대로 사라졌다. 덮개가 있어도 **옛 파일에만 있는 값은 채운다** — 그래야 순서와 무관하게 값을 안 잃는다."""
+    seed, legacy, local = tmp_path / "seed.json", tmp_path / "legacy.json", tmp_path / "local.json"
+    _write(seed, [_base(environment="노지")])
+    _write(legacy, [_base()])                                     # 되돌린 커밋본 — 좌표·PNU 가 없다
+    monkeypatch.setenv("AGRODSS_PARCELS_PATH", str(seed))
+    monkeypatch.setenv("AGRODSS_PARCELS_LEGACY_PATH", str(legacy))
+    monkeypatch.setenv("AGRODSS_PARCELS_LOCAL_PATH", str(local))
+    parcels.ensure_local()                                        # ① 서버가 먼저 떴다
+    assert parcels.by_id("p001").get("lat") is None
+    _write(legacy, [_base(address="어느 지번", lat=36.7, lon=127.9, pnu="1234567890123456789")])   # ② 사본을 되돌렸다
+    parcels.ensure_local()
+    rec = parcels.by_id("p001")
+    assert rec["lat"] == 36.7 and rec["pnu"].endswith("789") and rec["address"] == "어느 지번", rec
+    assert rec["environment"] == "노지"                            # 씨앗 값도 그대로
+
+
+def test_backfill_never_overwrites_a_value_the_overlay_already_has(monkeypatch, tmp_path):
+    """경계 — 채우기는 **덧붙이기만** 한다. 덮개가 이긴다(사람이 화면에서 고친 값을 옛 파일이 되돌리면 안 된다)."""
+    seed, legacy, local = tmp_path / "seed.json", tmp_path / "legacy.json", tmp_path / "local.json"
+    _write(seed, [_base()])
+    _write(legacy, [_base(lat=36.7, lon=127.9)])
+    monkeypatch.setenv("AGRODSS_PARCELS_PATH", str(seed))
+    monkeypatch.setenv("AGRODSS_PARCELS_LEGACY_PATH", str(legacy))
+    monkeypatch.setenv("AGRODSS_PARCELS_LOCAL_PATH", str(local))
+    parcels.ensure_local()
+    parcels.set_fields("p001", lat=35.0, overwrite=True)           # 사람이 고쳤다
+    parcels.ensure_local()                                        # 다시 떠도
+    assert parcels.by_id("p001")["lat"] == 35.0                   # 옛 파일이 되돌리지 않는다
+    assert parcels.by_id("p001")["lon"] == 127.9                  # 빠진 값은 그대로 채워진다
+
+
+def test_backfill_does_not_rewrite_the_overlay_when_there_is_nothing_to_add(monkeypatch, tmp_path):
+    """기동마다 덮개를 다시 쓰지 않는다 — 채울 것이 없으면 바이트가 그대로다(쓰기는 잃을 기회다)."""
+    seed, legacy, local = tmp_path / "seed.json", tmp_path / "legacy.json", tmp_path / "local.json"
+    _write(seed, [_base()])
+    _write(legacy, [_base(lat=36.7)])
+    monkeypatch.setenv("AGRODSS_PARCELS_PATH", str(seed))
+    monkeypatch.setenv("AGRODSS_PARCELS_LEGACY_PATH", str(legacy))
+    monkeypatch.setenv("AGRODSS_PARCELS_LOCAL_PATH", str(local))
+    parcels.ensure_local()
+    before = local.read_bytes()
+    writes = []
+    real = Path.write_text
+    monkeypatch.setattr(Path, "write_text",
+                        lambda self, *a, **k: (writes.append(str(self)), real(self, *a, **k))[1])
+    for _ in range(3):                       # 여러 번 떠도
+        parcels.ensure_local()
+    assert not [w for w in writes if w == str(local)], "채울 것이 없는데 덮개를 다시 썼다(내용이 같아도 쓰기는 잃을 기회다)"
+    legacy.unlink()                          # 옛 파일이 아예 없어도 마찬가지
+    parcels.ensure_local()
+    assert not [w for w in writes if w == str(local)]
+    assert local.read_bytes() == before

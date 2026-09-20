@@ -46,12 +46,55 @@ def _read(p: Path) -> list[dict[str, Any]]:
     return list(json.loads(p.read_text(encoding="utf-8")).get("parcels", []))
 
 
+def _backfill_local(lp: Path) -> Path:
+    """덮개에 **빠진** 값만 옛 파일에서 채운다. 있는 값은 건드리지 않고, 채울 것이 없으면 파일도 안 쓴다.
+
+    무엇을 옮기는지는 `ensure_local` 과 **같은 규칙**이다 — PII 필드와 *씨앗에 없는* 런타임 기록만. 첫 판은 옛 파일의
+    모든 키를 옮겨 `source` · `recorded_at` 같은 장부 필드까지 덮개로 끌어왔고, 그래서 기동마다 덮개를 다시 썼다
+    (직접 쓴 검사가 잡았다). 규칙이 두 벌이면 어긋난다 — 한 벌로 둔다.
+    """
+    legacy = {r.get("id"): r for r in _read(legacy_path())}
+    if not legacy:
+        return lp
+    seed = {r.get("id"): r for r in _read(parcels_path())}
+    doc = json.loads(lp.read_text(encoding="utf-8")) if lp.exists() else {"parcels": []}
+    rows = doc.get("parcels") or []
+    by_id = {r.get("id"): r for r in rows}
+    added = 0
+    for pid, lg in legacy.items():
+        cur, s = by_id.get(pid), seed.get(pid, {})
+        if cur is None:
+            cur = {"id": pid}
+            rows.append(cur)
+            by_id[pid] = cur
+        for k, v in lg.items():
+            if k == "id" or v is None or k in cur:
+                continue                       # 덮개에 이미 있으면 그것이 이긴다 — 덧붙이기만 한다
+            if k not in PRIVATE_FIELDS and k in s:
+                continue                       # 씨앗에 있는 값은 씨앗이 정본 — 덮개로 끌어오지 않는다(ensure_local 과 같은 규칙)
+            cur[k] = v
+            added += 1
+    if not added:
+        return lp
+    doc["parcels"] = rows
+    lp.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return lp
+
+
 def ensure_local() -> Path:
     """씨앗(추적 파일)에 PII 필드가 남아 있고 덮개가 없으면 덮개를 만들어 옮겨 둔다 — 발행자 PC 에서 pull 뒤 첫 기동에 자동으로 일어난다.
-    씨앗은 여기서 건드리지 않는다(추적 파일 쓰기 금지 — 씨앗에서 PII 를 빼는 것은 커밋으로)."""
+    씨앗은 여기서 건드리지 않는다(추적 파일 쓰기 금지 — 씨앗에서 PII 를 빼는 것은 커밋으로).
+
+    [복구 절차 미리 걷기 2026-09-21] 덮개가 있으면 그냥 돌아가던 것이 **순서 함정**이었다. 발행자 PC 의 실제 복구는
+    ① 옛 파일 사본 ② 추적 파일 되돌리기(pull 이 지나가게) ③ pull ④ 사본 제자리 인데, ③ 과 ④ 사이에 서버가 뜨면
+    (HEAD 가 바뀌면 스스로 다시 뜬다) 덮개가 **좌표 없는 커밋본으로** 만들어지고, 그 뒤 사본을 되돌려도 이주가 다시
+    일어나지 않는다. 실측: 좌표·PNU 는 커밋된 적이 없는 런타임 값이라 그대로 **사라진다**.
+    그래서 덮개가 있어도 **옛 파일에만 있는 값은 채워 넣는다** — 덧붙이기만 하고 덮개의 기존 값은 절대 안 건드린다
+    (되돌릴 수 있는 쪽 · 값을 잃지 않는 쪽). 순서를 사람이 지켜야 하는 절차는 언젠가 어긋난다.
+    """
     lp = local_path()
     if lp.exists():
-        return lp
+        return _backfill_local(lp)
     seed = {r.get("id"): r for r in _read(parcels_path())}
     legacy = {r.get("id"): r for r in _read(legacy_path())}       # 옛 추적 파일 — 발행자 PC 에는 런타임이 써 넣은 좌표·PNU 도 여기 있다
     moved: list[dict[str, Any]] = []
