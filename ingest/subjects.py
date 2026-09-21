@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from grid import schema as grid_schema
-from ingest import media
+from ingest import dropped, media
 from names import resolve as names
 from schema import records as sch
 
@@ -61,7 +61,10 @@ def grid_unit_for(crop: str, season: str) -> str | None:
     for p in sorted(grid_schema.GRID_DIR.glob("*.json")):
         try:
             u = json.loads(p.read_text(encoding="utf-8")).get("unit", {})
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            # [조용한 실패 전수 2026-09-21] 격자 파일 하나가 깨지면 그 작목은 **격자가 없는 것처럼** 되고
+            # 판정이 통째로 '해당 없음' 이 된다 — 아무 데도 안 남으면 왜 답이 비는지 알 길이 없다.
+            dropped.note("격자 파일", p.name, f"JSONDecodeError: {e}")
             continue
         if u.get("crop") == crop and u.get("season") and u["season"] in season:
             return u.get("id")

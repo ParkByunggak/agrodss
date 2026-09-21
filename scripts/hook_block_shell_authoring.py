@@ -147,7 +147,11 @@ def main() -> int:
         payload = json.load(sys.stdin)
         cmd = (payload.get("tool_input") or {}).get("command") or ""
         tool = payload.get("tool_name") or "Bash"
-    except Exception:
+    except Exception as e:  # noqa: BLE001
+        # [조용한 실패 전수 2026-09-21] 여기서 0 을 돌려주는 것은 **통과**다. 못 읽은 것을 판정할 수는 없으니 통과가
+        # 맞다(막으면 어떤 Bash 도 못 돈다). 그러나 **조용히** 통과하면 가드가 죽은 줄을 아무도 모른다 —
+        # "가드가 있는데 안 도는 상태는 가드가 없는 것보다 나쁘다". 통과하되 말한다.
+        print(f"[hook] 입력을 못 읽어 통과시킨다 — 이 회차의 가드는 무력하다({type(e).__name__}: {e})", file=sys.stderr)
         return 0
     if not cmd:
         return 0

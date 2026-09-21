@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ingest import dropped
 from schema import records as sch
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -45,7 +46,10 @@ def latest(kind: str, parcel: str | None, code: str | None = None) -> dict[str, 
     try:
         rec = json.loads(p.read_text(encoding="utf-8")).get("record")
         return sch.validate(rec) if rec else None
-    except (ValueError, sch.SchemaError):
+    except (ValueError, sch.SchemaError) as e:
+        # [조용한 실패 전수 2026-09-21] 전에는 그냥 None 이었다 — 처방 정본이 **있는데** 못 읽으면 판정이
+        # "정본 미도착" 이라고 말한다. 원인이 뒤바뀌어 농가는 없는 것을 다시 받으러 간다. 버린 사실을 남긴다.
+        dropped.note("토양 저장소", p.name, f"{type(e).__name__}: {e}")
         return None
 
 
@@ -58,6 +62,7 @@ def prescriptions_for(parcel: str) -> list[dict[str, Any]]:
             rec = json.loads(p.read_text(encoding="utf-8")).get("record")
             if rec:
                 out.append(sch.validate(rec))
-        except (ValueError, sch.SchemaError):
+        except (ValueError, sch.SchemaError) as e:
+            dropped.note("토양 저장소(처방)", p.name, f"{type(e).__name__}: {e}")
             continue
     return out
