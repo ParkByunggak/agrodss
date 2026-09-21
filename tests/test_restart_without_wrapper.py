@@ -55,3 +55,20 @@ def test_restart_exit_code_is_still_three_for_the_batch():
     assert config.RESTART_EXIT_CODE == 3
     text = (ROOT / "run_frontend.bat").read_text(encoding="ascii")
     assert '"%RC%"=="3"' in text
+
+
+def test_the_batch_also_restarts_on_the_silent_death_shape():
+    """[R-6 2026-09-21] 종료 코드 3 만 보면 **옛 빌드의 조용한 종료**(exit 0)를 못 살린다.
+
+    고친 코드가 도착하는 그 순간 돌고 있는 것은 **옛 빌드**다 — 제 재기동을 스스로 못 구한다(발행자 화면이
+    두 번 죽은 이유). 그래서 래퍼가 **죽음의 형태**로 판단한다: 도는 동안 HEAD 가 바뀌었는데 재기동을
+    요청하지 않았으면 그것이 조용한 종료다. Ctrl+C 도 0 으로 끝나지만 그때는 HEAD 가 안 바뀌므로 조용히 멈춘다.
+    """
+    text = (ROOT / "run_frontend.bat").read_text(encoding="ascii")
+    assert all(ord(c) < 128 for c in text), "배치는 ASCII — cmd 가 cp949 로 읽는다"
+    assert text.count("rev-parse --short HEAD") == 2, "돌기 전과 돌고 난 뒤 두 번 재야 바뀜을 안다"
+    assert 'if not "%H0%"=="%H1%" goto restart' in text
+    i_rc, i_shape = text.index('if "%RC%"=="3" goto restart'), text.index('if not "%H0%"=="%H1%"')
+    assert i_rc < i_shape, "종료 코드 3 이 먼저다 — 형태 판단은 그것이 아닐 때만"
+    assert text.index(":again") < text.index("rev-parse"), "첫 측정은 루프 안에서(재기동마다 새로 잰다)"
+    assert text.index(":restart") > i_shape and text.count("goto again") == 1

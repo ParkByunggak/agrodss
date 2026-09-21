@@ -101,14 +101,25 @@ table.tb { border-collapse:collapse; width:100%; font-size:13px; } .tb th, .tb t
 """
 
 
-def shell(title: str, side: str, main: str, panel: str | None, head: str) -> str:
+def shell(title: str, side: str, main: str, panel: str | None, footer: str) -> str:
+    """[발행자 화면 2026-09-21] 발행자가 붙여 주신 꼬리가 결함을 그대로 보여 주었다:
+
+        HEAD 실행 중 225cf9f · 127.0.0.1:8765 · 외부 배포 없음(D-6) · 127.0.0.1:8765 · 외부 배포 없음(D-6)
+
+    받은 것은 **꼬리 정본**(`serve.footer_text()` — 실행 중 커밋 · 호스트 · D-6 · AI 고지를 이미 담고 있다)인데,
+    이 자리가 그것을 `head` 라고 부르며 **호스트·포트·D-6 을 한 번 더** 붙이고 앞에 낡은 `HEAD ` 까지 달았다.
+    두 벌 진실의 표현 층 판이다 — 정본이 바뀌어도 이 사본은 안 바뀐다(실제로 '실행 중' 으로 고친 뒤에도
+    `HEAD` 라는 말이 남아, 읽는 사람에게는 *저장소 HEAD* 로 보였다).
+
+    받은 것을 **그대로** 싣는다. 이름도 `footer` 로 바꾼다 — `head` 라는 이름이 이 사본을 부른 원인이다.
+    """
     cols = "" if panel is not None else "<style>.app{grid-template-columns:260px 1fr}.composer{right:0}</style>"
     title = title if title.startswith(BRAND) else f"{BRAND} — {title}"
     return (f'<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             f"<title>{_e(title)}</title><style>{CSS}</style>{cols}</head><body><div class=\"app\">"
             f'<aside class="side">{side}</aside><main class="thread">{main}</main>'
             + (f'<aside class="panel">{panel}</aside>' if panel is not None else "")
-            + f'</div><div style="position:fixed;bottom:4px;right:8px;color:var(--muted);font-size:10px">HEAD {_e(head)} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)</div></body></html>')
+            + f'</div><div style="position:fixed;bottom:4px;right:8px;color:var(--muted);font-size:10px">{_e(footer)}</div></body></html>')
 
 
 def sidebar(current: str, docs: list[str], today: date) -> str:

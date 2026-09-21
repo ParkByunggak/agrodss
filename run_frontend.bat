@@ -30,15 +30,27 @@ REM Without this flag (e.g. PowerShell running serve.py directly) the server res
 set "AGRODSS_WRAPPED=1"
 set "BROWSER="
 :again
+set "H0="
+for /f "delims=" %%h in ('git rev-parse --short HEAD 2^>nul') do set "H0=%%h"
 %PY% frontend\serve.py %BROWSER%
 set "RC=%errorlevel%"
-if "%RC%"=="3" (
-  REM [publisher 2026-09-19 21:40 "changes must show up right away"] the server saw git HEAD change - git pull landed - and
-  REM shut itself down with code 3. Restart on the new code without opening another browser window; the page just reloads.
-  echo [agrodss] code changed - restarting on new HEAD ...
-  set "BROWSER=--no-browser"
-  goto again
-)
+set "H1="
+for /f "delims=" %%h in ('git rev-parse --short HEAD 2^>nul') do set "H1=%%h"
+REM [publisher 2026-09-19 21:40 "changes must show up right away"] the server saw git HEAD change - git pull landed - and
+REM shut itself down with code 3. Restart on the new code without opening another browser window; the page just reloads.
+if "%RC%"=="3" goto restart
+REM [R-6 2026-09-21] a race made the server exit 0 on a code change, so this loop never fired and the screen stayed dead
+REM with no error at all. The race is fixed, but the build that is RUNNING when the fix arrives is the old one - it cannot
+REM save its own restart. So judge by the SHAPE of the death: the code changed while it ran, yet it did not ask to restart.
+REM That is the silent exit. Ctrl+C also exits 0, but then HEAD did not change, so this stays quiet.
+if not "%H0%"=="%H1%" goto restart
+goto stopped
+:restart
+echo [agrodss] code changed - restarting on new HEAD ...
+set "BROWSER=--no-browser"
+goto again
+:stopped
 echo.
-echo [agrodss] server stopped - exit code %RC%
+echo [agrodss] server stopped - exit code %RC% (code was %H0%)
+echo [agrodss] if the screen died with no error, just run this file again.
 pause
