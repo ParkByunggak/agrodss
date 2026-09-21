@@ -87,7 +87,12 @@ main.thread { display:flex; flex-direction:column; min-height:100vh; }
 .btn { padding:5px 12px; border-radius:7px; border:1px solid var(--line); background:var(--panel); color:var(--fg); cursor:pointer; font-size:13px; }
 .btn.pri { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
 .done { color:var(--ok-fg); background:var(--ok); padding:2px 8px; border-radius:6px; font-size:12px; }
-.composer { position:fixed; bottom:0; left:260px; right:340px; padding:14px 24px 18px; background:linear-gradient(transparent, var(--bg) 30%); }
+/* [발행자 2026-09-22] 꼬리는 **화면 가운데 아래**. 자리는 여기 한 곳이 정한다 — 본문에 박으면 다음 요청 때 여러 곳을 고친다.
+   `pointer-events:none` 이 짝이다: 가운데로 오면 입력칸 위를 지나므로, 글자가 클릭을 먹으면 안 된다.
+   입력칸 아래 여백(18px→28px)은 그 자리를 비워 두려고 함께 늘렸다 — 안 늘리면 글자와 상자가 겹친다. */
+#footer { position:fixed; left:0; right:0; bottom:6px; text-align:center; pointer-events:none; z-index:3;
+  color:var(--muted); font-size:10px; line-height:1.3; padding:0 12px; }
+.composer { position:fixed; bottom:0; left:260px; right:340px; padding:14px 24px 28px; background:linear-gradient(transparent, var(--bg) 30%); }
 .composer form { max-width:820px; margin:0 auto; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:10px 12px; box-shadow:0 4px 18px rgba(0,0,0,.06); }
 .composer textarea { width:100%; border:0; background:transparent; color:var(--fg); resize:none; font:inherit; min-height:52px; outline:none; }
 .composer .row { display:flex; justify-content:space-between; align-items:center; margin-top:4px; }
@@ -123,6 +128,10 @@ def shell(title: str, side: str, main: str, panel: str | None, footer: str) -> s
     `HEAD` 라는 말이 남아, 읽는 사람에게는 *저장소 HEAD* 로 보였다).
 
     받은 것을 **그대로** 싣는다. 이름도 `footer` 로 바꾼다 — `head` 라는 이름이 이 사본을 부른 원인이다.
+
+    [발행자 2026-09-22] *"이 문장은 화면의 **중앙**에 위치하도록 한다."* — 오른쪽 구석에서 가운데로 옮겼다.
+    자리(스타일)는 CSS 의 `#footer` 하나가 정한다: 본문에 박아 두면 다음 요청 때 여기저기를 고쳐야 하고,
+    검사도 그 문자열을 물고 있어 **맞는 고침이 관문을 빨갛게 만든다**(오늘 네 번 겪은 그 형태).
     """
     cols = "" if panel is not None else "<style>.app{grid-template-columns:260px 1fr}.composer{right:0}</style>"
     title = title if title.startswith(BRAND) else f"{BRAND} — {title}"
@@ -130,7 +139,7 @@ def shell(title: str, side: str, main: str, panel: str | None, footer: str) -> s
             f"<title>{_e(title)}</title><style>{CSS}</style>{cols}</head><body><div class=\"app\">"
             f'<aside class="side">{side}</aside><main class="thread">{main}</main>'
             + (f'<aside class="panel">{panel}</aside>' if panel is not None else "")
-            + f'</div><div style="position:fixed;bottom:4px;right:8px;color:var(--muted);font-size:10px">{_e(footer)}</div></body></html>')
+            + f'</div><div id="footer">{_e(footer)}</div></body></html>')
 
 
 def sidebar(current: str, docs: list[str], today: date) -> str:

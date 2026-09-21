@@ -125,7 +125,9 @@ th { background:var(--head); position:sticky; top:0; }
 .st-폐기 { background:var(--drop); color:var(--drop-fg); }
 .meta { color:var(--muted); font-size:12px; margin-bottom:12px; }
 .counts span { margin-right:10px; }
-footer { color:var(--muted); font-size:12px; border-top:1px solid var(--line); margin-top:32px; padding-top:8px; }
+/* [발행자 2026-09-22] 꼬리는 가운데. 표 화면은 문서 흐름의 끝이라 고정하지 않고 가운데 정렬만 한다 —
+   여기까지 함께 옮기지 않으면 같은 문장이 화면마다 다른 자리에 선다(그게 더 어수선하다). */
+footer { color:var(--muted); font-size:12px; border-top:1px solid var(--line); margin-top:32px; padding-top:8px; text-align:center; }
 @media (max-width: 720px) { .wrap { display:block; } nav { width:auto; border-right:0; border-bottom:1px solid var(--line); } main { padding:16px; } }
 """
 

@@ -41,7 +41,10 @@ def _footer_of(body: str) -> str | None:
     """
     if "<footer>" in body:
         return body[body.rindex("<footer>") + len("<footer>"):body.rindex("</footer>")]
-    key = "position:fixed;bottom:4px"
+    # [발행자 2026-09-22 "가운데로"] 전에는 **자리(스타일 문자열)** 로 잘랐다 — `position:fixed;bottom:4px`.
+    # 그래서 자리를 옮기라는 **맞는 요청**이 이 검사를 깨뜨린다(오늘 네 번 겪은 그 형태 — 안 재고 박은 것이 계약이 된다).
+    # 이제 **표지**(`id="footer"`)로 자른다 — 자리가 또 바뀌어도 잘라 내는 일은 그대로다.
+    key = 'id="footer"'
     if key in body:
         i = body.index(key)
         return body[body.index(">", i) + 1:body.index("</div>", i)]
@@ -69,6 +72,29 @@ def test_the_footer_is_rendered_once_and_not_re_assembled_by_the_screen(srv, pat
     assert foot.count("외부 배포 없음(D-6)") == 1, f"꼬리가 두 벌이다: {path} → {foot}"
     assert foot.count(serve.AI_NOTICE) == 1, f"{path} → {foot}"
     assert "HEAD 실행 중" not in foot, "낡은 'HEAD ' 접두가 남아 저장소 HEAD 처럼 읽힌다"
+
+
+@pytest.mark.parametrize("path", ROUTES)
+def test_the_notice_sits_in_the_middle_of_the_screen(srv, path):
+    """[발행자 2026-09-22] *"이 문장은 화면의 **중앙**에 위치하도록 한다."*
+
+    자리를 **한 곳**(CSS)이 정하는지를 본다 — 본문마다 박으면 다음 요청 때 여러 곳을 고쳐야 한다.
+    그리고 가운데로 오면 글자가 **입력칸 위**를 지나므로 `pointer-events:none` 이 짝이다:
+    없으면 꼬리가 클릭을 먹어 **입력칸이 안 눌린다**(보이지 않는 고장 — R-6 이 가르쳐 준 가장 나쁜 형태).
+    """
+    c = http.client.HTTPConnection("127.0.0.1", srv, timeout=5)
+    c.request("GET", path)
+    r = c.getresponse()
+    body = r.read().decode("utf-8")
+    if r.status == 404:
+        return
+    if "<footer>" in body:                                        # 표 화면 — 문서 흐름의 끝
+        assert "footer { " in body and "text-align:center" in body.split("footer { ")[1].split("}")[0]
+        return
+    css = body.split("#footer {")[1].split("}")[0]
+    assert "text-align:center" in css and "left:0" in css and "right:0" in css
+    assert "pointer-events:none" in css, "가운데 꼬리가 입력칸의 클릭을 먹는다"
+    assert 'style="position:fixed' not in body, "자리를 본문에도 박아 두면 두 벌이 된다"
 
 
 def test_the_notice_rides_the_one_footer_canon_not_a_second_copy():
