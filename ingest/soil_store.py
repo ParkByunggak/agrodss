@@ -53,8 +53,15 @@ def latest(kind: str, parcel: str | None, code: str | None = None) -> dict[str, 
         return None
 
 
-def prescriptions_for(parcel: str) -> list[dict[str, Any]]:
-    out = []
+def _scan_prescriptions(parcel: str) -> tuple[list[dict[str, Any]], list[str]]:
+    """(읽힌 처방, **못 읽은 파일 이름**) — 훑는 자리는 하나다(두 벌이면 둘이 어긋난다).
+
+    [U-21 2026-09-21] 앞 회차에 '버린 사실'은 남겼지만 **판정은 여전히 못 들었다** — `/changes` 만 알고
+    카드는 "정본 미도착" 이라고 했다. 없는 것과 있는데 못 읽은 것은 **다른 사실**이고, 뒤쪽은 **고치면 바뀐다**
+    (I-1 §2-6 — 채우면 바뀌는 것은 해당 없음도 지식 미비도 아니고 **판단 불가(데이터)**다).
+    """
+    out: list[dict[str, Any]] = []
+    bad: list[str] = []
     for p in sorted(soil_dir().glob(f"{parcel}_prescription_*.json")):
         if p.name.endswith(".prev.json"):
             continue
@@ -64,5 +71,15 @@ def prescriptions_for(parcel: str) -> list[dict[str, Any]]:
                 out.append(sch.validate(rec))
         except (ValueError, sch.SchemaError) as e:
             dropped.note("토양 저장소(처방)", p.name, f"{type(e).__name__}: {e}")
+            bad.append(p.name)
             continue
-    return out
+    return out, bad
+
+
+def prescriptions_for(parcel: str) -> list[dict[str, Any]]:
+    return _scan_prescriptions(parcel)[0]
+
+
+def unreadable_for(parcel: str) -> list[str]:
+    """그 필지의 처방 파일 중 **있는데 못 읽은** 것의 이름. 판정이 '없다' 와 '못 읽었다' 를 가르는 근거."""
+    return _scan_prescriptions(parcel)[1]

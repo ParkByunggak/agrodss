@@ -65,6 +65,12 @@ def git_log_lines(n: int = 20) -> list[tuple[str, str, str]]:
 RUNNING_HEAD = git_head_short()   # 프로세스가 기동한 코드. 저장소 HEAD 가 앞서가면 watch_head 가 재기동한다(RELOAD_ON_HEAD_CHANGE) — 이 둘의 차이가 '반영 여부'다
 
 
+# [발행자 2026-09-21] 화면 하단 고지 — 발행자가 문면을 그대로 주었다. **정본은 이 한 줄**이고 모든 화면의 꼬리가 이것을 싣는다
+# (꼬리가 여섯 자리인데 각자 적으면 언젠가 어긋난다). 이 시스템이 판단 불가를 판단 불가라고 말하는 것과 같은 축이다 —
+# 답이 나왔다는 것이 답이 맞다는 뜻은 아니다.
+AI_NOTICE = "AGRODSS는 AI이므로 실수를 할 수 있습니다. 응답을 다시 한번 확인해 주세요."
+
+
 def footer_text() -> str:
     """모든 화면의 꼬리 한 줄. **실행 중인 코드**를 찍고, 저장소가 앞서면 그 자리에서 '뒤처짐'이라고 말한다.
 
@@ -73,10 +79,9 @@ def footer_text() -> str:
     (VELA "커밋 완료 ≠ 반영 완료"의 화면 판). /changes 에만 있던 대조를 꼬리로 내린다.
     """
     head = git_head_short()
-    if head == RUNNING_HEAD:
-        return f"실행 중 {RUNNING_HEAD} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
-    return (f"실행 중 {RUNNING_HEAD} · 저장소 {head} — 뒤처짐(/changes) · "
-            f"{config.HOST}:{config.PORT} · 외부 배포 없음(D-6)")
+    state = (f"실행 중 {RUNNING_HEAD}" if head == RUNNING_HEAD
+             else f"실행 중 {RUNNING_HEAD} · 저장소 {head} — 뒤처짐(/changes)")
+    return f"{AI_NOTICE}  ·  {state} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
 
 
 def changes_page() -> tuple[int, str]:

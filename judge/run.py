@@ -70,7 +70,7 @@ def all_judgments(today: date | None = None, only: str | None = None) -> list[tu
         soil = soil_store.latest("observation.soil_exam", s_reg.get("parcel", ""))
         if soil and soil.get("status") == "success" and soil.get("values"):
             s0["soil_chem"], s0["soil_exam_at"] = dict(soil["values"]), soil.get("observed_at")
-        prescriptions = soil_store.prescriptions_for(s_reg.get("parcel", ""))
+        prescriptions, unreadable = soil_store._scan_prescriptions(s_reg.get("parcel", ""))   # [U-21] 읽힌 것과 **못 읽은 것**을 함께
         forecast, why = gather_forecast(s0)
         pest, pwhy = gather_pest(s0, today)
         evts = ev.list_records(s0.get("id"), "event")
@@ -90,7 +90,7 @@ def all_judgments(today: date | None = None, only: str | None = None) -> list[tu
                                      notes=[r for r in (recs["ledger"] or []) if r.get("kind") == "observation.note"])]
         # [M-10 결정 등록] 격자 칸이 선언한 나머지 8 결정 — 같은 입력, 같은 게이트 뒤
         envs += stage_decisions.judge_all(s, today, evts=recs["ledger"], forecast=recs["forecast"], pest=recs["pest"], harvest=envs[0],
-                                          prescriptions=recs["prescriptions"])
+                                          prescriptions=recs["prescriptions"], unreadable=unreadable)
         # [M-6 · D-14] 자율진화 보수 상한 — 판정기 뒤, 돌려주기 전, 한 번. 규칙은 안 바꾸고 등급만 낮춘다
         envs = evolve.apply_caps(s["id"], envs, caps=recs["caps"])
         out.append((s, envs, {"forecast": why or "예보 사용", "pest": pwhy or "예찰 사용"}))

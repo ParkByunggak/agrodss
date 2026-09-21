@@ -171,6 +171,20 @@ def _prescription(prescriptions: list[dict[str, Any]] | None) -> dict[str, Any] 
     return sorted(ok, key=lambda p: p.get("fetched_at") or "")[-1] if ok else None
 
 
+def _unreadable_envelope(did: str, sid: str, as_of: str, bad: list[str], extra: dict[str, Any]) -> Envelope:
+    """[U-21 2026-09-21] 처방 정본이 **있는데 못 읽은** 경우 — '없다' 와 다른 사실이고, **고치면 바뀐다**.
+
+    전에는 둘 다 `판단 불가(지식) — 정본 미도착` 이었다. 그러면 농가는 이미 받은 것을 **다시 받으러 간다**.
+    I-1 §2-6: 채우면 바뀌는 것은 지식 미비가 아니라 **데이터 미비**다(그래서 `missing` 을 채울 수 있다).
+    """
+    return Envelope("판단 불가(데이터)", did, sid, as_of,
+                    missing=[{"axis": "soil_chem",
+                              "who_can_fill": f"저장된 처방 파일이 깨졌다({' · '.join(bad)}) — python -m ingest.fertilizer <주소> 로 다시 받으면 된다"}],
+                    result={"why": f"시비량 처방 정본이 **있는데 읽지 못했다**(파일 {len(bad)}건) — 없는 것이 아니다. "
+                                   f"/changes 의 '읽다 버린 것' 에 사유가 있다",
+                            "unreadable": list(bad), **extra})
+
+
 def _prescription_input(p: dict[str, Any]) -> AxisUse:
     return AxisUse("soil_chem", p.get("observed_at"), p["source"], p["resolution"], "관측")
 
@@ -181,7 +195,8 @@ def _amounts(p: dict[str, Any], prefix: str) -> str:
     return " · ".join(parts)
 
 
-def judge_base_fertilization(subject, today: date, prescriptions: list[dict[str, Any]] | None = None) -> Envelope:
+def judge_base_fertilization(subject, today: date, prescriptions: list[dict[str, Any]] | None = None,
+                             unreadable: list[str] | None = None) -> Envelope:
     ctx, env = _base(subject, "base_fertilization", today)
     if env:
         return env
@@ -208,6 +223,9 @@ def judge_base_fertilization(subject, today: date, prescriptions: list[dict[str,
     mats = (t or {}).get("materials")
     m = mats.get(cert, []) if isinstance(mats, dict) else []
     p = _prescription(prescriptions)
+    if p is None and unreadable:
+        return _unreadable_envelope("base_fertilization", sid, as_of, list(unreadable),
+                                    {"materials": m, "summary": f"자재 갈래({cert}): {', '.join(m) or '없음'} · 양은 **저장된 처방이 깨져** 대기"})
     if p is None:
         return Envelope("판단 불가(지식)", "base_fertilization", sid, as_of,
                         result={"why": "시비량 처방 정본(흙토람 FrtlzrUse — 검정값 기반)이 아직 이 필지에 없다 — 양을 지어내지 않는다. python -m ingest.fertilizer <주소> 로 받는다",
@@ -282,7 +300,8 @@ def judge_drainage_alert(subject, today: date, forecast=None, pest=None) -> Enve
 
 
 def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]] | None = None,
-                       prescriptions: list[dict[str, Any]] | None = None) -> Envelope:
+                       prescriptions: list[dict[str, Any]] | None = None,
+                       unreadable: list[str] | None = None) -> Envelope:
     ctx, env = _base(subject, did, today)
     if env:
         return env
@@ -327,13 +346,20 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
         amount = _amounts(p, "post") or "처방에 추비 값 없음"
         amount_note = f"추비 {amount} (kg/10a, {p['source']})" + (" — 유기 갈래는 목표 양분량(자재 환산 규칙 정본 없음)" if cert == "유기" else "")
         inputs = inputs + [_prescription_input(p)]
+    elif unreadable:
+        # [U-21] 웃거름은 창·자재를 여전히 '판단함' 으로 낸다(양만 못 낸다) — 그래서 등급 대신 **문면**으로 가른다.
+        amount_note = (f"판단 불가(데이터) — 처방 정본이 **있는데 읽지 못했다**(파일 {len(unreadable)}건: {' · '.join(unreadable)}). "
+                       "없는 것이 아니다 — 다시 받으면 된다(python -m ingest.fertilizer <주소>) · /changes 에 사유")
     else:
         amount_note = "판단 불가(지식) — 처방 정본 미도착(python -m ingest.fertilizer <주소>)"
     return Envelope("판단함", did, sid, as_of, inputs=inputs, grade=weakest(["관측", _grid_grade(unit)]),
                     revisit_at=(today + timedelta(days=1)).isoformat(),
                     result={"status": status, "work_date": work_date, "deadline": dl, "materials": m, "done_refs": [e.get("id") for e in done],
                             "amount": amount_note, "reason": (reason or {}).get("reason"), "reason_ref": (reason or {}).get("id"),
-                            "summary": f"{status} — 작업일 {work_date} · 마감 {dl} · 자재({cert}) {', '.join(m) or '없음'} · {'양 ' + amount_note if p else '양은 정본 대기'}"
+                            # [U-21] 요약이 카드에서 읽히는 줄이다 — 여기서도 '없다' 와 '있는데 못 읽었다' 를 가른다.
+                            # 안 가르면 판정 종류만 고치고 **사람이 보는 문장은 그대로**인 표현 층 결함이 된다(G1 세 번째 형태).
+                            "summary": f"{status} — 작업일 {work_date} · 마감 {dl} · 자재({cert}) {', '.join(m) or '없음'} · "
+                                       + ("양 " + amount_note if p else ("양은 **저장된 처방이 깨져** 대기(다시 받으면 된다)" if unreadable else "양은 정본 대기"))
                                        + (f" · 사유: {reason['reason'][:120]}" if reason else "")},
                     notes=["양(kg/10a)은 지어내지 않는다 — 처방 정본이 없으면 비운다"])
 
@@ -380,11 +406,11 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
 
 
 def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pest=None, harvest: Envelope | None = None,
-              prescriptions: list[dict[str, Any]] | None = None) -> list[Envelope]:
+              prescriptions: list[dict[str, Any]] | None = None, unreadable: list[str] | None = None) -> list[Envelope]:
     evts = evts or []
     obs = [e for e in evts if e.get("kind") == "observation.note"]
     targets = [e for e in evts if e.get("kind") == "plan.target_date"]
-    return [judge_sowing_window(subject, today), judge_base_fertilization(subject, today, prescriptions), judge_replant(subject, today, obs),
-            judge_pest_alert(subject, today, forecast, pest), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions),
-            judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions), judge_drainage_alert(subject, today, forecast, pest),
+    return [judge_sowing_window(subject, today), judge_base_fertilization(subject, today, prescriptions, unreadable), judge_replant(subject, today, obs),
+            judge_pest_alert(subject, today, forecast, pest), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions, unreadable),
+            judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions, unreadable), judge_drainage_alert(subject, today, forecast, pest),
             judge_ship_or_store(subject, today, targets, harvest)]
