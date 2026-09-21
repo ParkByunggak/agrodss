@@ -25,7 +25,7 @@ def _levels(env):
 def test_registered_and_consistent_with_every_grid_stage():
     d = R.get("risk_alert")
     assert d and d.revisit_days == 1
-    unit = A._load_unit(SUBJ)
+    unit = A.grid_schema.load_unit(SUBJ)[0]
     for s in unit["stages"]:
         assert R.check_against_grid(d, s) == [], s["name"]
 
@@ -84,8 +84,10 @@ def test_alerts_sorted_alert_first():
     assert levels == sorted(levels, key={"경보": 0, "주의": 1, "예고": 2}.get)
 
 
-def test_not_applicable_and_data_gap():
-    assert A.judge({"id": "x"}, today=T24).kind == "해당 없음"
+def test_no_grid_is_a_knowledge_gap_and_no_anchor_is_a_data_gap():
+    """[U-23] 첫 줄은 `해당 없음` 을 박아 두고 있었다 — 격자가 서면 바뀌므로 지식 미비다(I-1 §2-6).
+    아래 `test_before_any_stage_is_not_applicable` 은 그대로 해당 없음이다 — **시점**은 채워도 안 바뀐다."""
+    assert A.judge({"id": "x"}, today=T24).kind == "판단 불가(지식)"
     env = A.judge({**SUBJ, "anchor": None}, today=T24)
     assert env.kind == "판단 불가(데이터)" and env.missing[0]["axis"] == "anchor"
 

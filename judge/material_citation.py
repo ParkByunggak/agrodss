@@ -16,9 +16,8 @@ from typing import Any
 
 from grid import capture, schema as grid_schema
 from ingest import organic_materials as om, psis
-from judge import registry
+from judge import registry, units
 from judge.envelope import AxisUse, Envelope
-from judge.harvest_timing import _load_unit
 from schema import records as sch
 
 DECISION_ID = "material_citation"
@@ -69,6 +68,11 @@ def _families(stage: dict[str, Any]) -> list[str]:
 
 
 CERTS = ("유기", "관행")
+# [U-23 처방 직후 전수 2026-09-21] **선언된 갈래인데 규칙 정본이 아직 없는** 것. 전에는 이것도 `해당 없음`
+# 이었다 — 사유란에 *"무농약은 갈래 규칙 미정"* 이라고 **정직하게 적어 놓고** 종류는 "아무리 채워도 안 바뀐다"
+# 였다(I-1 §2-6). 규칙이 서면 바뀌므로 지식 미비다. 격자 건과 같은 결함·같은 처방이라 함께 넓혔다.
+# 어휘 밖의 값(오타 등)은 여기 없다 — 그건 규칙이 없는 것이 아니라 값이 틀린 것이라 급이 다르다.
+CERT_RULES_MISSING = ("무농약",)
 
 
 def _conventional(subject: dict[str, Any], stage: dict[str, Any], today: date, as_of: str, sid: str, anchor: str,
@@ -126,13 +130,18 @@ def judge(subject: dict[str, Any], today: date | None = None, psis_search=None) 
         return Envelope("판단 불가(데이터)", DECISION_ID, sid, as_of,
                         missing=[{"axis": "cert", "who_can_fill": "농가 — 인증 유형(필지 고정 정보)"}],
                         result={"why": "인증 유형이 없어 어느 자재 목록을 볼지 정할 수 없다"})
+    if cert in CERT_RULES_MISSING:
+        return Envelope("판단 불가(지식)", DECISION_ID, sid, as_of,
+                        result={"why": f"'{cert}' 갈래의 자재 규칙 정본이 아직 없다 — 유기(공시) · 관행(PSIS) 두 갈래만 서 있다. "
+                                       f"규칙이 서면 답이 바뀌므로 '해당 없음'(= 볼 일이 아니다)이 아니다",
+                                "summary": f"{cert} 갈래 자재 규칙 미정 — 정본 대기"})
     if cert not in CERTS:
         return Envelope("해당 없음", DECISION_ID, sid, as_of,
-                        result={"why": f"인증 유형 {cert!r} — 유기(공시) · 관행(PSIS) 갈래만 인용한다. 무농약은 갈래 규칙 미정"})
-    unit = _load_unit(subject)
+                        result={"why": f"인증 유형 {cert!r} 은 아는 갈래가 아니다 — 유기 · 무농약 · 관행 중 하나로 적는다"})
+    unit, miss = grid_schema.load_unit(subject)
     anchor = subject.get("anchor")
-    if unit is None:
-        return Envelope("해당 없음", DECISION_ID, sid, as_of, result={"why": "격자 단위가 없다"})
+    if miss is not None:                                   # [U-23] 격자를 못 읽은 것은 '할 일 아님' 이 아니다
+        return units.envelope_for(miss, DECISION_ID, sid, as_of)
     if not anchor:
         return Envelope("판단 불가(데이터)", DECISION_ID, sid, as_of,
                         missing=[{"axis": "anchor", "who_can_fill": "농가 — 파종일"}], result={"why": "기준점이 없다"})

@@ -14,11 +14,12 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from grid import schema as grid_schema
 from ingest import events as ev
 from ingest import media
-from judge import plan, registry
+from judge import plan, registry, units
 from judge.envelope import AxisUse, Envelope, weakest
-from judge.harvest_timing import GRID_GRADE, _load_unit
+from judge.harvest_timing import GRID_GRADE
 
 DECISION_ID = "plan_vs_actual"
 
@@ -123,9 +124,9 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
     as_of = _now()
     sid = subject.get("id", "?")
     d = registry.get(DECISION_ID)
-    unit = _load_unit(subject)
-    if unit is None:
-        return Envelope("해당 없음", DECISION_ID, sid, as_of, result={"why": "격자 단위가 없다"})
+    unit, miss = grid_schema.load_unit(subject)
+    if miss is not None:                                   # [U-23] 격자를 못 읽은 것은 '할 일 아님' 이 아니다
+        return units.envelope_for(miss, DECISION_ID, sid, as_of)
     anchor = subject.get("anchor")
     if not anchor:
         return Envelope("판단 불가(데이터)", DECISION_ID, sid, as_of,

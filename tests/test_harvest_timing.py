@@ -44,7 +44,7 @@ def test_registry_refuses_without_rule_or_required():
 def test_harvest_timing_registered_and_consistent_with_grid():
     d = R.get("harvest_timing")
     assert d and d.required_axes == ("anchor",) and "humidity_air" in d.forbidden_axes
-    unit = H._load_unit(SUBJ)
+    unit = H.grid_schema.load_unit(SUBJ)[0]
     assert R.check_against_grid(d, H._harvest_stage(unit)) == []
 
 
@@ -56,7 +56,7 @@ def test_judges_window_from_anchor_and_grid():
     # [발행자 몫 ③ 미리 걷기 2026-09-20] 전에는 ("2026-10-14", "2026-11-03") 을 박아 두었다 — 수확 창은 **검토지 W 의 답이
     # 바꿀 지식**이라, 답이 오는 날 이 검사도 손봐야 했다(대장이 "격자 한 수정으로 끝난다"고 적은 것과 어긋난다).
     # 검사가 지킬 계약은 값이 아니라 **"창은 기준점 + 격자 창에서 나온다"** 다 — 기대값을 격자에서 계산한다.
-    w = H._harvest_stage(H._load_unit(SUBJ))["window"]
+    w = H._harvest_stage(H.grid_schema.load_unit(SUBJ)[0])["window"]
     a = date.fromisoformat(SUBJ["anchor"])
     assert (r["window_start"], r["window_end"]) == ((a + timedelta(days=w["from_day"])).isoformat(),
                                                     (a + timedelta(days=w["to_day"])).isoformat())
@@ -84,14 +84,21 @@ def test_position_after_window():
 
 
 # ── 판별 순서 ──────────────────────────────────────────────────────────────────
-def test_not_applicable_without_grid_unit():
+def test_no_grid_is_a_knowledge_gap_not_not_applicable():
+    """[U-23 2026-09-21] 이 검사는 **옛 믿음을 박아 두고 있었다** — `해당 없음`.
+
+    I-1 §2-6 으로 재면 틀렸다: 해당 없음은 *"아무리 채워도 안 바뀐다"* 인데, 격자가 서면 **바뀐다**.
+    화면에 '해당 없음' 이 뜨면 농가는 *"할 일이 아니었다"* 고 읽는다 — 격자가 없어서 못 본 것을 가린다.
+    """
     env = H.judge({"id": "s", "anchor": "2026-08-25"}, today=TODAY)
-    assert env.kind == "해당 없음"
+    assert env.kind == "판단 불가(지식)"
+    assert env.result["grid_unit_miss"] == "unlinked"
+    assert not env.missing, "지식 미비에는 missing 을 채우지 않는다 — 농가가 채울 것이 아니다"
 
 
 def test_knowledge_gap_precedes_data_gap(tmp_path, monkeypatch):
     # 격자 창도 없고 기준점도 없을 때 → 판단 불가(지식) 가 먼저다
-    unit = H._load_unit(SUBJ)
+    unit = H.grid_schema.load_unit(SUBJ)[0]
     for s in unit["stages"]:
         if "harvest_timing" in s["decisions"]:
             s.pop("window")

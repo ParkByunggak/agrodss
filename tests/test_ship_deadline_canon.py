@@ -9,6 +9,7 @@ import re
 from datetime import date
 from pathlib import Path
 
+from grid import schema as grid_schema
 from ingest import media, parcels
 from judge import harvest_timing, stage_decisions as SD
 
@@ -19,7 +20,7 @@ T25 = date(2026, 9, 19)
 
 
 def _ship_stage_and_deadline():
-    unit = harvest_timing._load_unit(SUBJ)
+    unit = grid_schema.load_unit(SUBJ)[0]
     stage = SD._stage(unit, "ship_or_store")
     dl = int(next(t for t in stage["tasks"] if "출하" in t["name"])["retry"]["deadline_day"])
     return stage, dl
@@ -46,12 +47,13 @@ def test_the_grid_today_still_contradicts_itself_on_b6():
 
 
 def test_missing_grid_deadline_is_a_knowledge_gap_not_a_default(monkeypatch):
-    unit = copy.deepcopy(harvest_timing._load_unit(SUBJ))
+    unit = copy.deepcopy(grid_schema.load_unit(SUBJ)[0])
     for s in unit["stages"]:
         for t in s.get("tasks", []):
             if "출하" in t.get("name", ""):
                 t.pop("retry", None)
-    monkeypatch.setattr(SD, "_load_unit", lambda subject: unit)
+    # [U-23] 읽는 자리가 정본 하나가 되어 여기도 그 하나를 바꾼다 — 전에는 모듈마다 있던 `_load_unit` 을 따로 갈아 끼웠다
+    monkeypatch.setattr(grid_schema, "load_unit", lambda subject: (unit, None))
     h = harvest_timing.judge(SUBJ, today=T25)
     e = SD.judge_ship_or_store(SUBJ, T25, targets=[{"kind": "plan.target_date", "target_date": "2026-11-10"}], harvest=h)
     assert e.kind == "판단 불가(지식)" and "마감" in e.result["why"]

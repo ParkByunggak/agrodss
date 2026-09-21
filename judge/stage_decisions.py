@@ -12,9 +12,10 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from judge import plan_vs_actual, registry, risk_alert
+from grid import schema as grid_schema
+from judge import plan_vs_actual, registry, risk_alert, units
 from judge.envelope import AxisUse, Envelope, weakest
-from judge.harvest_timing import GRID_GRADE, _load_unit
+from judge.harvest_timing import GRID_GRADE
 
 FORB = ("humidity_air",)
 SELF_USE_WORDS = ("자가", "시험")
@@ -128,9 +129,11 @@ def _base(subject: dict[str, Any], did: str, today: date):
     """공통 앞부분 — (unit, stage, anchor_date, day) 또는 즉시 돌려줄 봉투."""
     sid = subject.get("id", "?")
     as_of = _now()
-    unit = _load_unit(subject)
-    if unit is None:
-        return None, Envelope("해당 없음", did, sid, as_of, result={"why": "격자 단위가 없다"})
+    unit, miss = grid_schema.load_unit(subject)
+    if miss is not None:
+        # [U-23] 격자를 **못 읽은 것**과 격자가 이 결정을 **선언하지 않은 것**은 다른 사실이다. 전에는 둘 다
+        # '해당 없음' 이라 격자 파일 이름 한 글자가 어긋나면 카드 여덟 장이 조용히 "할 일 없음" 이 됐다.
+        return None, units.envelope_for(miss, did, sid, as_of)
     stage = _stage(unit, did)
     if stage is None:
         return None, Envelope("해당 없음", did, sid, as_of, result={"why": "이 결정을 선언한 격자 칸이 없다"})

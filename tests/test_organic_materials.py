@@ -114,8 +114,17 @@ def test_citation_conventional_without_psis_key_is_data_gap(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     env = MC.judge({**SUBJ, "cert": "관행"}, today=T24)
     assert env.kind == "판단 불가(데이터)" and "PSIS" in env.result["why"] and env.missing[0]["axis"] == "cert"
+    # [U-23 전수 2026-09-21] 전에는 `해당 없음` 을 박아 두었다 — 사유란이 *"무농약은 갈래 규칙 미정"* 이라고
+    # 정직하게 적어 놓고 종류는 "아무리 채워도 안 바뀐다" 였다. 규칙이 서면 바뀌므로 지식 미비다(I-1 §2-6).
     env = MC.judge({**SUBJ, "cert": "무농약"}, today=T24)
-    assert env.kind == "해당 없음"
+    assert env.kind == "판단 불가(지식)" and "규칙" in env.result["why"]
+
+
+def test_a_cert_we_do_not_know_is_a_different_grade_from_a_rule_we_have_not_written():
+    """급을 가른다 — **선언된 갈래인데 규칙이 없는 것**(지식)과 **아는 갈래가 아닌 값**(해당 없음)은 다른 사실이다.
+    섞으면 오타까지 '정본 대기' 가 되어 무엇을 기다리는지 알 수 없어진다."""
+    assert MC.judge({**SUBJ, "cert": "무농약"}, today=T24).kind == "판단 불가(지식)"
+    assert MC.judge({**SUBJ, "cert": "유기농"}, today=T24).kind == "해당 없음"     # 어휘 밖 — 값이 틀린 것
 
 
 def test_conventional_proxy_query_is_labelled_not_asserted():
@@ -152,7 +161,7 @@ def test_citation_outside_grid_window():
 
 
 def test_families_extracted_from_grid_text():
-    unit = MC._load_unit(SUBJ)
+    unit = MC.grid_schema.load_unit(SUBJ)[0]
     st = [s for s in unit["stages"] if s["order"] == 3][0]
     fams = MC._families(st)
     assert "BT제" in fams and "님 추출물" in fams and any("유기질" in f for f in fams)

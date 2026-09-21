@@ -8,9 +8,9 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
+from grid import schema as grid_schema
 from ingest import chat, events as ev, media, parcels
 from judge import registry, run as judge_run, stage_decisions as SD
-from judge.harvest_timing import _load_unit
 
 _RAW = [s for s in media.load_subjects() if s["id"] == "p001-jjokpa-2026f"][0]
 SUBJ = parcels.enrich_subject(_RAW, parcels.by_id("p001"))     # run.py 와 같은 병합 — 용도(D-8 자가)가 붙는다
@@ -25,7 +25,7 @@ def _by(envs):
 
 # ── 등록부 완전성 ───────────────────────────────────────────────────────────────────
 def test_every_grid_decision_is_registered_and_consistent():
-    unit = _load_unit(SUBJ)
+    unit = grid_schema.load_unit(SUBJ)[0]
     declared = {d for s in unit["stages"] for d in (s.get("decisions") or [])}
     assert declared == set(SD.IDS) | {"harvest_timing"}
     for s in unit["stages"]:

@@ -23,7 +23,7 @@ def _rows(env):
 
 # ── 계획 ────────────────────────────────────────────────────────────────────────
 def test_plan_from_grid_has_dates_and_cert_materials():
-    unit = PVA._load_unit(SUBJ)
+    unit = PVA.grid_schema.load_unit(SUBJ)[0]
     ps = plan.from_unit(unit, ANCHOR, "유기")
     by = {p["task"]: p for p in ps}
     p = by["예찰(트랩 · 육안)"]
@@ -108,6 +108,7 @@ def test_counts_sum_to_rows_and_no_raw_layers():
     assert [i.axis for i in env.inputs] == ["anchor"]
 
 
-def test_not_applicable_and_data_gap():
-    assert PVA.judge({"id": "x"}, today=date(2026, 9, 19)).kind == "해당 없음"
+def test_no_grid_is_a_knowledge_gap_and_no_anchor_is_a_data_gap():
+    """[U-23] 첫 줄은 `해당 없음` 을 박아 두고 있었다 — 격자가 서면 바뀌므로 지식 미비다(I-1 §2-6)."""
+    assert PVA.judge({"id": "x"}, today=date(2026, 9, 19)).kind == "판단 불가(지식)"
     assert PVA.judge({**SUBJ, "anchor": None}, today=date(2026, 9, 19)).kind == "판단 불가(데이터)"

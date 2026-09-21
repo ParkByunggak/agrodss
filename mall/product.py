@@ -15,7 +15,6 @@ from typing import Any
 from grid import schema as grid_schema
 from ingest import media, parcels, subjects
 from judge import run as judge_run
-from judge.harvest_timing import _load_unit
 from schema import records as sch
 
 STATUS_BY_SUBJECT = {"계획": "생육 준비", "재배 중": "생육 중(예약 없음 — D-3 대기)", "종료": "판매 종료"}
@@ -37,7 +36,9 @@ def cert_label(parcel: dict[str, Any] | None, subject: dict[str, Any]) -> str:
 
 def capture_timeline(subject: dict[str, Any], videos: list[dict[str, Any]], today: date) -> list[dict[str, Any]]:
     """격자 촬영 칸(shoot=True)마다 — 그 창에 찍힌 영상들 · 없으면 '촬영 예정/미촬영'. 소비자가 보는 것은 시계열 목록(몰-C)."""
-    unit = _load_unit(subject)
+    # [U-23] 몰 화면은 봉투를 내지 않는다 — 사유는 `load_unit` 이 이미 '읽다 버린 것' 에 남겼고(/changes),
+    # 소비자에게는 시계열이 비는 것으로 족하다. 읽는 자리는 그래도 정본 하나다.
+    unit, _miss = grid_schema.load_unit(subject)
     anchor = subject.get("anchor")
     if unit is None or not anchor:
         return []

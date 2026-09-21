@@ -85,7 +85,7 @@ def test_external_source_prefix_and_no_subject():
 def test_registries_and_plans_conform():
     assert media.load_subjects()                                            # subjects.json 이 스키마를 통과한다
     assert parcels.load() and parcels.by_id("p001")["use"] == "시험 재배(자가)"
-    unit = PVA._load_unit(SUBJ)
+    unit = PVA.grid_schema.load_unit(SUBJ)[0]
     for p in plan.from_unit(unit, date(2026, 8, 25), "유기"):
         sch.validate(p)
     rec = soil_exam.SoilExamRecord(status="no_data", pnu="4376038025100500000", observed_at=None, fetched_at="x")

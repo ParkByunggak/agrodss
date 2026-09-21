@@ -25,7 +25,7 @@ SUBJ = parcels.enrich_subject(_RAW, parcels.by_id("p001"))
 
 def _unit_without_deadline(task_key: str) -> dict:
     """그 작업의 retry.deadline_day 만 null 로 — 나머지는 그대로(부분 주입이 아니라 이 한 축만 비운다)."""
-    unit = copy.deepcopy(SD._load_unit(SUBJ))
+    unit = copy.deepcopy(schema.load_unit(SUBJ)[0])
     hit = 0
     for s in unit["stages"]:
         for t in (s.get("tasks") or []) if isinstance(s.get("tasks"), list) else []:
@@ -44,7 +44,7 @@ def _unit_without_deadline(task_key: str) -> dict:
 ])
 def test_missing_deadline_is_a_knowledge_gap_not_the_window_end(task_key, call, monkeypatch):
     unit = _unit_without_deadline(task_key)          # 먼저 만든다 — 치환 뒤에 부르면 자기를 부른다
-    monkeypatch.setattr(SD, "_load_unit", lambda subject: unit)
+    monkeypatch.setattr(schema, "load_unit", lambda subject: (unit, None))   # [U-23] 읽는 자리가 정본 하나
     e = call(SUBJ, date(2026, 9, 19))
     assert e.kind == "판단 불가(지식)", f"{task_key}: 마감이 없는데 {e.kind} 가 나왔다"
     assert "retry.deadline_day" in e.result["why"] and "지어내지 않는다" in e.result["why"]

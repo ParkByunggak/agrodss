@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from grid import schema as grid_schema
-from judge import registry
+from judge import registry, units
 from judge.envelope import AxisUse, Envelope, weakest
 
 DECISION_ID = "harvest_timing"
@@ -25,12 +25,9 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _load_unit(subject: dict[str, Any]) -> dict[str, Any] | None:
-    uid = subject.get("grid_unit")
-    if not uid:
-        return None
-    p = grid_schema.unit_path(uid)
-    return grid_schema.load(p) if p.exists() else None
+# [U-23 2026-09-21] 여기 있던 `_load_unit` 은 **서로 다른 세 상태를 같은 `None`** 으로 뭉갰고, 그것을 받은
+# 일곱 곳이 전부 '해당 없음'(= *"할 일이 아니었다"*)을 냈다. 읽기는 이제 `grid.schema.load_unit` 하나이고
+# 사유가 함께 온다. 뭉개는 형태를 되살릴 얇은 별칭은 두지 않는다 — 있으면 다음 호출부가 그것을 쓴다.
 
 
 def _harvest_stage(unit: dict[str, Any]) -> dict[str, Any] | None:
@@ -52,10 +49,13 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         raise RuntimeError("harvest_timing 이 등록되지 않았다")
 
     # 1~2. 등록됨 · 정책은 '판단'
-    # 3. 해당하는가 — 격자 단위와 수확 칸이 있어야 이 결정이 적용된다
-    unit = _load_unit(subject)
-    stage = _harvest_stage(unit) if unit else None
-    if unit is None or stage is None:
+    # 3. 해당하는가 — [U-23] 격자를 **못 읽은 것**과 격자가 이 결정을 **선언하지 않은 것**은 다른 사실이다.
+    #    앞은 채우면 바뀌므로 판단 불가, 뒤는 정본의 정직한 산출이라 해당 없음. 전에는 둘이 한 문장이었다.
+    unit, miss = grid_schema.load_unit(subject)
+    if miss is not None:
+        return units.envelope_for(miss, DECISION_ID, sid, as_of)
+    stage = _harvest_stage(unit)
+    if stage is None:
         return Envelope("해당 없음", DECISION_ID, sid, as_of,
                         result={"why": "이 재배 단위에는 수확 시기 결정이 적용되는 격자 칸이 없다"})
 

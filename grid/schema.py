@@ -53,6 +53,65 @@ def unit_path(unit_id: str) -> Path:
     return GRID_DIR / f"{unit_id.replace('-', '_')}.json"
 
 
+# ── [U-23 2026-09-21] 격자 단위를 읽는 정본 하나 — **왜 못 읽었는지를 잃지 않는다** ─────────────────
+#
+# 전에는 `_load_unit` 이 서로 다른 세 상태를 같은 `None` 으로 돌려줬고, 소비자 일곱이 그것을 **해당 없음**
+# ("격자 단위가 없다")으로 냈다. 해당 없음은 I-1 §2-6 에서 *"아무리 채워도 안 바뀐다"* 는 뜻이다 —
+# 화면이 **"할 일이 아니었다"** 고 단정한다. 곧 위 `unit_path` 주석이 말한 *"파일 이름 한 글자"* 가 어긋나면
+# 판정 카드 여덟 장이 **조용히** "할 일 없음" 이 되고, 그 사실이 아무 데도 안 남았다.
+#
+#   unlinked    grid_unit 이 비었다      그 작목·작기의 격자 정본이 없어 등록 때 못 이었다
+#   no_file     가리키는 파일이 없다      오타 · 삭제 · 이름 바뀜
+#   unreadable  읽다 버렸다              **있는데 못 읽었다** — 고치면 바뀐다
+#
+# 사유는 여기(1·2층 어휘)까지다. 봉투 종류로 옮기는 것은 3층 몫이다(`judge/units.py`) — `soil_store.`
+# `_scan_prescriptions` 가 (읽힌 것, 못 읽은 것)을 주고 `judge` 가 종류를 정한 U-21 의 형태를 그대로 쓴다.
+#
+# **여기 없는 것**: 격자가 그 결정을 선언하지 않은 경우는 정본의 **정직한 산출**이라 해당 없음이 맞다 —
+# 같은 형태지만 다른 급이다(§7.5). 섞으면 여덟이 다 '즉시' 가 되어 우선순위가 흐려진다.
+REASONS = ("unlinked", "no_file", "unreadable")
+
+
+@dataclass(frozen=True)
+class UnitMiss:
+    reason: str
+    unit_id: str
+    why: str
+    summary: str
+    fixer: str = ""          # 'unreadable' 에서만 — 누가 무엇을 고치면 되는가(봉투 missing 으로 간다)
+
+
+def load_unit(subject: dict[str, Any]) -> tuple[dict[str, Any] | None, UnitMiss | None]:
+    """재배 단위 → (격자, None) 또는 (None, 사유). 둘 중 하나는 반드시 None 이다."""
+    from ingest import dropped               # 읽다 버린 것의 정본(프로세스 안) — 순환 없는 잎 모듈
+
+    uid = str(subject.get("grid_unit") or "")
+    if not uid:
+        return None, UnitMiss(
+            "unlinked", "",
+            "이 재배 단위에 격자가 이어져 있지 않다 — 그 작목·작기의 격자 정본이 아직 없다(등록 때 잇지 못했다)",
+            "격자 정본 없음 — 작목·작기 격자가 서면 판정이 열린다")
+    p = unit_path(uid)
+    if not p.exists():
+        dropped.note("격자 단위", p.name, f"재배 단위가 '{uid}' 를 가리키는데 파일이 없다")
+        return None, UnitMiss(
+            "no_file", uid,
+            f"재배 단위가 격자 '{uid}' 를 가리키는데 그 파일이 없다 — 정본 미작성이거나 이름이 어긋났다",
+            f"격자 '{uid}' 정본 없음 — 가리키는 파일이 없다")
+    try:
+        unit = load(p)
+        if not isinstance(unit, dict):
+            raise ValueError(f"격자는 객체여야 한다 — {type(unit).__name__}")
+    except (OSError, ValueError, UnicodeDecodeError) as e:      # JSONDecodeError 는 ValueError 다
+        dropped.note("격자 단위", p.name, f"{type(e).__name__}: {e}")
+        return None, UnitMiss(
+            "unreadable", uid,
+            f"격자 '{uid}' 정본이 **있는데 읽지 못했다** — 없는 것이 아니다. /changes 의 '읽다 버린 것' 에 사유가 있다",
+            f"격자 '{uid}' 가 깨져 읽다 버렸다 — 고치면 판정이 열린다",
+            f"발행자 — data/grid/{p.name} 가 깨졌다(고치면 바뀐다)")
+    return unit, None
+
+
 def _canonical_names() -> set[str]:
     from names import resolve as R
     return set(R.load().canonical)

@@ -31,14 +31,12 @@ def stage_for_day(unit: dict[str, Any], day: int) -> dict[str, Any] | None:
 
 def hint_for(subject: dict[str, Any], today: date) -> dict[str, Any] | None:
     """subject(data/subjects.json 항목) → {day, stage, shoot, scene, window} 또는 None(격자·기준점 없음)."""
-    unit_id = subject.get("grid_unit")
+    # [U-23] 읽는 자리는 정본 하나(`schema.load_unit`) — 전에는 여기가 제 손으로 열고 **조용히 None** 을
+    # 돌려줬다. 힌트 층은 봉투를 내지 않으므로 사유는 '읽다 버린 것' 에만 남는다(/changes 가 말한다).
     anchor = subject.get("anchor")
-    if not unit_id or not anchor:
+    unit, _miss = schema.load_unit(subject)
+    if unit is None or not anchor:
         return None
-    path = schema.unit_path(unit_id)
-    if not path.exists():
-        return None
-    unit = schema.load(path)
     day = (today - date.fromisoformat(anchor)).days
     s = stage_for_day(unit, day)
     if s is None:
