@@ -88,7 +88,15 @@ REPLANT = _R(registry.Decision(
     id="replant", name="보식", required_axes=("anchor",), optional_axes=("soil_water", "temp"), forbidden_axes=FORB,
     rule="발아·출현 창(칸 2) 안에서, 농가 관찰(결주·출현 불량)이 있으면 마감일까지 보식을 권고한다(판단함). "
          "관찰이 없으면 판단 불가(데이터) — 출현 상태는 농가 관찰이 최종 심급. 창 밖이면 해당 없음.", revisit_days=1,
-    params={"words": REPLANT_WORDS, "source": "격자 칸 2 tasks[보식] retry.deadline_day"}))
+    # [두 층 불일치 2026-09-21] 이 결정은 "관찰이 없으면 판단 불가(데이터)" 라고 **이미 선언하고 있었는데**, 계획 대 실제는
+    # 같은 작업을 '놓침 — 사유를 묻는다' 로 냈다. 한 작업에 두 층이 다른 답을 한 것이다. 원인은 '조건부' 라는 사실이
+    # **격자 작업명의 괄호 표기**("관수(건조 시)")에만 실려 있었고 '보식' 이라는 이름에는 그 표기가 없었다는 것 — 곧 조건
+    # 여부가 작업명 문자열에만 있는 **두 벌 진실**이었다. 조건을 여기 선언하면 두 층이 같은 것을 읽는다(계획 대 실제는
+    # registry 만 import 하므로 순환이 없다 — import 방향은 stage_decisions → plan_vs_actual 이다).
+    params={"words": REPLANT_WORDS, "source": "격자 칸 2 tasks[보식] retry.deadline_day",
+            "conditional_task": "보식",                       # 이 격자 작업은 조건부다 — 안 했다고 놓친 것이 아니다
+            "condition": "결주·출현 불량 관찰(농가)",            # 무엇이 채워져야 조건이 서는가
+            "condition_source": "농가 — 출현 상태 한 줄(채팅 관찰: 결주 · 듬성 · 안 났다)"}))
 PEST_ALERT = _R(registry.Decision(
     id="pest_alert", name="병해충 경보(칸 3)", required_axes=("anchor",), optional_axes=("pest_regional", "temp", "precip", "microclimate"),
     forbidden_axes=FORB, rule="risk_alert 와 같은 규칙(비대칭 경보)을 칸 3 의 위험에만 적용해 낸다. 칸이 horizon 밖이면 해당 없음.",

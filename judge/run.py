@@ -84,7 +84,10 @@ def all_judgments(today: date | None = None, only: str | None = None) -> list[tu
         envs = [harvest_timing.judge(s, forecast=recs["forecast"], today=today),
                 risk_alert.judge(s, forecast=recs["forecast"], today=today, pest=recs["pest"], evts=recs["events"]),   # [B1] 수확 사건
                 material_citation.judge(s, today=today),
-                plan_vs_actual.judge(s, today=today, evts=recs["events"], videos=recs["videos"], reasons=recs["reasons"])]
+                # [§7.5 관문의 입력 2026-09-21] notes 를 안 넘기면 조건부 갈래가 관찰을 못 보고 **게이트를 안 거친 원장**을 직접 읽는다 —
+                # 관문은 멀쩡히 서 있고 아무것도 안 거르는 형태. 게이트를 지난 원장에서 관찰만 골라 넘긴다
+                plan_vs_actual.judge(s, today=today, evts=recs["events"], videos=recs["videos"], reasons=recs["reasons"],
+                                     notes=[r for r in (recs["ledger"] or []) if r.get("kind") == "observation.note"])]
         # [M-10 결정 등록] 격자 칸이 선언한 나머지 8 결정 — 같은 입력, 같은 게이트 뒤
         envs += stage_decisions.judge_all(s, today, evts=recs["ledger"], forecast=recs["forecast"], pest=recs["pest"], harvest=envs[0],
                                           prescriptions=recs["prescriptions"])

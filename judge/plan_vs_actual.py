@@ -61,6 +61,39 @@ def _conditional(task_name: str) -> bool:
     return bool(_COND.search(task_name or ""))
 
 
+def conditional_of(task_name: str, notes: list[dict[str, Any]] | None = None,
+                   since: str | None = None) -> tuple[bool, str] | None:
+    """이 격자 작업이 **조건부인가**, 그리고 그 조건이 **채워졌는가** — 조건 판정의 정본 하나.
+
+    출처가 둘이고 아는 것의 깊이가 다르다(두 벌 진실이 아니라 두 층위다).
+
+      ① 격자 작업명의 괄호 표기 "(… 시)"   조건부라는 것만 안다 — 조건 판정 규칙이 없다 → 언제나 '조건부'
+      ② 결정 등록부의 `conditional_task`   조건이 무엇인지도 안다 → **채워졌으면 보통 경로**(놓침이 살아 있다)
+
+    ②가 이 회차에 생긴 이유: '보식' 은 이름에 표기가 없어 ①에 안 걸렸고, 그래서 계획 대 실제는 '놓침 — 사유를 묻는다',
+    `judge_replant` 는 '출현 관찰이 없으니 판단 불가(데이터)' 로 **한 작업에 두 층이 다른 답**을 냈다.
+    조건이 무엇인지는 결정 등록부가 이미 알고 있었다 — 계획 대 실제가 그것을 안 읽었을 뿐이다.
+
+    돌려주는 값: 조건부가 아니면 None, 맞으면 (조건이 채워졌는가, 화면에 적을 사유).
+    """
+    if _COND.search(task_name or ""):
+        return False, "조건('… 시')이 붙은 작업 — 조건 판정 규칙 없음, 놓침으로 세지 않는다"
+    for d in registry.all_decisions().values():
+        key = d.params.get("conditional_task")
+        if not key or key not in (task_name or ""):
+            continue
+        words = tuple(d.params.get("words") or ())
+        seen = [o for o in (notes or [])
+                if (not since or (o.get("observed_at") or "") >= since) and any(w in (o.get("text") or "") for w in words)]
+        if seen:
+            # 조건이 섰다 → **보통 경로로 돌려보낸다**(그때는 안 한 것이 진짜 놓침이고 사유를 묻는 것이 맞다).
+            # 조건부를 넓히면서 이 갈래를 안 두면 막는 것만 보고 통과하는 것을 안 보는 상태가 된다(게이트는 양방향).
+            return True, f"조건({d.params.get('condition')}) 관찰 {len(seen)}건 — 조건이 섰다"
+        return False, (f"조건부 작업 — {d.params.get('condition')}이 없다. 안 한 것이 아니라 **할 일이 없었던 것**이라 "
+                       f"사유를 묻지 않는다(조건이 서면 '{d.name}' 결정이 마감까지 권고한다)")
+    return None
+
+
 def reason_for(reasons: list[dict[str, Any]], task: str, work_date: str) -> dict[str, Any] | None:
     """계획표 한 줄(작업명 · 계획일)에 기록된 불이행 사유. 계획 대 실제와 단계 결정(웃거름 등)이 **같은 키**로 잇는다 — 한 벌."""
     return next((r for r in reasons if r.get("kind", "decision.noncompliance") == "decision.noncompliance"
@@ -80,7 +113,8 @@ def _matched_event(p: dict[str, Any], evts: list[dict[str, Any]], tol: int, para
 
 
 def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[str, Any]] | None = None,
-          videos: list[dict[str, Any]] | None = None, reasons: list[dict[str, Any]] | None = None) -> Envelope:
+          videos: list[dict[str, Any]] | None = None, reasons: list[dict[str, Any]] | None = None,
+          notes: list[dict[str, Any]] | None = None) -> Envelope:
     today = today or date.today()
     as_of = _now()
     sid = subject.get("id", "?")
@@ -96,6 +130,9 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
     evts = evts if evts is not None else ev.list_records(sid, "event")
     videos = videos if videos is not None else media.list_records(sid)
     reasons = reasons if reasons is not None else ev.list_records(sid, "decision.noncompliance")
+    # [§7.5 관문의 입력 2026-09-21] 조건 판정이 읽을 관찰 — 호출부가 안 넘기면 조건부 갈래가 **아무것도 못 거르고 통과시킨다**
+    # (관문은 멀쩡히 서 있고 하는 일이 없는 상태). 그래서 기본값은 None 이 아니라 원장에서 직접 읽는다.
+    notes = notes if notes is not None else ev.list_records(sid, "observation.note")
     # 기준점은 그 자체가 사건이다(농가 행위 기준점)
     evts = list(evts) + [{"type": "파종", "observed_at": anchor, "id": "anchor", "source": subject.get("source", "farmer")}]
     tol = int(d.params["tolerance_days"])
@@ -116,10 +153,11 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
             m = _matched_event(p, evts, tol, d.params)
             if m:
                 status, evidence = "이행", f"사건 {m.get('type')} {m.get('observed_at', '')[:10]}"
-        if status is None and _conditional(p["task"]):
-            # [코드 평가 B13] "관수(건조 시)" · "웃거름 2회(필요 시)" 같은 조건부 작업은 안 했다고 놓친 것이 아니다 — 조건 판정 규칙이
-            # 격자에 없으면(지식 미비) 사유를 묻지 않고 '조건부'로 둔다. 조건이 채워지는 날 결정기가 그것을 판단한다
-            status, evidence = "조건부", "조건('… 시')이 붙은 작업 — 조건 판정 규칙 없음, 놓침으로 세지 않는다"
+        cond = conditional_of(p["task"], notes, since=anchor) if status is None else None
+        if cond and not cond[0]:
+            # [코드 평가 B13 + 두 층 불일치 2026-09-21] 조건부 작업은 안 했다고 놓친 것이 아니다 — 사유를 묻지 않고 '조건부'로 둔다.
+            # 조건이 **채워졌으면**(cond[0]) 여기서 걸리지 않고 보통 경로로 내려간다 — 그때는 놓침이 맞고 사유를 묻는 것이 맞다
+            status, evidence = "조건부", cond[1]
         elif status is None and p["kind"] == "plan.capture" and wd < anchor_d:
             # 기준점 이전 촬영(종구 준비 칸) — 기준점을 뒤에 등록한 재배 단위는 소급 촬영이 있을 수 없다. 놓침이 아니라 기록 없음
             status, evidence = "기록 없음", "기준점 이전 작업 — 소급 촬영 불가, 사유를 묻지 않는다"

@@ -22,7 +22,9 @@ def _pva(today):
 
 def test_end_declaration_closes_the_plan_after_that_day_and_nothing_before_it():
     before = _pva(date(2026, 11, 23)).result["counts"]
-    assert before["놓침"] == 12 and before["종료 뒤"] == 0                              # 시점 걷기 실측: 11/23 놓침 12
+    # [래칫 교정 2026-09-21] 전에는 `놓침 == 12` 라는 **그때의 상태**를 박아 두었다. 보식이 '조건부'로 옮겨 가자(두 층 불일치 처방)
+    # 배선은 하나도 안 변했는데 이 검사만 깨졌다 — 계약은 숫자가 아니라 **"종료 선언이 종료 전 놓침을 건드리지 않는다"** 이다.
+    assert before["놓침"] > 0 and before["종료 뒤"] == 0
     m, r = chat.send(SID, "11월 3일 쪽파 재배 종료", today=date(2026, 11, 6), now=NOW)
     d = m["drafts"][0]
     assert d["kind"] == "subject.end" and d["ended_at"] == "2026-11-03" and "작기 종료" in r["text"]
@@ -32,8 +34,8 @@ def test_end_declaration_closes_the_plan_after_that_day_and_nothing_before_it():
     assert rec["kind"] == "subject" and s["status"] == "종료" and s["ended_at"] == "2026-11-03"
     after = _pva(date(2026, 11, 23))
     c = after.result["counts"]
-    # 11/3 뒤의 계획은 '잔사 정리 · 후작 준비'(11/5) 하나 — 전에는 11/23 에 미이행 1 이던 줄. 놓침 12 는 그대로(종료 전 놓침은 놓침)
-    assert c["종료 뒤"] == 1 and c["미이행"] == 0 and c["놓침"] == 12 and sum(c.values()) == len(after.result["rows"])
+    # 11/3 뒤의 계획은 '잔사 정리 · 후작 준비'(11/5) 하나 — 전에는 11/23 에 미이행 1 이던 줄. **종료 전 놓침은 그대로**(수가 아니라 불변이 계약)
+    assert c["종료 뒤"] == 1 and c["미이행"] == 0 and c["놓침"] == before["놓침"] and sum(c.values()) == len(after.result["rows"])
     assert all(a["work_date"] <= "2026-11-03" for a in after.result["ask_reason"])       # 종료 뒤 줄은 사유를 묻지 않는다
     assert all(r["status"] != "종료 뒤" for r in after.result["rows"] if r["work_date"] <= "2026-11-03")   # 종료 전 줄은 그대로
     side = chat_pages.sidebar(f"/c/{SID}", [], date(2026, 11, 23))
