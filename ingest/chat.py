@@ -172,6 +172,17 @@ _MD = re.compile(r"(\d{1,2})\s*월\s*(\d{1,2})\s*일")
 _SLASH = re.compile(r"(?<![\d/.\-])(\d{1,2})/(\d{1,2})(?![\d/])")   # "9/8 트랩 확인" — 빗금 월/일(걷기 실측 2026-09-20: 날짜로 안 읽혀 관찰 메모가 됐다)
 _AGO = re.compile(r"(\d+)\s*일\s*전")
 _REL = {"오늘": 0, "어제": -1, "그저께": -2, "엊그제": -2, "내일": 1, "모레": 2, "글피": 3}
+# [실측 2026-09-21] 발행자는 밭에서 일하고 **돌아와서** 적는다. 9/24 마감이 지난 뒤 늦게 적을 때 날짜가 안 잡히면
+# 밭에 다녀온 일이 **놓침**으로 남는다. 어제 · 그저께 · "9월 23일" · "9/23" 은 이미 잡혔고, 세 형태가 비어 있었다.
+# 되묻는 것 자체는 정직하지만(지어내지 않는다), 발행자가 자연스럽게 쓰는 말이라 마찰이 그대로 기록 누락이 된다.
+# **추론한 날짜는 확인 폼에 그대로 보이므로** 사람이 보고 고친다 — 조용히 박는 것이 아니다(대리값과 다른 점).
+_NATIVE_DAYS = {"하루": 1, "이틀": 2, "사흘": 3, "나흘": 4, "닷새": 5, "엿새": 6, "이레": 7, "여드레": 8, "아흐레": 9, "열흘": 10}
+_NATIVE_AGO = re.compile(r"(" + "|".join(_NATIVE_DAYS) + r")\s*전")
+# 달 없이 일만 — "23일에 예찰했다". **함정을 먼저 막는다**: `23일차`(파종 경과일) · `23일째` · `10일 뒤`(앞날).
+# 달은 지어내지 않는다 — 지난 일이면 **오늘 이전의 가장 가까운 그 날**, 계획이면 **오늘 이후의 가장 가까운 그 날**.
+_DAY_ONLY = re.compile(r"(?<![\d/.\-])(\d{1,2})\s*일(?!\s*(?:차|째|간|뒤|후|만에|동안|이내|이상|이하|걸|넘|남|정도|가량|째))")
+_WEEKDAYS = "월화수목금토일"
+_WEEKDAY = re.compile(r"(지난|저번|이번)?\s*주?\s*([월화수목금토일])요일")
 
 
 def parse_day(text: str, today: date, past: bool = False) -> str | None:
@@ -195,9 +206,30 @@ def parse_day(text: str, today: date, past: bool = False) -> str | None:
     m = _AGO.search(text)
     if m:
         return (today - timedelta(days=int(m.group(1)))).isoformat()
+    m = _NATIVE_AGO.search(text)                      # "이틀 전에 물 줬다" — 한글 수사
+    if m:
+        return (today - timedelta(days=_NATIVE_DAYS[m.group(1)])).isoformat()
     for w, d in _REL.items():
         if w in text:
             return (today + timedelta(days=d)).isoformat()
+    m = _WEEKDAY.search(text)
+    if m:
+        want = _WEEKDAYS.index(m.group(2))
+        back = (today.weekday() - want) % 7
+        if m.group(1) in ("지난", "저번"):
+            back += 7                                  # '지난 금요일' 은 이번 주 그 요일이 아니다
+        elif back == 0:
+            back = 7 if past else 0                    # 오늘이 그 요일인데 지난 일이면 한 주 전(오늘이면 '오늘'이라 쓴다)
+        d2 = today - timedelta(days=back)
+        return (d2 if past or d2 <= today else d2 + timedelta(days=7)).isoformat()
+    m = _DAY_ONLY.search(text)
+    if m:
+        day = int(m.group(1))
+        for back in range(0, 62):                      # 달을 지어내지 않고 **가장 가까운 그 날**을 고른다(두 달 안)
+            cand = today - timedelta(days=back) if past else today + timedelta(days=back)
+            if cand.day == day:
+                return cand.isoformat()
+        return None
     return None
 
 
