@@ -554,13 +554,32 @@ def _with_stage(row: dict[str, Any]) -> str:
     return f"{task}(칸 {num})" if num.isdigit() else task
 
 
-def summarize_envelope(e: Any) -> str:
+def summarize_envelope(e: Any, plain: bool = True) -> str:
+    """판정 한 줄. `plain` 이면 **사람 말**로 옮긴다(4층 정본 `frontend.words`).
+
+    [§7.5 전수 2026-09-21] 앞 회차에 채팅 카드만 고쳤는데, 화면 전체를 재니 152곳이었고 그중 /judge 가 76곳이었다.
+    여기가 그 76곳의 입구다 — 종류 이름을 그대로 내고(`[해당 없음]`), 본문으로 **개발자 사유(`why`)** 를 냈다.
+    이제 `summary`(농가가 읽는 줄)가 있으면 그것이 먼저고, `why` 는 화면이 `title` 로 내린다(정확함은 안 버린다).
+
+    낱말 표를 4층에 두고 여기서 **함수 안에서** 부르는 이유: 이 문장은 원장에 남는 대화 글이라 문면이 4층 관심사인데,
+    `ingest` 가 `frontend` 를 모듈 수준에서 import 하면 층이 뒤집힌다(`answer` 가 `judge` 를 그렇게 부르는 것과 같은 형태).
+    """
+    from frontend import words
+
     r = e.result or {}
-    head = f"[{e.kind}]"
+    head = f"[{words.said(e.kind) if plain else e.kind}]"
     if e.kind != "판단함" and e.kind != "사실 인용":
-        why = r.get("why") or ""
+        body = r.get("summary") or r.get("why") or ""       # 농가가 읽는 줄이 있으면 그것이 먼저
         miss = " · ".join(f"{m.get('axis')}: {m.get('who_can_fill')}" for m in (e.missing or []))
-        return f"{head} {why}" + (f" — 채울 사람: {miss}" if miss else "")
+        out = f"{head} {body}" + (f" — 채울 사람: {miss}" if miss else "")
+        return words.plain(out) if plain else out
+    out = _judged_line(e, r, head)
+    return words.plain(out) if plain else out
+
+
+def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
+    """'판단함 · 사실 인용' 의 본문. 갈래가 많아 따로 뽑았다 — 위에서 **한 자리**에서 사람 말로 옮긴다
+    (갈래마다 옮기면 다음 갈래가 빠진다 · §7.5 지점 축)."""
     if r.get("summary") and e.decision_id not in ("harvest_timing", "risk_alert", "material_citation", "plan_vs_actual"):
         caps = " · ".join(f"상한: {c.get('name')}({c.get('basis')})" for c in (e.caps or []))
         return f"{head} {r['summary']} · 등급 {e.grade}" + (f" · {caps}" if caps else "")
@@ -670,11 +689,13 @@ def request_improvement(reply_id: str, text: str = "", now: datetime | None = No
     m = get_message(reply_id)
     if not m or m.get("role") != "system":
         raise ChatError("개선 요구는 시스템 답변에 대해 낸다")
+    # [발행자 2026-09-22] 칸이 없어서 **시스템이 지어낸 문장**만 접수되던 자리. 사람이 적은 말이 있으면 그것이 요구다.
+    # 적힌 말이 없을 때만 답변을 인용한다 — 무엇이 틀렸는지를 지어내지 않는다(대리값 금지).
     body = (text or "").strip() or f"이 답변이 틀리거나 부족하다: {m['text'][:200]}"
     req = fb.add_request(body, target="decision", target_ref=reply_id, subject=m.get("subject"), source="farmer", now=now)
     ts = _now(now).isoformat(timespec="seconds")
     note = _append({"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": m["subject"], "role": "system",
-                    "text": f"개선 요구 접수 {req['id']} — 개선 항목이 되면 /improve 에 보인다. 채택은 사람이 한다(D-14).",
+                    "text": "말씀 받았습니다 — 적으신 그대로 남겼습니다. 고칠지는 사람이 정하고, 진행은 왼쪽 '고쳐 달라는 말' 에서 보실 수 있습니다.",
                     "observed_at": ts[:10], "recorded_at": ts, "source": "computed:chat", "resolution": RESOLUTION,
                     "drafts": [], "confirmed_refs": [], "reply_ref": reply_id, "request_ref": req["id"]})
     return req, note

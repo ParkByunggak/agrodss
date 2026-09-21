@@ -11,6 +11,7 @@ from frontend import chat_pages, config, serve
 from ingest import chat, events as ev, fertilizer as fz, soil_store
 from tests.test_brand_home import srv  # noqa: F401
 from tests.test_fertilizer import PNU, USE_XML
+from frontend import words
 
 
 def _confirm_buttons(label: str) -> str:
@@ -102,7 +103,7 @@ def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv, mo
     ans = [x for x in chat.list_messages(SID) if x.get("role") == "system"][-1]["text"]
     # 변별 표지 — "촬영(칸 " 만 보면 **다른 묶음**의 촬영이 그 조건을 채운다(§7.1 4번). 칸 없는 꼴이 하나도 없어야 한다.
     assert "촬영(~" not in ans and "촬영(0" not in ans and "촬영," not in ans, ans[:250]
-    assert "촬영(칸 " in ans, ans[:250]
+    assert "촬영(3단계)" in ans, ans[:250]      # 칸 번호는 붙되 화면 말로 나온다
     # 4b. 처방 정본이 있으면 웃거름 카드가 **양**을 낸다(추비 N·K, kg/10a) — 발행자 2회차 live_check 뒤 화면에서 보라고 한 그 값
     assert "양 추비 N 7.6" in body and "K₂O 5.5" in body and "정본 대기" not in body[body.index("<h2>웃거름 1회 "):body.index("<h2>웃거름 2회")]
     assert f"오늘이 {TODAY} 로 고정돼 있다" in body                                     # 고정은 화면이 말한다(잊힌 고정 방지)

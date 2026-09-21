@@ -45,7 +45,7 @@ def test_stage_one_capture_is_not_a_miss_and_the_missed_one_is_stage_two():
 def test_the_answer_tells_the_stage_so_the_same_name_can_be_told_apart():
     """② 처방 — 답의 모든 묶음이 칸을 말한다. 안 그러면 같은 이름이 세 번 밀린 것처럼 읽힌다."""
     e, _ = _rows()
-    text = chat.summarize_envelope(e)
+    text = chat.summarize_envelope(e, plain=False)      # 계약은 **칸 번호가 붙는가** — 화면 낱말이 아니다
     assert "촬영(칸 2)" in text and "촬영(칸 3)" in text and "촬영(칸 4)" in text, text
     for group in ("지금 할 것", "다음 예정", "놓침"):
         assert group in text
@@ -55,11 +55,11 @@ def test_the_answer_tells_the_stage_so_the_same_name_can_be_told_apart():
 def test_a_recorded_reason_takes_the_task_out_of_what_to_do_now():
     """① 판정 — 사유가 원장에 들어가면 '지금 할 것'에서 빠진다(배선은 멀쩡하다)."""
     before, _ = _rows()
-    assert "웃거름 1회(칸 3)" in chat.summarize_envelope(before)
+    assert "웃거름 1회(칸 3)" in chat.summarize_envelope(before, plain=False)
     reason = {"kind": "decision.noncompliance", "subject": SUBJ["id"], "id": "nc_x", "source": "farmer",
               "planned_task": "웃거름 1회", "reason": "토양검정 상태 기준 — 주지 않음",
               "observed_at": "2026-09-16", "planned_day": "2026-09-16"}
     after, by = _rows([reason])
     assert by[("3", "웃거름 1회")] == "사유 기록됨"
     assert after.result["counts"]["미이행"] == before.result["counts"]["미이행"] - 1
-    assert "웃거름 1회(칸 3)" not in chat.summarize_envelope(after)
+    assert "웃거름 1회(칸 3)" not in chat.summarize_envelope(after, plain=False)

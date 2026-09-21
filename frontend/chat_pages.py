@@ -9,7 +9,7 @@ from datetime import date
 from typing import Any
 from urllib.parse import quote
 
-from frontend import config, render
+from frontend import config, render, words
 from grid import capture as grid_capture
 from ingest import chat, events as ev, feedback as fb, media, parcels, profile, subjects
 from judge import evolve, registry, run as judge_run
@@ -70,6 +70,15 @@ main.thread { display:flex; flex-direction:column; min-height:100vh; }
 .ts { color:var(--muted); font-size:11px; margin-top:4px; }
 .acts { display:flex; gap:2px; margin-top:2px; opacity:.55; } .acts.right { justify-content:flex-end; } .msg:hover .acts { opacity:1; }
 .acts .inline { display:inline; margin:0; }
+/* [발행자 2026-09-22] '고쳐 달라기' 를 누르면 **적는 칸**이 열린다 — 자바스크립트 없이 <details> 로. */
+.acts .ask { display:inline-block; }
+.acts .ask > summary { list-style:none; cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
+.acts .ask > summary::-webkit-details-marker { display:none; }
+.acts .ask[open] { display:block; width:100%; }
+.acts .ask form { margin:6px 0 0; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; max-width:560px; }
+.acts .ask .q { color:var(--muted); font-size:12px; margin-bottom:6px; }
+.acts .ask textarea { width:100%; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; font-size:13px; padding:6px 8px; resize:vertical; }
+.acts .ask .btn { margin-top:6px; }
 .act { display:inline-flex; align-items:center; gap:4px; border:0; background:transparent; color:var(--muted); font-size:11.5px; padding:3px 6px; border-radius:6px; cursor:pointer; }
 .act:hover { background:var(--chip); color:var(--fg); }
 .draft { margin:6px 0 0 36px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; }
@@ -126,20 +135,21 @@ def shell(title: str, side: str, main: str, panel: str | None, footer: str) -> s
 
 def sidebar(current: str, docs: list[str], today: date) -> str:
     # [발행자 2026-09-19] 좌측 상단 탭 = AGRODSS(대문자) · 홈(/) 링크 · 모든 화면에 있다
+    # [§7.5 전수 2026-09-21] 이 이름들은 **모든 페이지**에 실린다 — 한 낱말이 152곳 중 열 몇 곳을 혼자 만들고 있었다.
     out = [BRAND_HTML, '<a class="newchat" href="/c/new">＋ 새 채팅 (작목 추가 · 계획)</a>',
-           '<div class="grp">채팅 — 재배 단위</div>']
+           '<div class="grp">채팅 — 짓는 농사</div>']
     subs = subjects.load()
     if not subs:
         out.append('<div class="lnk">아직 목록이 없다 — 새 채팅으로 작목을 더한다</div>')
     for s in subs:
         st = s.get("status") or ("재배 중" if s.get("anchor") else "계획")
-        meta = f"{_e(s.get('season'))}" + (f" · 기준점 후 {(today - date.fromisoformat(s['anchor'])).days}일" if s.get("anchor") else " · 파종 전")
+        meta = f"{_e(s.get('season'))}" + (f" · 심은 지 {(today - date.fromisoformat(s['anchor'])).days}일" if s.get("anchor") else " · 파종 전")
         cls = ' on' if current == f"/c/{s['id']}" else ""
         pill = {"재배 중": "run", "종료": "end"}.get(st, "plan")          # 종료(작기 종료 경로 2026-09-20)는 계획 색이 아니라 회색
         out.append(f'<a class="chat{cls}" href="/c/{quote(s["id"])}"><b>{_e(s.get("crop"))}<span class="pill {pill}">{_e(st)}</span></b><span>{meta}</span></a>')
     out.append('<div class="grp">화면</div>')
     first = subs[0]["id"] if subs else ""
-    for href, label in (("/improve", "개선 · 자율진화"), ("/judge", "판단 봉투 전체"), ("/media", "영상 반입"), ("/events", "사건 · 사유(표)"),
+    for href, label in (("/improve", "고쳐 달라는 말 · 스스로 개선"), ("/judge", "판단 전체"), ("/media", "영상 반입"), ("/events", "한 일 · 못 한 이유(표)"),
                         (f"/mall/{quote(first)}" if first else "/c/new", "몰 상세페이지 목업 (M-11)")):
         out.append(f'<a class="lnk" href="{href}">{label}</a>')
     out.append('<div class="grp">문서</div>')
@@ -156,15 +166,15 @@ USER_MENU: tuple[tuple[str, str, str] | None, ...] = (
     ("/me", "설정", "사용자 정보 · 필지 · 동기화"),
     ("/doc/m13_chat_screen.md", "도움 받기", "채팅 화면 설명"),
     None,
-    ("/", "모든 목록 보기", "재배 단위 채팅"),
+    ("/", "모든 목록 보기", "짓는 농사별 채팅"),
     ("/judge", "판단 보기", "수확 시기 · 위험 경보 · 계획 대 실제"),
-    ("/events", "사건 · 불이행 사유", "표로 직접 적기"),
+    ("/events", "한 일 · 못 한 이유", "표로 직접 적기"),
     ("/media", "영상 · 사진 반입", "촬영 시각이 붙어야 등록"),
-    ("/improve", "개선 · 자율진화", "개선 요구 → 항목"),
-    ("/me#sync", "휴대폰 동기화(D-16)", "같은 Wi-Fi · 토큰"),
+    ("/improve", "고쳐 달라는 말", "말씀하신 것 → 고칠 항목"),
+    ("/me#sync", "휴대폰 동기화", "같은 Wi-Fi · 토큰"),
     None,
     ("/changes", "변경 로그 보기", "커밋 이력 · 실행 중 코드"),
-    ("/doc/agrodss_backlog.md", "자세히 알아보기", "대장 · 문서"),
+    ("/doc/agrodss_backlog.md", "자세히 알아보기", "작업 기록 · 문서"),
 )
 
 
@@ -248,7 +258,7 @@ def me_main(message: str = "", error: str = "", form: dict[str, str] | None = No
                '휴대폰 마이크·음성은 https 또는 localhost 에서만 열린다(브라우저 보안 규칙) — 휴대폰에서는 글·사진·영상 입력이 먼저다</div></div>')
     out.append(f'<div class="card"><b>음성 질문(D-15)</b> 크롬 내장 인식(구글 서버 경유) · 무신호 {config.VOICE_SILENCE_MS // 1000}초면 종료 · 최대 {config.VOICE_MAX_MS // 1000}초</div>')
     out.append(f'<div class="card"><b>반입</b> 사진(EXIF 시각) · 영상(mvhd 시각) · 한 번에 {config.MAX_UPLOAD_MB}MB 까지 · 시각 없으면 촬영일 입력</div>')
-    out.append(f'<div class="card"><b>원장</b> 영상·사진 {len(media.list_records())} · 반입 대기 {len(media.list_inbox())} · 개선 요구 {len(fb.latest_by_id("feedback.request"))} · 개선 항목 {len(fb.latest_by_id("improvement.item"))}</div>')
+    out.append(f'<div class="card"><b>쌓인 것</b> 영상·사진 {len(media.list_records())} · 반입 대기 {len(media.list_inbox())} · 고쳐 달라는 말 {len(fb.latest_by_id("feedback.request"))} · 고칠 항목 {len(fb.latest_by_id("improvement.item"))}</div>')
     out.append("</div>")
     return "".join(out)
 
@@ -290,7 +300,7 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
 
 def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = "") -> str:
     st = s.get("status") or ("재배 중" if s.get("anchor") else "계획")
-    out = [f'<div class="thead"><div><h1>{_e(s.get("label"))}</h1><div class="meta">{_e(st)} · 격자 {_e(s.get("grid_unit") or "없음")} · 인증 {_e(s.get("cert") or "미기재")}</div></div>'
+    out = [f'<div class="thead"><div><h1>{_e(s.get("label"))}</h1><div class="meta">{_e(st)} · 재배 달력 {"있음" if s.get("grid_unit") else "없음"} · 인증 {_e(s.get("cert") or "미기재")}</div></div>'
            f'<div><a href="/diary/{quote(s["id"])}">영농일지</a><a href="/judge">판단</a></div></div><div class="msgs">']
     if error:
         out.append(f'<p class="err">{_e(error)}</p>')
@@ -302,7 +312,7 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
     for m in msgs:
         if m.get("role") == "system":
             out.append(f'<div class="msg sys"><div class="av">a</div><div><div class="bub" id="t-{_e(m["id"])}">{_e(m["text"])}</div>'
-                       f'<div class="ts">{_e(render.local_time(m.get("recorded_at")))}{" · 개선 요구 " + _e(m["request_ref"]) if m.get("request_ref") else ""}</div>'
+                       f'<div class="ts">{_e(render.local_time(m.get("recorded_at")))}{" · 고쳐 달라는 말 " + _e(m["request_ref"]) if m.get("request_ref") else ""}</div>'
                        f'{_answer_actions(m)}</div></div>')
         else:
             tags = []
@@ -323,7 +333,7 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
                '<input type="hidden" name="input_mode" id="input_mode" value="text"><input type="hidden" name="edit_of" id="edit_of" value="">'
                '<textarea name="text" id="text" placeholder="예) 오늘 물 줬다 / 잎 끝이 누렇다 / 9월 25일에 웃거름 주려고 한다 / 수확 창이 너무 넓다 / 언제 캐면 되나?"></textarea>'
                '<div class="files" id="files" hidden><span id="filenames"></span> <label>촬영일 <input name="observed_at" id="observed_at" placeholder="메타에 없으면 필요 (2026-09-19)" size="24"></label></div>'
-               '<div class="row"><span class="hint" id="hint">사건 · 관찰 · 계획 · 개선 요구 · 질문 — 날짜는 "9월 20일" · "어제" · "2026-09-20"</span>'
+               '<div class="row"><span class="hint" id="hint">한 일 · 본 것 · 할 일 · 고쳐 달라는 말 · 물음 — 날짜는 "9월 20일" · "어제" · "2026-09-20"</span>'
                '<span><input type="file" name="file" id="file" accept="image/*,video/*" multiple hidden>'
                '<button class="btn" type="button" id="attach" title="사진 · 영상 올리기 — 촬영 시각은 메타(EXIF · mvhd)에서 읽고 없으면 촬영일을 묻는다">📎 사진·영상</button> '
                # [칸 3 재측정 2026-09-20 · D15] 툴팁만 '5초' 가 박혀 있었다 — 설정(AGRODSS_VOICE_SILENCE_MS)을 바꾸면 화면이 거짓말을 한다
@@ -352,11 +362,26 @@ def _question_actions(m: dict[str, Any]) -> str:
 
 
 def _answer_actions(m: dict[str, Any]) -> str:
+    """[발행자 2026-09-22] *"사용자가 직접 입력해서 개선 사항을 전하는 입력창이 필요하다."*
+
+    받는 쪽(`chat.request_improvement`)은 **처음부터 `text` 를 받고 있었다** — 보내는 쪽에 칸이 없었을 뿐이다.
+    그래서 단추 하나가 *"이 답변이 틀리거나 부족하다"* 라는 **시스템이 지어낸 문장**만 접수시켰고, 정작
+    무엇이 틀렸는지는 아무 데도 안 남았다(G1 의 거울 — 받는 자리는 있는데 **입구**가 없었다).
+
+    칸은 `<details>` 로 연다 — 자바스크립트 없이 열리고, 휴대폰에서도 그냥 글상자다.
+    """
     mid = _e(m["id"])
+    raw = (m.get("text") or "").strip()
+    quoted = _e(raw[:80]) + ("…" if len(raw) > 80 else "")
     return (f'<div class="acts" data-msg="{mid}">'
             f'<button type="button" class="act" data-act="copy" data-target="t-{mid}" title="복사">{ICONS["copy"]}<span>복사</span></button>'
-            f'<form method="post" action="/c/{quote(m["subject"])}/request" class="inline"><input type="hidden" name="reply" value="{mid}">'
-            f'<button type="submit" class="act" data-act="request" title="개선 요구 — 이 답이 틀리거나 부족하다고 접수한다">{ICONS["request"]}<span>개선 요구</span></button></form>'
+            f'<details class="ask"><summary class="act" title="이 답이 틀리거나 부족합니다 — 무엇이 잘못됐는지 적어 보내 주세요">'
+            f'{ICONS["request"]}<span>고쳐 달라기</span></summary>'
+            f'<form method="post" action="/c/{quote(m["subject"])}/request">'
+            f'<input type="hidden" name="reply" value="{mid}">'
+            f'<div class="q">이 답에 대해 — “{quoted}”</div>'
+            f'<textarea name="text" rows="2" required placeholder="무엇이 틀렸는지 · 어떻게 나오면 좋겠는지 적어 주세요"></textarea>'
+            f'<button class="btn pri" type="submit">보내기</button></form></details>'
             f'<button type="button" class="act" data-act="speak" data-target="t-{mid}" title="소리 내어 읽기">{ICONS["speak"]}<span>소리 내어 읽기</span></button></div>')
 
 
@@ -407,7 +432,10 @@ ACTION_JS = """<script>
 
 def _env_card(e: Any) -> str:
     cls = "kind-판단함" if e.kind == "판단함" else ("kind-판단불가" if e.kind.startswith("판단 불가") else "")
-    return f'<div class="card {cls}"><span class="k">{_e(DECISION_LABEL.get(e.decision_id, e.decision_id))}</span><b>{_e(e.kind)}</b><div>{_e(chat.summarize_envelope(e))}</div></div>'
+    # [§7.5 전수 2026-09-21] 이름표가 `해당 없음` 이었다 — 안쪽 이름이다. 정확한 종류는 `title` 에 남긴다(잃지 않는다).
+    return (f'<div class="card {cls}" title="{_e(e.kind)} · {_e((e.result or {}).get("why", ""))}">'
+            f'<span class="k">{_e(DECISION_LABEL.get(e.decision_id, e.decision_id))}</span>'
+            f'<b>{_e(words.said(e.kind))}</b><div>{_e(chat.summarize_envelope(e))}</div></div>')
 
 
 def thread_panel(s: dict[str, Any], today: date) -> str:

@@ -11,6 +11,7 @@ import pytest
 from grid import schema as grid_schema
 from ingest import chat, events as ev, media, parcels
 from judge import registry, run as judge_run, stage_decisions as SD
+from frontend import words
 
 _RAW = [s for s in media.load_subjects() if s["id"] == "p001-jjokpa-2026f"][0]
 SUBJ = parcels.enrich_subject(_RAW, parcels.by_id("p001"))     # run.py 와 같은 병합 — 용도(D-8 자가)가 붙는다
@@ -124,4 +125,5 @@ def test_run_emits_twelve_envelopes_and_chat_routes_specific_questions():
     assert chat.topic_of("출하할까 저장할까?") == "ship_or_store"
     assert chat.topic_of("벌레 걱정되는데 괜찮나?") == "pest_alert"
     _, r = chat.send(SID, "웃거름 줘야 하나?", today=T25, now=NOW)
-    assert r["text"].startswith("[판단함]") and "미이행" in r["text"] and "정본 대기" in r["text"]
+    assert r["text"].startswith(f"[{words.said('판단함')}]")
+    assert "아직 안 함" in r["text"] and "기준이 아직 없음" in r["text"]      # 사람 말로 나온다

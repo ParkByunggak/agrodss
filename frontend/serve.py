@@ -605,7 +605,7 @@ class Handler(BaseHTTPRequestHandler):
             sid = unquote(p[len("/c/"):-len("/request")])
             try:
                 req, _ = chat.request_improvement(form.get("reply", ""), form.get("text", ""))
-                status, body = chat_page(sid, message=f"개선 요구 접수 {req['id']} — /improve 에서 개선 항목으로 이어진다")
+                status, body = chat_page(sid, message="말씀 받았습니다 — 적으신 그대로 남겼습니다. 왼쪽 '고쳐 달라는 말' 에서 진행을 보실 수 있습니다.")
             except (chat.ChatError, fb.FeedbackError) as e:
                 status, body = chat_page(sid, error=str(e))
         elif p.startswith("/c/") and p.endswith("/confirm"):
@@ -613,7 +613,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 rec = chat.confirm(form.get("msg", ""), int(form.get("i") or 0), day=form.get("day") or None, event_type=form.get("type") or None,
                                    risk=form.get("risk") or None, planned_task=form.get("planned_task") or None)
-                status, body = chat_page(sid, message=f"원장에 들어감 {rec['id']} · {chat.KIND_LABEL.get(rec['kind'], rec['kind'])} {rec.get('observed_at', '')}")
+                # [§7.5 전수 2026-09-21] 앞 회차 문면 고침이 **여기까지 닿지 않았다** — 확인 직후 화면에 뜨는 줄이다(가장 자주 보는 말)
+                status, body = chat_page(sid, message=f"{chat.SAVED_LABEL} · {chat.KIND_PLAIN.get(rec['kind'], rec['kind'])} {rec.get('observed_at', '')}")
             except (chat.ChatError, ValueError) as e:
                 status, body = chat_page(sid, error=str(e))
         elif p.startswith("/c/") and p.endswith("/choose"):

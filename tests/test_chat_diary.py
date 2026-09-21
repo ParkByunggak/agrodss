@@ -14,6 +14,7 @@ import pytest
 from frontend import config, serve
 from ingest import chat, events as ev, feedback as fb, media, subjects
 from schema import records as sch
+from frontend import words
 
 ROOT = Path(__file__).resolve().parent.parent
 SID = "p001-jjokpa-2026f"
@@ -107,11 +108,11 @@ def test_request_from_chat_lands_in_feedback_ledger():
 
 def test_question_answered_from_envelope_kind_first():
     m, r = chat.send(SID, "언제 캐면 되나?", today=TODAY, now=NOW)
-    assert r["text"].startswith("[") and ("수확 창" in r["text"] or "판단" in r["text"])
+    assert r["text"].startswith(f"[{words.said('판단함')}]") and "수확 기간" in r["text"]
     # 발행자 2026-09-19 "현재 관리해야 할 항목" — 답은 지금 것이 먼저다(마감 안 미이행 → 다음 예정 → 놓침). 옛 놓침만 6건 보이던 표현 층 결함
     _, r3 = chat.send(SID, "쪽파를 현재 관리해야 할 항목들을 알려줘요", today=TODAY, now=NOW)
     t = r3["text"]
-    assert t.startswith("[판단함]") and "지금 할 것" in t and "다음 예정" in t and "놓침" in t, t
+    assert t.startswith(f"[{words.said('판단함')}]") and "지금 할 것" in t and "다음 예정" in t and "놓침" in t, t
     assert t.index("지금 할 것") < t.index("다음 예정") < t.index("놓침") and "웃거름 1회" in t and "예찰" in t, t
     _, r2 = chat.send(SID, "달이 왜 둥근가?", today=TODAY, now=NOW)
     assert "판단 불가(지식)" in r2["text"]                                  # 지어내지 않는다

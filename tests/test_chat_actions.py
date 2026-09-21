@@ -50,7 +50,9 @@ def test_question_and_answer_action_bars_and_voice_button_in_page():
     q = html.split(f'id="t-{m["id"]}"')[1].split('class="msg sys"')[0]
     assert 'data-act="copy"' in q and 'data-act="edit"' in q and 'data-act="retry"' in q and f'name="retry_of" value="{m["id"]}"' in q
     a = html.split(f'id="t-{reply["id"]}"')[1].split("</div></div></div>")[0]
-    assert 'data-act="copy"' in a and 'data-act="request"' in a and 'data-act="speak"' in a and f'name="reply" value="{reply["id"]}"' in a
+    # [발행자 2026-09-22] '고쳐 달라기' 는 이제 **칸을 연다** — 단추만 있으면 무엇이 틀렸는지가 아무 데도 안 남는다
+    assert 'data-act="copy"' in a and 'data-act="speak"' in a and f'name="reply" value="{reply["id"]}"' in a
+    assert "<details" in a and 'name="text"' in a and "<textarea" in a, "고쳐 달라는 말을 적을 칸이 없다"
     assert 'id="mic"' in html and "SpeechRecognition" in html and "speechSynthesis" in html and 'name="input_mode"' in html
     assert "rec.onend" in html and "submit()" in html                        # 말이 끝나면 자동 전송
 
@@ -80,7 +82,10 @@ def test_http_retry_voice_and_request(srv):
     assert m["input_mode"] == "voice"
     st, _, _ = _post(srv, f"/c/{quote(SID)}/send", {"text": m["text"], "retry_of": m["id"]})
     assert st == 302 and chat.list_messages(SID)[2]["retry_of"] == m["id"]
-    st, _, body = _post(srv, f"/c/{quote(SID)}/request", {"reply": reply["id"]})
-    assert st == 200 and "개선 요구 접수" in body and len(fb.list_records("feedback.request")) == 1
+    # 적은 말이 **그대로** 요구가 된다(전에는 시스템이 지어낸 한 줄만 들어갔다)
+    st, _, body = _post(srv, f"/c/{quote(SID)}/request", {"reply": reply["id"], "text": "수확 시기를 날짜로 말해 주세요"})
+    assert st == 200 and "말씀 받았습니다" in body
+    reqs = fb.list_records("feedback.request")
+    assert len(reqs) == 1 and reqs[0]["text"] == "수확 시기를 날짜로 말해 주세요"
     st, _, body = _post(srv, f"/c/{quote(SID)}/request", {"reply": m["id"]})
     assert st == 400 and "시스템 답변" in body
