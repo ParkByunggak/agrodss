@@ -678,7 +678,8 @@ def make_server() -> ThreadingHTTPServer:
     return ThreadingHTTPServer((host, config.PORT), Handler)
 
 
-def watch_head(srv, start_head: str, poll_sec: float, stop: threading.Event, head_fn=git_head_short) -> bool:
+def watch_head(srv, start_head: str, poll_sec: float, stop: threading.Event, head_fn=git_head_short,
+               on_change=None) -> bool:
     """[발행자 2026-09-19 21:40 "수정된 것들은 리프레시하면 반영이 되어야 한다"] git HEAD 가 바뀌면(= git pull 이 내려앉으면) 서버를 내린다 —
     run_frontend.bat 가 새 코드로 다시 띄운다. True 면 HEAD 변화로 내렸다(종료 코드 3), False 면 stop 으로 끝났다(Ctrl+C).
     데이터(검정값 · 좌표 · 채팅)는 원래 요청마다 새로 읽으니 새로고침으로 충분했다 — 재시작이 필요했던 것은 코드뿐이다."""
@@ -686,6 +687,14 @@ def watch_head(srv, start_head: str, poll_sec: float, stop: threading.Event, hea
         now = head_fn()
         if now not in ("?", "", start_head):
             print(f"[agrodss] 코드가 바뀌었다 {start_head} → {now} — 새 코드로 다시 뜬다(브라우저는 새로고침만)")
+            # [경쟁 조건 2026-09-21 — 발행자 화면 ERR_CONNECTION_REFUSED 의 원인] **내리기 전에** 표시한다.
+            # `srv.shutdown()` 은 main 의 `serve_forever` 를 즉시 깨우는데, 재기동 표시는 이 함수가 **반환한 뒤에야**
+            # 대입됐다. main 이 먼저 도착하면 표시가 아직 False 라 `return 0` 으로 나가 버린다 —
+            # 서버는 조용히 사라지고(exit 0) 래퍼의 `if RC==3` 도 안 걸려 배치는 pause 에 멈춘다.
+            # 실측: 임시 클론에서 pull 을 흉내 내니 3회 중 3회 다 **종료 상태 0 · 프로세스 0개 · 연결 거부**였다.
+            # 표시를 먼저 세우면 두 경로(래퍼 exit 3 · 자기 execv)가 다 산다.
+            if on_change is not None:
+                on_change()
             srv.shutdown()
             return True
     return False
@@ -706,10 +715,10 @@ def main(open_browser: bool = True) -> int:
     if open_browser:
         webbrowser.open(url)
     stop = threading.Event()
-    restarted = {"v": False}
+    restarted = threading.Event()          # 내리기 전에 세운다(위 watch_head 주석 — 대입 시점이 늦으면 서버가 조용히 사라진다)
     if config.RELOAD_ON_HEAD_CHANGE:
         def _w() -> None:
-            restarted["v"] = watch_head(srv, head, config.RELOAD_POLL_SEC, stop)
+            watch_head(srv, head, config.RELOAD_POLL_SEC, stop, on_change=restarted.set)
         threading.Thread(target=_w, daemon=True, name="agrodss-head-watch").start()
     try:
         srv.serve_forever()
@@ -718,15 +727,20 @@ def main(open_browser: bool = True) -> int:
     finally:
         stop.set()
         srv.server_close()
-    if not restarted["v"]:
+    if not restarted.is_set():
         return 0
     if config.WRAPPED:
         return config.RESTART_EXIT_CODE          # 배치 루프가 새 코드로 다시 띄운다(옛 방식 그대로)
     # 래퍼가 없다 — 스스로 새 코드로 갈아탄다. 안 그러면 여기서 서버가 그냥 멈추고 **사람은 옛 코드가 멎은 줄 모른다**
     # (PowerShell 에서 `python frontend\serve.py` 로 켜면 그 형태가 된다 — 이번 27커밋 드리프트를 만든 구멍).
-    print(f"[agrodss] 코드가 바뀌었다 — 새 코드로 갈아탄다(재기동 · 브라우저 새 창 없음)")
+    print("[agrodss] 코드가 바뀌었다 — 새 코드로 갈아탄다(재기동 · 브라우저 새 창 없음)")
     args = [a for a in sys.argv if a != "--no-browser"] + ["--no-browser"]
-    os.execv(sys.executable, [sys.executable, *args])
+    try:
+        os.execv(sys.executable, [sys.executable, *args])
+    except OSError as e:
+        # 갈아타기가 실패해도 **사람을 빈손으로 두지 않는다** — 무엇이 실패했고 어떻게 다시 켜는지 말한다.
+        # (화면이 조용히 사라지는 것이 이 회차에 발행자가 겪은 일이다. 침묵이 가장 나쁜 실패다.)
+        print(f"[agrodss] 갈아타기 실패({e}) — 옛 코드로 계속 두지 않고 내린다. 다시 켜기: run_frontend.bat")
     return config.RESTART_EXIT_CODE              # execv 가 성공하면 여기 안 온다
 
 

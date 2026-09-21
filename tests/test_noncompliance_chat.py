@@ -65,7 +65,11 @@ def test_confirm_each_draft_once_and_judgments_read_the_reason_before_deadline()
     p = next(x for x in judge_run.judgments_for(SID, today=T) if x.decision_id == "plan_vs_actual")
     row = next(r for r in p.result["rows"] if r["task"] == "웃거름 1회")
     assert row["status"] == "사유 기록됨" and row["evidence"] == SENTENCE and p.result["counts"]["사유 기록됨"] == 1
-    assert p.result["counts"]["미이행"] == 3                                        # 전에는 4 (T+25 실측 대장: 미이행 4)
+    # [상태 리터럴 전수 2026-09-21 — 발행자 지적] 전에는 `미이행 == 3`("전에는 4")이라는 **그때의 대장 상태**를 박아 두었다.
+    # 계약은 숫자가 아니라 **"사유를 기록하면 그 줄이 미이행에서 빠진다"** 이므로 같은 날 사유 없는 판정과 견준다.
+    # (시즌이 가면 이런 리터럴이 가장 바쁜 시점에 거짓 빨간불을 낸다 — 놓침·미이행은 날마다 변한다.)
+    bare = plan_vs_actual.judge(_subject(), today=T, evts=[], videos=[], reasons=[], notes=[])
+    assert p.result["counts"]["미이행"] == bare.result["counts"]["미이행"] - 1
 
 
 def test_legacy_message_level_confirmation_still_refuses_and_choose_kind_paths():

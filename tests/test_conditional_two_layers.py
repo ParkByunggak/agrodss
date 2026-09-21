@@ -37,14 +37,21 @@ def _row(today: date, notes=()) -> dict:
     return env, next(r for r in env.result["rows"] if r["task"] == "보식")
 
 
-def test_without_the_observation_the_two_layers_now_say_the_same_thing():
-    """조건이 선 적 없으면 **할 일이 아니었다** — 놓침도 아니고 사유도 묻지 않는다. 결정 층과 어긋나지 않는다."""
+def test_without_the_observation_the_row_says_what_is_missing_not_that_nothing_was_due():
+    """[발행자 계약 지적 2026-09-21] 첫 판은 *"할 일이 없었던 것"* 이라고 적었다 — **아는 것보다 더 단정했다.**
+
+    원장에 관찰이 없다는 것은 *조건이 없었다*는 뜻이 아니라 *아무도 안 적었다*는 뜻일 수 있다. 결주가 실제로 있었는데
+    안 본 경우를 그 문장이 **가린다**. I-1 §2-6 의 '해당 없음' 은 "아무리 채워도 안 바뀐다" 인데 이쪽은 **채우면 바뀐다** —
+    곧 계약상 '판단 불가(데이터)' 자리다. 그래서 행은 **없는 것이 관찰이라는 사실**과 **넣으면 바뀐다는 것**을 말해야 한다.
+    """
     t = A + timedelta(days=27)
     env, row = _row(t)
     assert row["status"] == "조건부", row
-    assert "결주" in row["evidence"] and "사유를 묻지 않는다" in row["evidence"]
-    assert not any(a["task"] == "보식" for a in env.result["ask_reason"])
-    assert SD.judge_replant(SUBJ, t).kind in ("해당 없음", "판단 불가(데이터)")     # 두 층 다 "지금 할 일 아님"
+    assert "결주" in row["evidence"] and "원장에 없다" in row["evidence"]          # 없는 것이 무엇인지 말한다
+    assert "답이 바뀐다" in row["evidence"]                                       # 채우면 바뀐다고 말한다(판단 불가(데이터)의 성격)
+    assert "할 일이 없었" not in row["evidence"], "아는 것보다 더 단정한다 — 관찰이 없는 것과 조건이 없던 것은 다르다"
+    assert not any(a["task"] == "보식" for a in env.result["ask_reason"])          # '왜 안 했나'는 묻지 않는다
+    assert SD.judge_replant(SUBJ, t).kind in ("해당 없음", "판단 불가(데이터)")     # 두 층이 어긋나지 않는다
 
 
 def test_when_the_condition_did_stand_the_miss_comes_back():
