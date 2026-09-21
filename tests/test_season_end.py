@@ -27,7 +27,8 @@ def test_end_declaration_closes_the_plan_after_that_day_and_nothing_before_it():
     assert before["놓침"] > 0 and before["종료 뒤"] == 0
     m, r = chat.send(SID, "11월 3일 쪽파 재배 종료", today=date(2026, 11, 6), now=NOW)
     d = m["drafts"][0]
-    assert d["kind"] == "subject.end" and d["ended_at"] == "2026-11-03" and "작기 종료" in r["text"]
+    assert d["kind"] == "subject.end" and d["ended_at"] == "2026-11-03"
+    assert chat.plain_why(d) in r["text"]
     assert subjects.by_id(SID).get("status") != "종료"                                # 확인 전엔 아무것도 안 바뀐다
     rec = chat.confirm(m["id"], 0, now=NOW)
     s = subjects.by_id(SID)
@@ -49,7 +50,7 @@ def test_end_needs_a_day_and_is_choosable_and_reversible_only_by_registry():
         subjects.set_status(SID, "종료")
     with pytest.raises(subjects.SubjectError, match="상태는"):
         subjects.set_status(SID, "끝")
-    assert ("subject.end", "작기 종료") in chat_pages.CHOOSABLE
+    assert ("subject.end", chat.KIND_PLAIN["subject.end"]) in chat_pages.CHOOSABLE
     m, _ = chat.send(SID, "오늘은 특별한 일 없음", today=date(2026, 11, 6), now=NOW)
     d = chat.choose_kind(m["id"], "subject.end", today=date(2026, 11, 6))["drafts"][0]
     assert d["kind"] == "subject.end" and d["ended_at"] == "2026-11-06"

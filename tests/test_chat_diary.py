@@ -72,7 +72,7 @@ def test_classify_rules_are_proposals_only():
 def test_send_records_message_and_reply_and_confirm_writes_ledger():
     m, r = chat.send(SID, "오늘 물 줬다", today=TODAY, now=NOW)
     assert m["kind"] == "chat.message" and m["schema_version"] == sch.SCHEMA_VERSION and m["drafts"][0]["type"] == "관수"
-    assert r["role"] == "system" and r["reply_ref"] == m["id"] and "사건" in r["text"]
+    assert r["role"] == "system" and r["reply_ref"] == m["id"] and chat.plain_why(m["drafts"][0]) in r["text"]
     assert ev.list_records(SID) == []                                     # 확인 전엔 원장에 없다
     rec = chat.confirm(m["id"], 0, now=NOW)
     assert rec["kind"] == "event" and rec["type"] == "관수" and rec["chat_ref"] == m["id"] and rec["observed_at"] == "2026-09-19"
@@ -91,7 +91,8 @@ def test_confirm_without_day_is_refused_until_day_given():
 def test_statement_is_proposed_as_note_and_human_may_change_kind():
     # 발행자 2026-09-19: 종류는 내부 로직이 정한다 — "분류 안 됨 — 종류를 고른다" 를 사람에게 보이지 않는다. 바꾸는 것은 여전히 사람 몫
     m, r = chat.send(SID, "날씨가 좋다", today=TODAY, now=NOW)
-    assert m["drafts"][0]["kind"] == "observation.note" and "관찰" in r["text"] and "분류 안 됨" not in r["text"]
+    assert m["drafts"][0]["kind"] == "observation.note" and chat.KIND_PLAIN["observation.note"] in r["text"]
+    assert "분류 안 됨" not in r["text"]
     m2 = chat.choose_kind(m["id"], "feedback.request", today=TODAY)
     assert m2["drafts"][0]["kind"] == "feedback.request" and m2["drafts"][0]["why"] == "사람이 고름"
     rec = chat.confirm(m["id"], 0, now=NOW)
@@ -209,10 +210,10 @@ def test_send_confirm_through_http(srv):
     st, loc, _ = _post(srv, f"/c/{quote(SID)}/send", {"text": "오늘 물 줬다"})
     assert st == 302
     st, _, body = _get(srv, loc)
-    assert "초안" in body and "확인 → 원장" in body
+    assert chat.CONFIRM_LABEL in body      # 넣는 길이 화면에 있는가(문면이 아니라 길을 본다)
     m = chat.list_messages(SID)[0]
     st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m["id"], "i": "0", "day": "", "type": "관수"})
-    assert st == 200 and "원장에 들어감" in body
+    assert st == 200 and chat.SAVED_LABEL in body
     assert ev.list_records(SID)[0]["type"] == "관수"
 
 

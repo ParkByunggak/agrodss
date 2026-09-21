@@ -72,7 +72,7 @@ def test_the_field_trip_path_walks_end_to_end(srv, monkeypatch):
     assert "event" in kinds, kinds                                            # 한 일 = 사건
     i = kinds.index("event")
     st, _, body = _post(srv, f"/c/{quote(SID)}/confirm", {"msg": m["id"], "i": str(i), "day": "2026-09-08", "type": "예찰"})
-    assert st == 200 and "원장에 들어감" in body
+    assert st == 200 and chat.SAVED_LABEL in body
     assert any(r["type"] == "예찰" and r["observed_at"].startswith("2026-09-08") for r in ev.list_records(SID, "event"))
 
     # ③ 판정 화면 — 예찰이 이행으로 바뀐다(농가 행위로 생긴 첫 이행)

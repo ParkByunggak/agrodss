@@ -51,7 +51,9 @@ def test_no_screen_asks_the_person_which_kind_it_is():
         code = "\n".join(ln.split("#", 1)[0] for ln in src.splitlines())
         assert "분류 안 됨" not in code, f"{py.name}: 사람에게 분류를 묻는 문면이 남아 있다"
     body = (ROOT / "frontend" / "chat_pages.py").read_text(encoding="utf-8")
-    assert "다른 종류:" in body, "고치는 길까지 없애면 안 된다 — 시스템 판정을 사람이 바꿀 수 있어야 한다"
+    # [발행자 2026-09-21 문면] 말 자체는 이제 `chat` 의 정본에서 온다 — 여기서 볼 것은 **고치는 길이 화면에 있는가**다.
+    # 문면을 박아 두면 말을 다듬을 때마다 이 래칫이 거짓으로 깨진다(오늘 세 번째 같은 형태였다).
+    assert "OTHER_KIND_LABEL" in body and "/choose" in body, "고치는 길까지 없애면 안 된다 — 시스템 판정을 사람이 바꿀 수 있어야 한다"
 
 
 def test_the_kind_can_still_be_changed_by_the_person():

@@ -41,7 +41,8 @@ def test_send_attaches_plan_row_of_this_subject_for_any_task_type():
     m, r = chat.send(SID, SENTENCE, today=T, now=NOW)
     d = m["drafts"][0]
     assert d["planned_task"] == "웃거름 1회" and d["planned_day"] == "2026-09-16" and d["needs"] == [] and "계획표" in d["why"]
-    assert "불이행 사유" in r["text"] and "초안 1) 불이행 사유 · 2) 관찰" in r["text"]
+    assert chat.KIND_PLAIN["decision.noncompliance"] in r["text"]
+    assert f'1) {chat.KIND_PLAIN["decision.noncompliance"]} · 2) {chat.KIND_PLAIN["observation.note"]}' in r["text"]
     m2, _ = chat.send(SID, "제초 생략했다", today=T, now=NOW)                    # 다른 종류 — 같은 로직이 그 종류의 계획표 줄을 찾는다
     assert m2["drafts"][0]["planned_task"] == "제초" and m2["drafts"][0]["planned_day"] == "2026-09-14"
     m3, _ = chat.send(SID, "약 안 쳤다", today=T, now=NOW)                        # 계획표에 방제 줄이 없다 — 지어내지 않고 계획일을 묻는다
@@ -82,7 +83,7 @@ def test_legacy_message_level_confirmation_still_refuses_and_choose_kind_paths()
     assert chat.choose_kind(m2["id"], "observation.note", today=T)["drafts"][0]["observed_at"] == T.isoformat()   # 전에는 NameError
     d = chat.choose_kind(m2["id"], "decision.noncompliance", today=T)["drafts"][0]
     assert d["kind"] == "decision.noncompliance" and d["needs"] == ["planned_day"]
-    assert ("decision.noncompliance", "불이행 사유") in chat_pages.CHOOSABLE
+    assert ("decision.noncompliance", chat.KIND_PLAIN["decision.noncompliance"]) in chat_pages.CHOOSABLE
 
 
 def test_screen_renders_each_draft_and_planned_task_input():
@@ -92,7 +93,8 @@ def test_screen_renders_each_draft_and_planned_task_input():
     assert 'name="planned_task"' not in h1 and 'name="i" value="1"' in h1
     chat.confirm(m["id"], 0, now=NOW)
     m = chat.get_message(m["id"])
-    assert "원장에 들어감" in chat_pages._draft_html(m, 0, m["drafts"][0]) and "원장에 들어감" not in chat_pages._draft_html(m, 1, m["drafts"][1])
+    assert chat.SAVED_LABEL in chat_pages._draft_html(m, 0, m["drafts"][0])
+    assert chat.SAVED_LABEL not in chat_pages._draft_html(m, 1, m["drafts"][1])
 
 
 def test_damage_negation_is_a_note_and_never_feeds_alert_matching():
@@ -100,7 +102,7 @@ def test_damage_negation_is_a_note_and_never_feeds_alert_matching():
     from judge import evolve
     m, r = chat.send(SID, "서리에 안 얼었다", today=T, now=NOW)
     d = m["drafts"][0]
-    assert d["kind"] == "observation.note" and "피해 없음" in d["why"] and "관찰" in r["text"]
+    assert d["kind"] == "observation.note" and "피해 없음" in d["why"] and chat.plain_why(d) in r["text"]
     rec = chat.confirm(m["id"], 0, now=NOW)
     assert rec["kind"] == "observation.note"
     assert [e for e in ev.list_records(SID, "event") if e.get("type") == ev.DAMAGE_TYPE] == []

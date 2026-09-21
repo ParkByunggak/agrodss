@@ -73,9 +73,10 @@ def test_chat_send_with_media_refs_makes_message_and_reply():
     rec = media.register(key, SID)
     m, r = chat.send(SID, "", media_refs=[rec], now=datetime(2026, 9, 19, tzinfo=timezone.utc))
     assert m["input_mode"] == "file" and m["media_refs"] == [rec["id"]] and m["text"].startswith("[반입]")
-    assert r["text"].startswith("반입됨") and rec["id"] in r["text"]
+    assert rec["id"] in r["text"]          # 받은 것을 말한다(문면은 사람 말로 바뀔 수 있다)
     m2, r2 = chat.send(SID, "잎 끝이 누렇게 보인다", media_refs=[rec], now=datetime(2026, 9, 19, tzinfo=timezone.utc))
-    assert m2["drafts"][0]["kind"] == "observation.note" and r2["text"].startswith("반입됨") and "관찰" in r2["text"]
+    assert m2["drafts"][0]["kind"] == "observation.note" and rec["id"] in r2["text"]
+    assert chat.plain_why(m2["drafts"][0]) in r2["text"]
 
 
 # ── 화면 · HTTP multipart ──────────────────────────────────────────────────────────
@@ -124,7 +125,7 @@ def test_upload_through_chat_composer(srv):
     recs = media.list_records(SID)
     assert len(recs) == 1 and recs[0]["kind"] == "observation.image" and recs[0]["note"] == "두둑 전경"
     msgs = chat.list_messages(SID)
-    assert msgs[0]["media_refs"] == [recs[0]["id"]] and msgs[1]["text"].startswith("반입됨")
+    assert msgs[0]["media_refs"] == [recs[0]["id"]] and recs[0]["id"] in msgs[1]["text"]
     st, _, body = _post_multipart(srv, f"/c/{quote(SID)}/send", {"text": "", "observed_at": ""}, [("file", "noexif.jpg", make_jpeg_with_exif(None))])
     assert st == 400 and "촬영 시각이 없다" in body and "반입 대기함" in body
     assert len(media.list_records(SID)) == 1 and any(i["name"] == "noexif.jpg" for i in media.list_inbox())

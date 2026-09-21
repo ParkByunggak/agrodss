@@ -140,7 +140,7 @@ def test_confirm_damage_through_http(monkeypatch):
                   headers={"Content-Type": "application/x-www-form-urlencoded"})
         r = c.getresponse()
         body = r.read().decode("utf-8")
-        assert r.status == 200 and "원장에 들어감" in body
+        assert r.status == 200 and chat.SAVED_LABEL in body
         assert ev.list_records(SID)[0]["risk"] == "부패"
     finally:
         s.shutdown()

@@ -18,8 +18,10 @@ BRAND = "AGRODSS"
 BRAND_HTML = f'<a class="brand" href="/" id="brand" title="홈 — 첫 채팅으로">{BRAND} <small>내부 화면</small></a>'
 DECISION_LABEL = {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용", "plan_vs_actual": "계획 대 실제"}
 DECISION_LABEL.update({k: d.name for k, d in registry.all_decisions().items() if k not in DECISION_LABEL})   # M-10 등록분은 등록부 이름
-CHOOSABLE = (("event", "사건"), ("observation.note", "관찰"), ("plan.farmer", "계획"), ("decision.noncompliance", "불이행 사유"), ("feedback.request", "개선 요구"),
-             ("subject.end", "작기 종료"))
+# [발행자 2026-09-21 "이런 답변을 보여 주는 것을 이해할 사람이 얼마나 될까?"] 단추의 말은 **사람 말 정본**에서 온다 —
+# 내부 이름(사건 · 관찰 · 불이행 사유)을 단추에 그대로 쓰면 고르는 사람이 무엇을 고르는지 모른다.
+CHOOSABLE = tuple((k, chat.KIND_PLAIN[k]) for k in
+                  ("event", "observation.note", "plan.farmer", "decision.noncompliance", "feedback.request", "subject.end"))
 
 
 def _e(v: Any) -> str:
@@ -257,9 +259,11 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
         return ""
     done = chat.confirmed_ref(m, i)
     if done:
-        return f'<div class="draft"><span class="done">원장에 들어감</span> {_e(chat.KIND_LABEL.get(k, k))} · {_e(done)}</div>'
+        return f'<div class="draft"><span class="done">{_e(chat.SAVED_LABEL)}</span> {_e(chat.KIND_PLAIN.get(k, k))} · {_e(done)}</div>'
     need = d.get("needs") or []
-    parts = [f'<div class="draft"><b>{_e(chat.KIND_LABEL.get(k, k))}</b> 초안 — {_e(d.get("why", ""))}']
+    # [발행자 2026-09-21] 앞에 서는 것은 **사람 말**이고, 개발자 사유(`why`)는 버리지 않고 `title` 로 내린다 —
+    # 정확함을 잃지 않으면서 읽는 사람을 막지 않는다. 옛 판은 `why` 를 그대로 카드 첫 줄에 냈다.
+    parts = [f'<div class="draft" title="{_e(d.get("why", ""))}"><b>{_e(chat.KIND_PLAIN.get(k, k))}</b> — {_e(chat.plain_why(d))}']
     parts.append(f'<form method="post" action="/c/{quote(m["subject"])}/confirm"><input type="hidden" name="msg" value="{_e(m["id"])}"><input type="hidden" name="i" value="{i}">')
     if k == "event":
         opts = "".join(f'<option value="{_e(t)}"{" selected" if t == d.get("type") else ""}>{_e(t)}</option>' for t in ev.EVENT_TYPES)
@@ -272,8 +276,8 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
     day = d.get("observed_at") or d.get("planned_day") or d.get("target_date") or ""
     if k != "feedback.request":
         parts.append(f'<input name="day" value="{_e(day)}" placeholder="YYYY-MM-DD{" (필요)" if need else ""}" size="12">')
-    parts.append('<button class="btn pri" type="submit">확인 → 원장</button></form>')
-    parts.append('<form method="post" action="/c/' + quote(m["subject"]) + '/choose" style="margin-top:4px"><input type="hidden" name="msg" value="' + _e(m["id"]) + '"><span style="color:var(--muted)">다른 종류:</span>'
+    parts.append(f'<button class="btn pri" type="submit">{_e(chat.CONFIRM_LABEL)}</button></form>')
+    parts.append('<form method="post" action="/c/' + quote(m["subject"]) + '/choose" style="margin-top:4px"><input type="hidden" name="msg" value="' + _e(m["id"]) + f'"><span style="color:var(--muted)">{_e(chat.OTHER_KIND_LABEL)}</span>'
                  + "".join(f'<button class="btn" name="kind" value="{kk}">{lab}</button>' for kk, lab in CHOOSABLE if kk != k) + '</form></div>')
     return "".join(parts)
 
@@ -294,7 +298,7 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
         out.append(f'<p class="ok">{_e(message)}</p>')
     msgs = chat.list_messages(s["id"])
     if not msgs:
-        out.append('<div class="msg sys"><div class="av">a</div><div class="bub">이 목록의 첫 대화다. 무엇을 했는지(사건) · 무엇이 보이는지(관찰) · 무엇을 할지(계획) · 고칠 것(개선 요구) · 물음(질문)을 적으면 분류해 초안을 만든다. 확인해야 원장에 들어간다 — 시스템이 대신 적지 않는다.</div></div>')
+        out.append('<div class="msg sys"><div class="av">a</div><div class="bub">여기에 그날 밭에서 있었던 일을 그냥 적으시면 됩니다 — <b>한 일</b>(오늘 물 줬다) · <b>본 것</b>(잎이 누렇다) · <b>할 일</b>(내일 웃거름) · 못 한 이유 · 고쳐 달라는 말 · 물음. 읽어서 어디에 적을지 <b>먼저 골라 보여 드립니다</b>. <b>넣기를 누르셔야</b> 영농일지에 들어갑니다 — 저절로 적히지 않습니다.</div></div>')
     for m in msgs:
         if m.get("role") == "system":
             out.append(f'<div class="msg sys"><div class="av">a</div><div><div class="bub" id="t-{_e(m["id"])}">{_e(m["text"])}</div>'
@@ -412,10 +416,10 @@ def thread_panel(s: dict[str, Any], today: date) -> str:
     if hint:
         out.append(f'<div class="card"><b>찍을 장면</b> · {_e(hint.get("stage"))}<div>{_e(hint.get("scene") or hint.get("shoot"))}</div></div>')
     else:
-        out.append('<div class="card">격자·기준점이 없어 촬영 시점을 못 낸다 — 파종 사건을 확인하면 기준점이 생긴다</div>')
+        out.append('<div class="card">심은 날이 아직 없어 촬영 시기를 못 냅니다 — 파종을 적고 넣으시면 그날부터 셉니다</div>')
     pend = chat.pending_drafts(s["id"])
     if pend:
-        out.append(f'<div class="card"><b>미확인 초안 {len(pend)}</b> — 대화에서 확인하면 원장에 들어간다</div>')
+        out.append(f'<div class="card"><b>{_e(chat.PENDING_LABEL)} {len(pend)}</b> — 대화에서 넣기를 누르시면 영농일지에 들어갑니다</div>')
     inbox = media.list_inbox()
     if inbox:
         out.append(f'<div class="card"><b>반입 대기 파일 {len(inbox)}</b> — 촬영 시각이 없어 등록되지 않았다. <a href="/media">/media</a> 에서 날짜를 넣어 등록</div>')
@@ -436,10 +440,10 @@ def thread_panel(s: dict[str, Any], today: date) -> str:
 
 
 def diary_main(s: dict[str, Any], today: date) -> str:
-    out = [f'<div class="thead"><div><h1>영농일지 — {_e(s.get("label"))}</h1><div class="meta">원장(사건 · 관찰 · 계획 · 사유 · 영상)을 날짜로 펼친 것. 새 원장이 아니다.</div></div><div><a href="/c/{quote(s["id"])}">대화로</a></div></div><div class="msgs diary">']
+    out = [f'<div class="thead"><div><h1>영농일지 — {_e(s.get("label"))}</h1><div class="meta">넣으신 것(한 일 · 본 것 · 할 일 · 못 한 이유 · 영상)을 날짜순으로 펼친 것입니다. 따로 적는 곳이 아닙니다.</div></div><div><a href="/c/{quote(s["id"])}">대화로</a></div></div><div class="msgs diary">']
     pend = chat.pending_drafts(s["id"])
     if pend:
-        out.append(f'<p class="err">미확인 초안 {len(pend)} — 대화에서 확인해야 일지에 들어간다</p>')
+        out.append(f'<p class="err">{_e(chat.PENDING_LABEL)} {len(pend)} — 대화에서 넣기를 누르셔야 일지에 들어갑니다</p>')
     items = chat.diary(s["id"])
     if not items:
         out.append("<p>아직 기록이 없다.</p>")

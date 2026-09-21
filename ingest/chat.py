@@ -29,8 +29,12 @@ RESOLUTION = "cultivation_unit"
 
 EVENT_SYNONYMS: dict[str, tuple[str, ...]] = {
     "파종": ("파종", "심었", "심음", "씨 뿌", "씨뿌", "종구를"), "정식": ("정식", "옮겨 심", "옮겨심"),
-    "방제": ("방제", "약 쳤", "약을 쳤", "약쳤", "살포", "뿌렸"), "시비": ("시비", "비료", "거름", "웃거름", "밑거름"),
-    "관수": ("관수", "물 줬", "물을 줬", "물줬", "물 주었"), "제초": ("제초", "풀 뽑", "풀뽑", "김매", "풀을 뽑"),
+    "방제": ("방제", "약 쳤", "약을 쳤", "약쳤", "살포", "뿌렸"), "시비": ("시비", "비료", "거름", "웃거름", "밑거름", "추비", "기비", "퇴비"),
+    # [발행자 실사용 2026-09-21 "오늘 스프링쿨러로 급수함" → 관찰 메모로 제안됐다] '관수' 는 있는데 **'급수' 가 없었다**.
+    # 한자어 동의어가 빠져 한 일을 못 읽은 것이다. 장치 이름(스프링쿨러 · 점적)은 넣지 않는다 — "스프링쿨러가 고장났다"가
+    # 관수 사건이 된다. 넣는 것은 **한 일을 가리키는 말**뿐이고, 한 일인지는 지금처럼 완료 표지가 가른다("급수 시설이 없다"는 관찰).
+    "관수": ("관수", "급수", "관주", "살수", "물 줬", "물을 줬", "물줬", "물 주었", "물 줌", "물줌", "물을 줌"),
+    "제초": ("제초", "풀 뽑", "풀뽑", "김매", "풀을 뽑"),
     "예찰": ("예찰", "트랩", "살펴봤", "둘러봤", "살펴보았"), "보식": ("보식", "다시 심", "다시심"),
     "배수": ("배수", "물 빼", "물빼", "도랑", "고랑 정비", "고랑정비"), "수확": ("수확", "캤", "캐서", "캐냈", "뽑았", "뽑아서", "다듬었", "거뒀", "거두었"),
     "납품": ("납품", "보냈", "출하했", "출하 했"), "저장": ("저장", "창고에"), "소독": ("소독",), "정리": ("정리했", "정비했", "걷었"),
@@ -107,6 +111,60 @@ DAMAGE_WORDS: dict[str, tuple[str, ...]] = {
 KIND_LABEL = {"event": "사건", "observation.note": "관찰", "plan.farmer": "계획", "plan.target_date": "납품 계획일",
               "feedback.request": "개선 요구", "decision.noncompliance": "불이행 사유", "subject.end": "작기 종료", "observation.video": "영상",
               "question": "질문", "subject.new": "새 목록"}
+
+# ── 사람이 읽는 말 ────────────────────────────────────────────────────────────────
+# [발행자 2026-09-21] 화면이 *"관찰 초안 — 서술문 — 사건·계획·질문 어휘가 없어 관찰 메모로 제안(원문 그대로 ·
+# 종류는 확인에서 바꾼다)"* 이라고 답했다. 발행자 물음: **"이런 답변을 보여 주는 것을 이해할 사람이 얼마나 될까?"**
+#
+# 위 `KIND_LABEL` 과 `why` 는 **원장의 이름**이고 **개발자의 사유**다 — 대장 · 검사 · `/changes` 가 그것을 쓴다.
+# 그것을 그대로 화면에 내보낸 것이 결함이다(I-1 4층 전달 · G1 세 번째 형태 — 정본은 옳은데 표현 층이 배반한다).
+# 정확한 사유는 **버리지 않는다** — 카드의 `title` 에 그대로 남겨 두고, 앞에 내세우지 않는다.
+KIND_PLAIN = {"event": "한 일", "observation.note": "본 것", "plan.farmer": "할 일", "plan.target_date": "납품 날짜",
+              "feedback.request": "고쳐 달라는 말", "decision.noncompliance": "못 한 이유", "subject.end": "농사 끝",
+              "observation.video": "영상", "question": "물음", "subject.new": "새 목록"}
+assert set(KIND_PLAIN) == set(KIND_LABEL)      # 종류가 늘면 사람 말도 함께 는다 — 한쪽만 늘면 화면이 내부 이름을 낸다
+
+CONFIRM_LABEL = "일지에 넣기"            # 옛 문면 "확인 → 원장"
+OTHER_KIND_LABEL = "다르게 적을까요?"     # 옛 문면 "다른 종류:"
+SAVED_LABEL = "일지에 넣었습니다"         # 옛 문면 "원장에 들어감"
+PENDING_LABEL = "아직 안 넣은 것"         # 옛 문면 "미확인 초안"
+
+
+# 관찰 메모는 **서로 다른 네 가지 이유**로 나온다. 종류만 사람 말로 바꾸고 이유를 하나로 뭉개면 화면이 틀린 말을 한다
+# ("급수 시설이 없다" 에 *"관수라는 말이 없어서"* 라고 답하게 된다 — 있다). 갈래마다 한 줄을 둔다.
+PLAIN_BY_KEY = {
+    "no_done_marker": "'했다 · 완료 · 날짜' 같은 표시가 없어 한 일이 아니라 본 것으로 적었습니다",
+    "observed": "밭에서 보신 것으로 적었습니다(날짜를 안 적으시면 오늘로 둡니다)",
+    "statement": "한 일이나 할 일을 가리키는 말이 없어 본 것으로 적었습니다",
+    "no_damage": "피해가 없었다는 것으로 적었습니다",
+    "alt_after_negation": "대신 하신 일을 본 것으로도 남겨 둡니다",
+    "undecided": "무엇으로 적을지 정하지 못해 우선 본 것으로 두었습니다",
+}
+
+
+def plain_why(draft: dict[str, Any]) -> str:
+    """그 초안을 **왜 그렇게 읽었는지**를 농가의 말로 한 줄. 내부 `why` 는 그대로 두고 여기서만 옮긴다(정본 하나)."""
+    kind = draft.get("kind", "")
+    key = draft.get("why_key")
+    if key and key in PLAIN_BY_KEY:
+        return PLAIN_BY_KEY[key]
+    if kind == "event":
+        # 앞의 이름표가 이미 '한 일' 이다 — 여기서는 **무슨 일이었는지**를 말한다(같은 말을 두 번 하지 않는다).
+        # '기록으로' 로 맺는 것은 조사 때문이다 — '관수로'·'파종로' 처럼 받침에 따라 갈리지 않는다.
+        return f"{draft.get('type') or '작업'} 기록으로 적었습니다"
+    if kind == "observation.note":
+        return PLAIN_BY_KEY["statement"]
+    if kind == "plan.farmer":
+        return "앞으로 할 일로 읽었습니다"
+    if kind == "decision.noncompliance":
+        return "하지 않은 일과 그 이유로 읽었습니다"
+    if kind == "feedback.request":
+        return "고쳐 달라는 말로 읽었습니다"
+    if kind == "subject.end":
+        return "이 농사를 끝내는 것으로 읽었습니다"
+    if kind == "question":
+        return "물음으로 읽었습니다"
+    return f"{KIND_PLAIN.get(kind, kind)}(으)로 읽었습니다"
 
 
 class ChatError(ValueError):
@@ -430,13 +488,15 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
         if _ALT_AFTER.search(t[end:]):
             # 부정 뒤에 대신 한 일이 이어진다("… 주지 않고 수분공급만 …") — 그 관행은 관찰 메모로도 남길 수 있다(선택 · 원문 그대로)
             drafts.append({"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
-                           "why": "불이행 뒤에 이어진 실행 서술 — 관행을 관찰 메모로도 남긴다(선택)", "needs": []})
+                           "why": "불이행 뒤에 이어진 실행 서술 — 관행을 관찰 메모로도 남긴다(선택)",
+                           "why_key": "alt_after_negation", "needs": []})
         return drafts
     dmg = _damage_risk(t)
     if dmg == NO_DAMAGE:
         # 피해 어휘 + 부정 = 피해가 **없었다**는 관찰. 사건으로 두면 경보↔피해 대조가 적중으로 센다(되먹임 오염)
         return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
-                 "why": "피해 어휘 + 부정 → 피해 없음 관찰(사건이 아니다 · 경보 대조에 안 들어간다)", "needs": []}]
+                 "why": "피해 어휘 + 부정 → 피해 없음 관찰(사건이 아니다 · 경보 대조에 안 들어간다)",
+                 "why_key": "no_damage", "needs": []}]
     if dmg:
         # [U-16] 피해는 사건이되 무엇의 피해인지(risk)가 있어야 경보와 대조된다. '피해'만 있고 갈래가 없으면 확인 화면이 묻는다
         risk = None if dmg == "피해" else dmg
@@ -448,13 +508,16 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
     if et:
         # 사건 어휘는 있는데 한 일의 표지가 없다("비료 상태가 안 좋다" · "웃거름 시기다") — 상태 서술이다. 사건이면 확인에서 '다른 종류'로 바꾼다
         return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
-                 "why": f"'{et}' 어휘는 있으나 한 일의 표지(과거 어미 · 날짜 · 완료)가 없어 관찰 메모로 제안(사건이면 종류를 바꾼다)", "needs": []}]
+                 "why": f"'{et}' 어휘는 있으나 한 일의 표지(과거 어미 · 날짜 · 완료)가 없어 관찰 메모로 제안(사건이면 종류를 바꾼다)",
+                 "why_key": "no_done_marker", "needs": []}]
     if any(w in t for w in OBS_WORDS):
         return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
-                 "why": "관찰 어휘(날짜 없으면 오늘 본 것으로 제안 — 확인에서 고친다)", "needs": []}]
+                 "why": "관찰 어휘(날짜 없으면 오늘 본 것으로 제안 — 확인에서 고친다)",
+                 "why_key": "observed", "needs": []}]
     # 아무 어휘도 안 걸린 서술문 — 농가가 밭에서 한 말은 관찰 메모(원문 그대로)로 제안한다. 내용을 지어내지 않고 종류만 정한다
     return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
-             "why": "서술문 — 사건·계획·질문 어휘가 없어 관찰 메모로 제안(원문 그대로 · 종류는 확인에서 바꾼다)", "needs": []}]
+             "why": "서술문 — 사건·계획·질문 어휘가 없어 관찰 메모로 제안(원문 그대로 · 종류는 확인에서 바꾼다)",
+             "why_key": "statement", "needs": []}]
 
 
 # ── 질문 → 3층 봉투 ─────────────────────────────────────────────────────────────────
@@ -568,27 +631,31 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
     msg = _append(rec)
     media_line = ""
     if media_refs:
-        media_line = "반입됨 " + " · ".join(f"{r.get('id')}(관측 {str(r.get('observed_at', ''))[:16]})" for r in media_refs) + " — 영상·사진 원장에 들어갔다. "
+        media_line = "받았습니다 " + " · ".join(f"{r.get('id')}(찍은 때 {str(r.get('observed_at', ''))[:16]})" for r in media_refs) + ". "
     if media_refs and not drafts:
-        reply_text = media_line + "설명을 함께 적으면 사건·관찰로도 분류한다."
+        reply_text = media_line + "무엇을 했는지 함께 적으시면 그것도 같이 적어 둡니다."
     elif drafts and drafts[0]["kind"] == "question":
         reply_text = answer(s, text, today)
     elif drafts:
         d = drafts[0]
         need = d.get("needs") or []
-        reply_text = f"{KIND_LABEL[d['kind']]}(으)로 읽었다 — {d['why']}. " + ("날짜를 넣고 " if need else "") + "확인하면 원장에 들어간다. 아니면 다른 종류를 고른다."
+        # [발행자 2026-09-21] 옛 문면은 `{KIND_LABEL}(으)로 읽었다 — {why}` 였다 — 내부 이름과 개발자 사유를 그대로 내보냈다.
+        reply_text = (f"{plain_why(d)}. " + ("날짜를 넣고 " if need else "")
+                      + f"'{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다. 아니면 아래에서 다르게 고르시면 됩니다.")
         if len(drafts) > 1:
-            reply_text += " 초안 " + " · ".join(f"{n + 1}) {KIND_LABEL.get(x['kind'], x['kind'])}" for n, x in enumerate(drafts)) + " — 각각 따로 확인한다."
+            reply_text += " 적을 것이 " + " · ".join(f"{n + 1}) {KIND_PLAIN.get(x['kind'], x['kind'])}"
+                                                  for n, x in enumerate(drafts)) + " — 하나씩 넣습니다."
     else:
         # [발행자 2026-09-21] 종류를 **사람에게 묻지 않는다** — 규칙이 못 고르면 시스템이 관찰 메모로 정한다(내용은 원문 그대로,
         # 지어내지 않는다). 사람은 초안의 '다른 종류' 로 고친다. 빈 발화는 위에서 이미 거부되므로 여기는 사실상 닿지 않지만,
         # **닿더라도 묻지 않는다**는 것이 이 자리의 약속이다(규칙이 넓어질 때 조용히 물음으로 되돌아가지 않게).
         drafts = [{"kind": "observation.note", "text": text, "observed_at": today.isoformat(),
-                   "why": "규칙이 종류를 못 정했다 — 관찰 메모로 둔다(원문 그대로). 다른 종류로 고칠 수 있다", "needs": []}]
+                   "why": "규칙이 종류를 못 정했다 — 관찰 메모로 둔다(원문 그대로). 다른 종류로 고칠 수 있다",
+                   "why_key": "undecided", "needs": []}]
         msg["drafts"] = drafts
         _append(dict(msg))
         d = drafts[0]
-        reply_text = f"{KIND_LABEL[d['kind']]}(으)로 읽었다 — {d['why']}. 확인하면 원장에 들어간다."
+        reply_text = f"{plain_why(d)}. '{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
     if media_refs and drafts:
         reply_text = media_line + reply_text
     reply = _append({"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": "system", "text": reply_text,
