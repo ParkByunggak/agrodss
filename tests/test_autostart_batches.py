@@ -20,13 +20,15 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 WATCH = ROOT / "scripts" / "keep_screen_up.bat"
+LOOP = ROOT / "scripts" / "watch_screen.bat"
 INSTALL = ROOT / "scripts" / "install_autostart.bat"
 UNINSTALL = ROOT / "scripts" / "uninstall_autostart.bat"
 UPDATE = ROOT / "scripts" / "update.bat"
 TASKS = ("agrodss-screen-logon", "agrodss-screen-watch")
+ENTRY = "agrodss-screen.cmd"        # 스케줄러가 거부당했을 때의 시작프로그램 항목 — 설치·제거가 같은 이름을 본다
 
 
-@pytest.mark.parametrize("p", [WATCH, INSTALL, UNINSTALL, UPDATE])
+@pytest.mark.parametrize("p", [WATCH, LOOP, INSTALL, UNINSTALL, UPDATE])
 def test_the_batches_exist_and_are_ascii(p):
     assert p.exists(), p
     raw = p.read_bytes()
@@ -39,7 +41,7 @@ def _body(p: Path) -> str:
     return "\n".join(ln for ln in p.read_text(encoding="ascii").splitlines() if not ln.strip().upper().startswith("REM"))
 
 
-@pytest.mark.parametrize("p", [WATCH, INSTALL, UNINSTALL, UPDATE])
+@pytest.mark.parametrize("p", [WATCH, LOOP, INSTALL, UNINSTALL, UPDATE])
 def test_no_multi_line_blocks_in_the_batches(p):
     """live_check.bat 실측: **여러 줄 블록** 안의 ')' 가 블록을 일찍 닫아 아무것도 안 돌고 빈 로그만 남았다.
 
@@ -83,9 +85,23 @@ def test_install_and_uninstall_name_exactly_the_same_tasks():
 
 
 def test_install_registers_for_the_current_user_only():
-    """관리자 권한도, 시스템 전역도 아니다 — 발행자 계정에만 등록한다(되돌리기 쉽고 범위가 좁다)."""
+    """관리자 권한도, 시스템 전역도 아니다 — 발행자 계정에만, **로그온해 있을 때만** 등록한다.
+
+    [발행자 실측 2026-09-21 "오류: 액세스가 거부되었습니다"] 첫 판은 `/RU` 가 **있으면** 권한을 올리는 줄 알고
+    *"`/RU` 가 없어야 현재 사용자"* 를 계약으로 박아 두었다 — 거꾸로였다. `/RU` 도 `/IT` 도 없으면 schtasks 는
+    *"로그온 여부와 무관하게 실행"* 으로 등록하려 하고, 그것은 **'배치 작업으로 로그온' 권한**을 요구한다.
+    표준 계정에는 그 권한이 없어 거부당한다. `/RU "%USERNAME%" /IT` 는 그 요구를 없앤다(암호도 필요 없다).
+
+    그래서 계약은 *"`/RU` 를 쓰지 않는다"* 가 아니라 **"내 계정 · 대화형 · 암호 없음"** 이다.
+    """
     ins = INSTALL.read_text(encoding="ascii")
-    assert "/RU" not in ins and "SYSTEM" not in ins
+    creates = [ln for ln in ins.splitlines() if "schtasks /Create" in ln]
+    assert len(creates) == len(TASKS)
+    for ln in creates:
+        assert '/RU "%USERNAME%"' in ln, f"등록 대상이 내 계정이 아니다: {ln}"
+        assert "/IT" in ln, f"/IT 가 없으면 '배치 작업으로 로그온' 권한을 요구한다 — 거부당한 그 형태: {ln}"
+        assert "/RP" not in ln, f"암호를 배치에 적지 않는다: {ln}"
+    assert "SYSTEM" not in ins
     assert "/SC ONLOGON" in ins and "/SC MINUTE" in ins and "/MO 5" in ins
 
 
@@ -127,4 +143,71 @@ def test_the_install_says_it_was_not_tested_on_windows():
     이 문장이 사라지면 다음 사람이 검증된 절차로 읽는다(안내가 틀리는 형태는 이 트랙에서 세 번 났다)."""
     ins = INSTALL.read_text(encoding="ascii")
     assert "not verified on Windows" in ins
-    assert "paste it into the session" in ins.lower()                 # 틀리면 고치는 길을 같이 준다
+    assert "paste this whole window into the session" in ins.lower()  # 틀리면 고치는 길을 같이 준다
+
+
+# ── 스케줄러가 거부당한 뒤 (발행자 실측 2026-09-21 "오류: 액세스가 거부되었습니다") ────────────────
+#
+# 옛 판은 schtasks 가 실패하면 `:failed` 로 가서 **멈췄다** — 발행자에게 남는 것은 오류 한 줄뿐이었다.
+# R-5 의 그 형태다: 세션은 Windows 를 못 걷고, 그래서 **한 방법에 걸면 걷지 못한 추측 하나에 전부를 건다**.
+# 처방은 추측을 맞히는 것이 아니라 **권한이 필요 없는 두 번째 길**을 붙이는 것이다.
+
+def test_every_scheduler_call_has_a_way_out():
+    """schtasks 줄이 늘면 그 줄에도 탈출구가 있어야 한다 — 하나가 가드 없이 들어오면 거기서 다시 멈춘다."""
+    lines = [ln.strip() for ln in _body(INSTALL).splitlines()]
+    creates = [i for i, ln in enumerate(lines) if "schtasks /Create" in ln]
+    assert creates, "설치가 스케줄러를 아예 안 부른다"
+    for i in creates:
+        nxt = next((ln for ln in lines[i + 1:] if ln), "")
+        assert nxt == "if errorlevel 1 goto fallback", f"거부당했을 때 갈 곳이 없다: {lines[i]}"
+    assert ":failed" not in _body(INSTALL), "거부 = 끝 인 옛 갈래가 되돌아왔다"
+
+
+def test_the_fallback_writes_a_startup_entry_that_needs_no_permission():
+    """두 번째 길은 **스케줄러를 다시 부르지 않는다** — 거부한 그것에 또 기대면 길이 하나인 것과 같다.
+
+    시작프로그램 항목은 내 프로필 안에 파일 하나를 쓰는 것이라 권한 문제로 거부될 수 없다.
+    (한글 Windows 에서도 이 경로는 영문이다 — 표시 이름만 번역된다.)
+    """
+    body = _body(INSTALL)
+    fb = body[body.index(":fallback"):body.index(":started")]
+    assert "schtasks" not in fb, "거부한 그 도구를 두 번째 길에서 또 부른다"
+    assert '> "%ENTRY%"' in fb and '>> "%ENTRY%"' in fb, "항목을 만드는 두 줄 중 하나가 없다 — 반쪽 파일이 남는다"
+    assert "%LOOP%" in fb, "항목이 감시자를 안 가리킨다"
+    assert 'if not exist "%ENTRY%" goto nostartup' in fb, "썼다고 믿고 넘어간다 — 쓰였는지 보고 넘어간다"
+    assert "Start Menu\\Programs\\Startup" in body
+
+
+def test_the_watch_loop_checks_before_it_sleeps_and_never_stops():
+    """감시자는 **먼저 보고 그 다음 잔다** — 순서가 반대면 로그온 직후 5분 동안 화면이 없다."""
+    text = _body(LOOP)
+    i_call, i_sleep = text.index("keep_screen_up.bat"), text.index("timeout /t")
+    assert i_call < i_sleep, "잠부터 자면 첫 5분이 빈다"
+    assert text.index(":loop") < i_call, "돌아올 표가 호출보다 뒤에 있다"
+    assert text.rindex("goto loop") > i_sleep, "한 번 자고 끝난다 — 감시가 아니다"
+    assert "taskkill" not in text, "감시자는 아무것도 죽이지 않는다"
+    assert "AGRODSS_WATCH_SECONDS" in text                            # 주기도 하드코딩하지 않는다
+
+
+def test_install_and_uninstall_name_the_same_startup_entry():
+    """되돌릴 수 있는가 — 두 번째 길로 만든 것도 지운다(이름이 갈리면 지울 수 없는 것이 남는다)."""
+    ins, uns = INSTALL.read_text(encoding="ascii"), UNINSTALL.read_text(encoding="ascii")
+    assert ENTRY in ins and ENTRY in uns
+    body = _body(UNINSTALL)
+    assert body.count("del ") == 1, "지우는 줄이 하나가 아니다 — 범위가 넓어진 것이다"
+    assert body.index('if exist "%ENTRY%"') < body.index("del "), "없는 파일을 지우려다 오류만 찍는다"
+    for danger in ("rmdir", " /s", "rd "):
+        assert danger not in body, danger
+
+
+def test_a_refusal_does_not_leave_the_publisher_without_a_screen():
+    """둘 다 막혔을 때 **화면이 멈추는 것이 아니다** — 자동 재시작만 없는 것이다. 그 구별을 화면이 말한다.
+
+    [§7.1 4번] 판정 어휘가 빠지면 정직한 고지가 아니라 막다른 길이 된다 — 옛 `:failed` 가 그랬다.
+    """
+    body = _body(INSTALL)
+    end = body[body.index(":nostartup"):]
+    assert "does NOT stop the screen" in end
+    assert "update.bat" in end, "지금 당장 화면을 띄우는 길을 안 알려 준다"
+    assert "shell:startup" in end, "손으로 하는 길을 안 알려 준다"
+    assert "paste this whole window into the session" in end.lower()  # 막히면 고치는 길이 이어진다
