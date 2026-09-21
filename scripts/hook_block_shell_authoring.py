@@ -48,6 +48,18 @@ PS_WRITERS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?i)\bNew-Item\b(?=[^\n]*-Force)"), "New-Item -Force"), (re.compile(r"\d?>>?\s*(?!&|\$null\b)\S"), "리다이렉트"),
 )
 PS_HERE_INTERP = re.compile(r"@\"\s*\r?\n")
+# [실측 2026-09-21] 이 세션에서 규율을 세 번 어겼고, 그 셋을 판정기에 그대로 먹여 보니 **둘은 잡고 하나는 샜다** —
+# `sed -i` 다. heredoc 도 아니고 인라인 코드도 아니면서 **파일을 제자리에서 고친다**. 규율의 대상은 '긴 문면'이 아니라
+# *"셸로 파일을 고치는 것"* 이므로 같은 급이다. 읽기 전용(`sed -n 1,5p`)은 통과해야 한다 — 과잉 차단은 가드를 끄게 만든다.
+INPLACE: tuple[tuple[re.Pattern[str], str], ...] = (
+    # 붙여 쓴 플래그(`-Ei` · `-pi`)도 본다 — `-i` 라는 **글자 그대로**를 찾으면 그 형태가 샌다(첫 판이 `perl -pi` 를 놓쳤다).
+    # 대문자 `-I` 같은 다른 뜻의 플래그를 안 건드리게 **실제로 쓰는 조합만** 적는다(과잉 차단은 가드를 끄게 만든다).
+    (re.compile(r"\bsed\s+[^|\n]*?(?:--in-place|-[Ernsz]*i(?:\.\S+)?(?=[\s'\"]|$))"), "sed -i (제자리 수정)"),
+    (re.compile(r"\bperl\s+[^|\n]*?-(?:i|[pn]i|[pn]ie)(?:\.\S+)?(?=[\s'\"]|$)"), "perl -i (제자리 수정)"),
+    (re.compile(r"\bawk\s+[^|\n]*?-i\s+inplace\b"), "awk -i inplace"),
+    (re.compile(r"\btruncate\s+[^|\n]*?-s\b"), "truncate -s"),
+    (re.compile(r"\bdd\s+[^|\n]*?\bof="), "dd of="),
+)
 REASON = """[U-13] 긴 문면을 셸에 통과시키지 않는다 — {why}
   걸린 지점: {evidence}
   대신: 소스·검사·대장 수정은 Edit/Write 도구, 새 파일은 Write, 되풀이 작업은 scripts/ 에 파일로 두고 실행한다.
@@ -117,6 +129,10 @@ def verdict(cmd: str, tool: str = "Bash"):
     v = _inline(cmd)
     if v:
         return v
+    for rx, name in INPLACE:                # heredoc 도 인라인 코드도 아니면서 파일을 고치는 형태(실측된 구멍)
+        hit = rx.search(cmd)
+        if hit:
+            return f"셸이 파일을 제자리에서 고친다({name}).", hit.group(0).strip()[:120]
     outside = cmd                       # [코드 평가 D9] heredoc 본문을 걷어낸 나머지 — 리다이렉트·tee 는 같은 줄이 아니라 **어디든** 본다
     for m in HEREDOC.finditer(cmd):
         delim = m.group(3) or m.group(4)

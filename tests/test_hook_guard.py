@@ -41,6 +41,18 @@ def blocked(cmd: str, tool: str = "Bash") -> bool:
     "{ cat <<'EOF'\nhi\nEOF\n} > out.txt",
     "( python3 - <<'PY'\nprint(1)\nPY\n) > out.txt",
     "cat <<'EOF' |\nhi\nEOF\ntee out.txt",
+    # [실측 2026-09-21] 이 세션의 위반 셋을 판정기에 그대로 먹여 보니 **둘은 잡고 하나는 샜다** — `sed -i` 다.
+    # heredoc 도 인라인 코드도 아니면서 **파일을 제자리에서 고친다**. 규율의 대상은 '긴 문면'이 아니라
+    # *"셸로 파일을 고치는 것"* 이므로 같은 급이다(세 번 어긴 뒤에야 판정기를 직접 재 본 것이 이 회차의 값).
+    "sed -i 's/a/b/' tests/test_x.py",
+    "sed -i.bak -e 's/a/b/' docs/agrodss_backlog.md",
+    "sed -E -i 's/a/b/' x.py",
+    "sed -Ei 's/a/b/' x.py",                 # 붙여 쓴 플래그 — '-i' 글자 그대로를 찾으면 샌다
+    "perl -pi -e 's/a/b/' x.py",
+    "perl -i.bak -pe 's/a/b/' x.py",
+    "awk -i inplace '{print}' x.txt",
+    "truncate -s 0 data/chat/index.jsonl",
+    "dd if=/dev/zero of=x.bin bs=1 count=1",
 ])
 def test_bash_write_paths_are_blocked(cmd):
     assert blocked(cmd), cmd
@@ -72,6 +84,14 @@ def test_powershell_write_paths_are_blocked(cmd):
     "python3 - <<'PY'\nwith open('x.csv', 'r') as f: print(len(f.read()))\nPY",
     "python -c 'import json, sys; json.dump({\"a\": 1}, sys.stdout)'",
     "python3 - <<'PY'\nprint('a -> b')\nPY",                                                # 화살표는 리다이렉트가 아니다(D 리뷰 #29)
+    # 제자리 수정 규칙의 반대편 — **읽기 전용 sed/awk 는 통과해야 한다**(과잉 차단은 가드를 통째로 끄게 만든다)
+    "sed -n '1,5p' judge/run.py",
+    "sed 's/a/b/' x.py | head",                                                             # 파이프로 보기만 한다
+    "grep -i heredoc scripts/ | head",                                                      # -i 는 대소문자 무시다
+    "awk '{print $1}' data/x.csv | sort | uniq -c",
+    "git diff --stat | sed -n '1,3p'",
+    "perl -Ilib -e 'print 1'",                                                              # 대문자 -I 는 제자리 수정이 아니다
+    "sed -e 's/a/b/' x.py > /dev/null",                                                     # 리다이렉트 규칙이 따로 본다(여기선 -i 가 아니다)
 ])
 def test_bash_read_only_paths_pass(cmd):
     assert not blocked(cmd), cmd
