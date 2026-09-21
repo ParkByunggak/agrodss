@@ -191,6 +191,21 @@ NUMERIC_FIELDS = ("area_m2",)
 # 보정 규칙 자체는 여기서 짓지 않는다: 임계가 정본에 미채움이고(격자 '고자리파리 유충' = NCPMS 대조 대기 · M-15 ②)
 # 없는 임계를 지어내는 것이 대리값이다. 대장에 등재하고 정본이 도착하면 잇는다.
 FIELDS_READ_BY_JUDGMENT = ("use", "environment")
+# [발행자 2026-09-21 — 절차를 장치로] *"새 입력 필드를 만들 때 그 값을 읽는 곳을 함께 세는 것. §7.5 전수와 같은 계열인데
+# 트리거가 다릅니다."* 맞다. 그래서 세는 일을 **사람의 성실성에 맡기지 않는다** — 화면이 받는 필드는 아래 둘 중 하나에
+# 반드시 들어가야 하고(검사가 분할을 고정한다), 새 필드를 넣으면 **어느 쪽인지 적기 전까지 관문이 빨갛다**.
+#
+# 이 형태가 앞의 G1 셋과 다른 점을 발행자가 짚었다: 앞의 셋은 **한쪽만 지어진 것**(COUNT 는 있고 INSERT 가 없다 ·
+# 아무도 import 안 한다 · 수집기는 있고 호출자가 없다)이고, 이번 것은 **양쪽이 다 지어졌는데 사이가 안 이어진 것**이다.
+# 축 등록도 있고 격자 칸 선언도 있고 문서도 "필지 보정 ②" 라고 적었고 이제 입력 폼까지 있는데 값이 판정으로 가는
+# 경로만 없다. **세 곳이 서로를 지지해서 문서로는 절대 안 보인다** — 전수로 세야 나온다.
+FIELDS_STORED_ONLY = ("soil_texture", "slope", "drainage", "irrigation", "night_light",
+                      "microclimate", "area_m2", "seed_source", "cert_legal")
+
+
+def input_fields() -> tuple[str, ...]:
+    """화면이 사람에게서 받는 필지 필드 — 분할 검사의 대상(좌표·검정 참조는 사람이 적는 값이 아니라 여기 없다)."""
+    return tuple(FIELD_CHOICES) + tuple(k for k, _ in FIELD_LABELS)
 
 
 class ParcelError(ValueError):

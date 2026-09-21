@@ -74,6 +74,33 @@ def test_legacy_tracked_file_is_migration_source_only_and_real_seed_has_no_pii(m
     assert "data/parcels.json" in (ROOT / ".gitignore").read_text(encoding="utf-8").split()
 
 
+def test_no_tracked_file_carries_a_pii_key_whatever_its_name():
+    """[§7.5 지점 축 · 2026-09-21] 앞의 래칫은 **파일 이름 둘**을 박아 두었다 — 이름이 다른 새 파일이 주소를 담으면 안 닿는다.
+    형태로 고정한다: git 이 추적하는 어떤 텍스트 파일도 PII 키를 갖지 않는다(값은 여기서도 읽지 않는다 — 키만 본다).
+
+    이 검사를 만든 계기: 발행자가 *"저장소가 공개인지"* 를 두 번 물었고, 2026-09-21 에 재니 **공개**였다. 추적 파일은 깨끗했지만
+    **이력의 커밋 둘에 주소가 남아 있다** — 그쪽은 검사가 못 막는다(force-push 는 발행자 몫). 검사가 막을 수 있는 것은 **다음 한 건**이다.
+    """
+    tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace", timeout=60).stdout.split()
+    bad = []
+    for rel in tracked:
+        p = ROOT / rel
+        if p.suffix.lower() not in (".json", ".csv", ".md", ".txt") or not p.exists():
+            continue
+        try:
+            t = p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        # 주소·PNU 는 언제나 PII. 좌표는 **그것이 가리키는 것**에 달렸다 — 관측소 좌표(data/kma/stations.json)는 공개 참조값이고
+        # 필지 좌표는 PII 다. 그래서 파일 이름이 아니라 **내용**으로 가른다: 그 파일이 필지 레코드를 담고 있는가.
+        # (첫 판은 좌표만 보고 관측소 목록을 걸었다 — 과잉 차단은 다음 사람이 가드를 통째로 끄게 만든다.)
+        always = [k for k in ("address", "pnu") if f'"{k}"' in t]
+        coords = [k for k in ("lat", "lon") if f'"{k}"' in t] if ('"parcel"' in t or '"parcels"' in t) else []
+        if always or coords:
+            bad.append((rel, always + coords))
+    assert not bad, f"추적 파일이 PII 키를 담았다: {bad} — 값은 덮개(git 밖)에만"
+
+
 def test_overlay_is_ignored_by_git_and_created_at_server_start():
     assert "data/parcels_local.json" in (ROOT / ".gitignore").read_text(encoding="utf-8").split()
     tracked = subprocess.run(["git", "ls-files", "data"], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace", timeout=30).stdout.split()
