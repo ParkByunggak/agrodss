@@ -13,7 +13,15 @@ REM file brings the screen back itself, through keep_screen_up.bat (which starts
 REM
 REM U-18: the old registry file data\parcels.json was tracked and runtime writes modified it, so pull stopped with
 REM "commit or stash". Its values live in data\parcels_local.json (git-ignored) now, so discarding that one edit loses
-REM nothing. Nothing else is touched - this file never discards your work.
+REM nothing. Nothing else is DISCARDED - this file never throws your work away.
+REM
+REM [swept 2026-09-21] parcels.json was not the only file of that shape. Three tracked files under data\ are still
+REM written while the app runs - subjects.json (adding a crop, changing its status), crop_names.csv (approving a name)
+REM and organic\organic_materials_public.json (refreshing the materials canon). If one of those is edited here AND the
+REM pull carries a change to the same file, git stops with "commit or stash" and you are stuck on old code again -
+REM which is exactly the days-long stall this script exists to end. So before pulling, any locally edited tracked file
+REM under data\ is COPIED to data\_local_backup\ (git-ignored) and then restored, and this window says which ones.
+REM Copied, not discarded: nothing you typed is lost, and the session can merge it back.
 REM
 REM ASCII ONLY (cmd reads a batch in the console code page - cp949 on Korean Windows).
 REM No parentheses inside blocks - live_check.bat died that way once: a ")" closes the block early.
@@ -26,6 +34,8 @@ echo [agrodss] code here now: %OLD%
 
 git diff --quiet -- data/parcels.json
 if errorlevel 1 git checkout -- data/parcels.json
+
+for /f "tokens=*" %%f in ('git diff --name-only -- data/ 2^>nul') do call :preserve "%%f"
 
 echo [agrodss] pulling ...
 git pull origin main
@@ -57,5 +67,24 @@ echo.
 echo [ERROR] git pull failed - see the message above. NOTHING was changed or discarded.
 echo [ERROR] paste that message into the session instead of working around it by hand.
 echo.
+pause
+exit /b 1
+
+REM Keep a copy of a locally edited tracked data file, then restore it so the pull can pass.
+REM The copy comes FIRST - if it fails, the restore does not happen and we stop rather than lose the file.
+:preserve
+set "P=%~1"
+set "P=%P:/=\%"
+if /i "%P%"=="data\parcels.json" goto :eof
+if not exist "data\_local_backup" mkdir "data\_local_backup"
+copy /y "%P%" "data\_local_backup\" >nul
+if errorlevel 1 goto preservefailed
+echo [agrodss] kept your local %P% in data\_local_backup\ - restoring it so the update can land
+git checkout -- "%P%"
+goto :eof
+
+:preservefailed
+echo.
+echo [ERROR] could not copy %P% aside, so nothing was touched. Paste this window into the session.
 pause
 exit /b 1

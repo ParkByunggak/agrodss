@@ -75,7 +75,7 @@ def test_run_collection_without_key(monkeypatch):
 def test_run_collection_replaces_and_guards_drop(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_GO_KR_API_KEY", "x")
     path = tmp_path / "om.json"
-    monkeypatch.setattr(om, "DATA_PATH", path)
+    monkeypatch.setenv("AGRODSS_ORGANIC_PATH", str(path))   # [R-4 전수] 경로가 호출 시점에 풀리므로 env 로 격리된다
     mk = lambda i, end="20991231": {"PBLNTF_ID": f"ID{i}", "PBLNTF_NO": f"공시-{i}", "MTRIL_TYPE_NM": om.TYPE_PEST,
                                    "MTRIL_NM": "미생물", "PRODUCT_NM": f"제품{i}", "PBLNTF_END_DE": end, "CEO_NM": "개인정보보호"}
     rows = [mk(i) for i in range(10)] + [mk(99, end="20000101")]            # 1건 만료

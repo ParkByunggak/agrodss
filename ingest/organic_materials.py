@@ -21,7 +21,7 @@ from typing import Any, Callable
 from ingest import config as _config  # noqa: F401  [코드 평가 C11] .env 적재 정본 — 키(ORGANIC_API_KEY)를 넣어도 여기서는 못 읽던 경로
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_PATH = Path(os.environ.get("AGRODSS_ORGANIC_PATH") or (ROOT / "data" / "organic" / "organic_materials_public.json"))
+DEFAULT_PATH = ROOT / "data" / "organic" / "organic_materials_public.json"
 GRID_ID = "Grid_20200929000000000606_1"
 BASE = os.environ.get("AGRODSS_ORGANIC_BASE", "http://211.237.50.150:7080/openapi")
 SOURCE = "external:naqs_organic_materials"
@@ -30,6 +30,17 @@ TYPE_SOIL = "토양개량 및 작물생육"
 KEEP = ("PBLNTF_ID", "PBLNTF_NO", "MTRIL_TYPE_NM", "MTRIL_NM", "PRODUCT_NM", "PBLNTF_BEGIN_DE", "PBLNTF_END_DE",
         "PRODUCT_PC", "CMPNY_NM", "MANAGE_INSTT_NM")
 DROP_GUARD = 0.5     # 유효 건수가 직전의 절반 미만이면 교체 보류(원본 장애로 정본이 비는 사고 차단)
+
+
+def data_path() -> Path:
+    """공시자재 정본 경로 — **호출 시점에** env 로 푼다.
+
+    [R-4 전수 2026-09-21] 여기만 `DATA_PATH = Path(os.environ.get(...) or 기본)` 으로 **import 시점에** 고정돼
+    있었다. R-4 가 만든 규율("경로는 호출 시점에 env 로 푼다")의 이유가 그대로 적용된다 — import 뒤에 건
+    `monkeypatch.setenv` 가 **안 닿는다**. 지금은 검사가 인자로 tmp 를 넘겨 사고가 안 났을 뿐이고,
+    env 로 격리하는 다음 검사가 운영 정본에 쓰게 되는 형태다(R-4 는 그렇게 33줄을 썼다).
+    """
+    return Path(os.environ.get("AGRODSS_ORGANIC_PATH") or DEFAULT_PATH)
 
 
 def api_key() -> str | None:
@@ -42,7 +53,7 @@ def api_key() -> str | None:
 # ── 정본 읽기 · 검색 ─────────────────────────────────────────────────────────────
 def load() -> dict[str, Any]:
     try:
-        return json.loads(DATA_PATH.read_text(encoding="utf-8"))
+        return json.loads(data_path().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {"rows": [], "fetched_at": None, "source": SOURCE}
 
@@ -127,7 +138,7 @@ def run_collection(page: Callable[[str, int, int], dict[str, Any]] = _http_page,
                    path: Path | None = None) -> dict[str, Any]:
     """전량 재수집 → 유효분 교체. 급감이면 보류. 반환 {status, total_all, valid, added, dropped}."""
     today = today or date.today()
-    path = path or DATA_PATH
+    path = path or data_path()
     key = api_key()
     if not key:
         return {"status": "no_key", "message": "data.go.kr 인증키 없음 (ORGANIC_MATERIAL_API_KEY 또는 DATA_GO_KR_API_KEY)"}

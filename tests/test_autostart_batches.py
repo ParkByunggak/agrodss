@@ -131,9 +131,18 @@ def test_the_updater_keeps_the_window_open_and_stops_on_failure():
 
 
 def test_the_updater_discards_nothing_but_the_one_known_file():
-    """되돌릴 수 없는 일은 하지 않는다 — U-18 의 그 한 파일(값은 덮개에 있다) 말고는 아무것도 버리지 않는다."""
+    """되돌릴 수 없는 일은 하지 않는다 — U-18 의 그 한 파일(값은 덮개에 있다) 말고는 아무것도 **버리지** 않는다.
+
+    [운영 상태 파일 전수 2026-09-21] 되돌리기가 하나 늘었다 — 추적 파일에 런타임이 쓰는 자리가 `parcels.json`
+    말고도 셋 더 있었고, 그것이 수정돼 있으면 pull 이 멈춰 발행자가 또 옛 코드에 묶인다. 그래서 되돌리되
+    **먼저 사본을 뜬다**. 계약은 "되돌리기가 하나" 가 아니라 **"사본 없는 되돌리기는 그 한 파일뿐"** 이다.
+    """
     text = _body(UPDATE)
-    assert text.count("git checkout") == 1 and "data/parcels.json" in text
+    assert "data/parcels.json" in text
+    known = text[:text.index(":preserve")]
+    assert known.count("git checkout") == 1, "사본 없이 되돌리는 자리가 늘었다"
+    kept = text[text.index(":preserve"):]
+    assert kept.count("git checkout") == 1 and "copy " in kept
     for danger in ("reset --hard", "clean -", "push --force", "rm -rf", "rmdir"):
         assert danger not in text, danger
 

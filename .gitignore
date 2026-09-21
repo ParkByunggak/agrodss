@@ -10,3 +10,7 @@ data/psis/
 data/names/
 data/parcels_local.json
 data/parcels.json
+# [운영 상태 파일 전수 2026-09-21] 런타임이 쓰는 것은 git 밖이다. profile.json 은 추적도 무시도 아니어서
+# `git status` 에 `??` 로 떠 있었다 — `git add -A` 한 번이면 발행자 이름이 저장소로 들어간다(U-18 과 같은 축).
+data/profile.json
+data/_local_backup/
