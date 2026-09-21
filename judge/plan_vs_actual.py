@@ -145,13 +145,21 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
     ended = subject.get("ended_at") if subject.get("status") == "종료" else None   # [시점 걷기 2026-09-20] 작기 종료 뒤 계획은 놓침이 아니다
     ask = []
     prep = []
+    # [경계일 촬영 2026-09-21 · B4 약속이 안 닿은 지점] 칸 창은 양끝 포함이라 **경계일은 두 칸에 걸린다**. 실측: 9/24 사진 한 장이
+    # 칸 3(마감)과 칸 4(작업일)를 **둘 다 이행**으로 만들었다 — 한 번 찍었는데 두 단계가 기록된 것으로 센다(거짓 이행 · 되먹임 오염).
+    # 약속은 이미 정해져 있었다: `grid.capture` 가 *"경계일은 **앞 칸**(첫 매치)"* 이라 적고, 그 주석이 **"판정기마다 따로 창을
+    # 비교하면 그 약속이 갈린다"** 고까지 경고해 두었다. 단계 판정과 경보는 그 정본으로 왔는데 **촬영 대조만 제 창을 따로 비교**했다.
+    # 그래서 여기서도 같은 약속을 지킨다 — 사진 한 장은 **가장 앞 칸 하나**에만 붙는다(쓰인 것은 다시 쓰지 않는다).
+    used_media: set[str] = set()
     for p in plan.from_unit(unit, anchor_d, subject.get("cert")):
         wd = date.fromisoformat(p["work_date"])
         dl = date.fromisoformat(p["deadline_date"]) if p.get("deadline_date") else wd + timedelta(days=tol)
         status, evidence = None, None
         if p["kind"] == "plan.capture":
-            hit = [v for v in videos if p["work_date"] <= (v.get("observed_at") or "")[:10] <= p["deadline_date"]]
+            hit = [v for v in videos
+                   if p["work_date"] <= (v.get("observed_at") or "")[:10] <= p["deadline_date"] and v.get("id") not in used_media]
             if hit:
+                used_media.add(hit[0].get("id"))
                 status, evidence = "이행", f"영상 {hit[0].get('id')} ({hit[0].get('observed_at', '')[:10]})"
         else:
             m = _matched_event(p, evts, tol, d.params)
