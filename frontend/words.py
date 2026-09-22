@@ -31,6 +31,19 @@ KIND_SAID = {
 # 신뢰 등급 3분류 → 사람 말. '추정' 은 *"근거가 약하다"* 는 뜻인데 그대로 쓰면 농가에게는 아무 말도 아니다.
 GRADE_SAID = {"계산": "계산한 값", "관측": "실제로 잰 값", "추정": "짐작"}
 
+# [발행자 2026-09-23] 사진의 찍은 때가 **어디서 왔는지**. 사다리 마지막 칸(`upload_time`)은 *"언제 찍었는지 모른다"* 는
+# 뜻이라, 화면이 그것을 말하지 않으면 라벨 없는 대리값이 된다 — 라벨이 붙어야 사실이다(`ingest.media.observed_ladder`).
+SHOT_TIME_SAID = {
+    "manual": "적어 주신 날짜",
+    "file_meta": "사진에 적힌 촬영 시각",
+    "file_name": "파일 이름의 날짜",
+    "upload_time": "올리신 때 — 찍은 때는 사진에 없었습니다",
+}
+
+
+def shot_time(source: str | None) -> str:
+    return SHOT_TIME_SAID.get(source or "", source or "")
+
 # 닫힌 낱말 표 — **측정으로 고른 것만** 넣는다. 긴 것부터 바꾼다(짧은 것이 먼저 물면 뒤가 어그러진다).
 SWAPS: tuple[tuple[str, str], ...] = (
     ("신뢰 등급", "근거"),

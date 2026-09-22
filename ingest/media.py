@@ -3,8 +3,11 @@
 # ROLE: [I-7 · 몰-C · I-3 §3] 현장 영상 반입 — inbox 의 파일을 1층 관찰(영상) 레코드로 등록한다.
 #
 # 규칙:
-#   · 1층 3요건(관측 시각 · 출처 · 해상도)이 없으면 등록되지 않는다. 촬영 시각은 MP4/MOV 메타(mvhd)
-#     에서 읽고, 없으면 사람이 넣는다. **어느 쪽도 없으면 거부** — 지금 시각으로 메우지 않는다(G3).
+#   · 1층 3요건(관측 시각 · 출처 · 해상도). 찍은 때는 **사다리**로 정하고 어디서 얻었는지를 함께 적는다 —
+#     사람이 적은 날짜 → 메타(EXIF · mvhd) → 파일 이름 → 올린 때(`observed_ladder`).
+#     [발행자 2026-09-23] 전에는 앞 둘이 없으면 **거부**했다. 카카오톡이 EXIF 를 지우므로 밭 사진이 언제나
+#     거절당했다 — 규칙이 옳아도 아무도 통과 못 하면 기능을 없앤 것이다. 지어내지 않되 거절도 하지 않는다:
+#     마지막 칸은 *"언제 찍었는지는 모르고 이때 받았다"* 는 **참인 사실**이고, 화면이 그렇게 말한다.
 #   · 파일은 git 에 넣지 않는다(data/media/ 는 .gitignore). 레코드는 index.jsonl(원장)에 append.
 #   · 원장 격리: 경로는 AGRODSS_MEDIA_DIR 로 바꿀 수 있다 — 테스트는 tmp 를 쓴다(conftest).
 #   · 위치(GPS)는 있으면 레코드에 두되 화면에는 '있음/없음'만 낸다(PII, I-5 §1-2).
@@ -18,7 +21,7 @@ import re
 import shutil
 import struct
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -358,6 +361,67 @@ def _safe(s: str) -> str:
     return re.sub(r"[^0-9A-Za-z가-힣._-]+", "_", s)[:80]
 
 
+# ── 찍은 때를 정하는 사다리 ────────────────────────────────────────────────────────────
+# [발행자 실사용 2026-09-23] 카카오톡으로 받은 사진 넉 장이 전부 거절당했다:
+#   "촬영 시각이 없다 — 메타에서 못 읽었고 입력도 없다. 시각 없는 영상은 1층에 들어가지 않는다"
+# 발행자: *"이 방법은 농업인들에게 **무리한 요구**다. 올린 날과 그 시각을 활용해야 한다."* ·
+#         *"`KakaoTalk_20260923_074025068_04` 여기에 **07:40분임을 알 수도 있다**."*
+#
+# 맞다. 카카오톡·메신저는 EXIF 를 지운다 — 그러면 밭에서 찍은 사진은 **언제나** 거절당한다. 규칙이 옳아도
+# 아무도 통과 못 하면 그 규칙은 기능을 없앤 것이다. 그런데 **아무 시각이나 지어내는 것**(대리값)도 안 된다.
+#
+# 그래서 사다리로 만든다 — **지어내지 않고, 어디서 얻었는지를 함께 적는다.**
+#
+#   manual      사람이 올릴 때 적은 촬영일          가장 세다 — 본인이 아는 사실이다
+#   file_meta   EXIF · mvhd                        기계가 잰 값
+#   file_name   파일 이름 안의 날짜·시각            KakaoTalk_20260923_074025 · IMG_20260923_074025 · PXL_…
+#   upload_time 그 파일을 받은 때                   마지막 — *"언제 찍었는지는 모른다"* 를 이 말로 적는다
+#
+# 마지막 칸이 있으므로 **이제 거절하지 않는다**. 대신 출처가 `upload_time` 이면 화면이 그렇게 말한다 —
+# 라벨 없는 대리값은 금지지만, **라벨 붙은 사실**은 사실이다(그 파일을 그때 받은 것은 참이다).
+#   마지막 `(?:\d{1,3})?` 가 **밀리초**다. 발행자 파일이 `KakaoTalk_20260923_074025068` 인데 첫 판은 이것 때문에
+#   시각을 통째로 놓치고 날짜만 읽었다(`07:40` 이 있다고 발행자가 짚어 준 바로 그 자리다).
+_NAME_TIME = (
+    re.compile(r"(?<!\d)(20\d{2})(\d{2})(\d{2})[_\-T ]?(\d{2})(\d{2})(\d{2})(?:\d{1,3})?(?!\d)"),  # 20260923_074025068
+    re.compile(r"(?<!\d)(20\d{2})[-.](\d{2})[-.](\d{2})[_ ](\d{2})[.:](\d{2})[.:](\d{2})"),        # 2026-09-23 07.40.25
+    re.compile(r"(?<!\d)(20\d{2})(\d{2})(\d{2})(?!\d)()()()"),                                     # 20260923 (시각 없음)
+)
+
+
+def time_from_name(name: str, today: date | None = None) -> str | None:
+    """파일 이름에서 찍은 때. 없으면 None — **지어내지 않는다**.
+
+    걸러야 할 것이 둘이다: ① 해상도·일련번호가 날짜처럼 보이는 것(`20261332` 같은 불가능한 달·일)
+    ② **앞날**(카메라 시계가 미래면 격자 칸 대조가 통째로 어긋난다). 둘 다 여기서 막는다.
+    """
+    today = today or date.today()
+    for rx in _NAME_TIME:
+        for m in rx.finditer(name):
+            y, mo, d, hh, mm, ss = (g or "" for g in m.groups())
+            try:
+                when = datetime(int(y), int(mo), int(d), int(hh or 0), int(mm or 0), int(ss or 0), tzinfo=timezone.utc)
+            except ValueError:
+                continue                       # 20261332 같은 것 — 날짜가 아니다
+            if when.date() > today:
+                continue                       # 앞날은 안 쓴다
+            return when.isoformat(timespec="seconds")
+    return None
+
+
+def observed_ladder(src: Path, typed: str | None, pr: Any, now: datetime,
+                    today: date | None = None) -> tuple[str, str]:
+    """(찍은 때, 출처) — 네 칸을 순서대로. **마지막 칸이 있으므로 언제나 답이 있다.**"""
+    typed = (typed or "").strip()
+    if typed:
+        return typed, "manual"
+    if getattr(pr, "creation_time", None):
+        return pr.creation_time, "file_meta"
+    by_name = time_from_name(src.name, today)
+    if by_name:
+        return by_name, "file_name"
+    return now.isoformat(timespec="seconds"), "upload_time"
+
+
 def register(key: str, subject: str, observed_at: str | None = None, note: str = "",
              now: datetime | None = None) -> dict[str, Any]:
     """inbox(옮김) 또는 감시 폴더(복사) → media/<subject>/<observed_at>_<sha8>.<ext> + index.jsonl 레코드.
@@ -376,9 +440,9 @@ def _register_locked(key: str, subject: str, observed_at: str | None, note: str,
     if src.suffix.lower() not in MEDIA_EXT:
         raise RegisterError(f"영상·사진 파일이 아니다: {src.suffix!r} ({', '.join(sorted(MEDIA_EXT))})")
     pr = probe(src)
-    observed = (observed_at or "").strip() or pr.creation_time
-    if not observed:
-        raise RegisterError("촬영 시각이 없다 — 메타에서 못 읽었고 입력도 없다. 시각 없는 영상은 1층에 들어가지 않는다")
+    now = now or datetime.now(timezone.utc)
+    # [발행자 2026-09-23] 여기서 거절하던 자리. 이제 사다리가 언제나 답을 내고 **출처를 함께** 돌려준다.
+    observed, observed_source = observed_ladder(src, observed_at, pr, now)
     try:
         datetime.fromisoformat(observed.replace("Z", "+00:00"))
     except ValueError:
@@ -386,7 +450,6 @@ def _register_locked(key: str, subject: str, observed_at: str | None, note: str,
     digest = sha256_of(src)
     if any(r.get("sha256") == digest for r in list_records()):
         raise RegisterError("같은 파일(sha256)이 이미 등록돼 있다")
-    now = now or datetime.now(timezone.utc)
     dest_dir = media_dir() / _safe(subject)
     dest_dir.mkdir(parents=True, exist_ok=True)
     stamp = re.sub(r"[^0-9T]", "", observed)[:15]
@@ -398,7 +461,7 @@ def _register_locked(key: str, subject: str, observed_at: str | None, note: str,
         "kind": KIND_IMAGE if src.suffix.lower() in IMAGE_EXT else KIND,
         "subject": subject,
         "observed_at": observed,
-        "observed_at_source": "manual" if (observed_at or "").strip() else "file_meta",
+        "observed_at_source": observed_source,
         "recorded_at": now.isoformat(timespec="seconds"),
         "source": SOURCE,
         "resolution": RESOLUTION,

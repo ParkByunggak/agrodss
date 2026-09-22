@@ -650,7 +650,12 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
     msg = _append(rec)
     media_line = ""
     if media_refs:
-        media_line = "받았습니다 " + " · ".join(f"{r.get('id')}(찍은 때 {str(r.get('observed_at', ''))[:16]})" for r in media_refs) + ". "
+        # [발행자 2026-09-23] 찍은 때가 **어디서 왔는지**를 함께 말한다 — 사다리 마지막 칸(올린 때)은
+        # *"언제 찍었는지 모른다"* 는 뜻이라, 말하지 않으면 라벨 없는 대리값이 된다.
+        from frontend import words as _w                      # 문면은 4층 정본(모듈 수준 import 는 층을 뒤집는다)
+        media_line = "받았습니다 " + " · ".join(
+            f"{r.get('id')}(찍은 때 {str(r.get('observed_at', ''))[:16]} — {_w.shot_time(r.get('observed_at_source'))})"
+            for r in media_refs) + ". "
     if media_refs and not drafts:
         reply_text = media_line + "무엇을 했는지 함께 적으시면 그것도 같이 적어 둡니다."
     elif drafts and drafts[0]["kind"] == "question":

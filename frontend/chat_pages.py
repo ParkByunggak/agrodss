@@ -341,10 +341,10 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
     out.append(f'<div class="composer"><form method="post" action="/c/{quote(s["id"])}/send" id="composer" enctype="multipart/form-data">'
                '<input type="hidden" name="input_mode" id="input_mode" value="text"><input type="hidden" name="edit_of" id="edit_of" value="">'
                '<textarea name="text" id="text" placeholder="예) 오늘 물 줬다 / 잎 끝이 누렇다 / 9월 25일에 웃거름 주려고 한다 / 수확 창이 너무 넓다 / 언제 캐면 되나?"></textarea>'
-               '<div class="files" id="files" hidden><span id="filenames"></span> <label>촬영일 <input name="observed_at" id="observed_at" placeholder="메타에 없으면 필요 (2026-09-19)" size="24"></label></div>'
+               '<div class="files" id="files" hidden><span id="filenames"></span> <label>찍은 날 <input name="observed_at" id="observed_at" placeholder="적으시면 이 날짜로 (2026-09-19) — 비우셔도 됩니다" size="30"></label></div>'
                '<div class="row"><span class="hint" id="hint">한 일 · 본 것 · 할 일 · 고쳐 달라는 말 · 물음 — 날짜는 "9월 20일" · "어제" · "2026-09-20"</span>'
                '<span><input type="file" name="file" id="file" accept="image/*,video/*" multiple hidden>'
-               '<button class="btn" type="button" id="attach" title="사진 · 영상 올리기 — 촬영 시각은 메타(EXIF · mvhd)에서 읽고 없으면 촬영일을 묻는다">📎 사진·영상</button> '
+               '<button class="btn" type="button" id="attach" title="사진 · 영상 올리기 — 찍은 때는 적어 주신 날짜 → 사진 속 시각 → 파일 이름 → 올리신 때 순으로 정합니다">📎 사진·영상</button> '
                # [칸 3 재측정 2026-09-20 · D15] 툴팁만 '5초' 가 박혀 있었다 — 설정(AGRODSS_VOICE_SILENCE_MS)을 바꾸면 화면이 거짓말을 한다
                f'<button class="btn" type="button" id="mic" title="음성으로 질문 — 말이 끝나거나 {config.VOICE_SILENCE_MS // 1000}초 조용하면 글로 바꿔 보낸다(D-15: 크롬 내장 인식, 구글 서버 경유)">🎤 음성</button> '
                '<button class="btn pri" type="submit">보내기</button></span></div></form></div>')

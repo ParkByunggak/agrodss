@@ -24,7 +24,7 @@ if __package__ in (None, ""):
     # `python frontend/serve.py` 로 직접 실행될 때 저장소 루트를 경로에 넣는다
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from frontend import chat_pages, config, render  # noqa: E402
+from frontend import chat_pages, config, render, words  # noqa: E402
 from ingest import chat, feedback as fb, profile, subjects  # noqa: E402  — [M-13] 채팅 원장 · 되먹임 · 재배 단위·사용자 등록부도 ingest 를 통해서만
 from ingest import events as ev  # noqa: E402  — 사건 원장도 ingest 를 통해서만
 from ingest import media  # noqa: E402  — 입력 화면은 ingest 를 통해서만 1층에 쓴다(원장 파일을 직접 열지 않는다)
@@ -343,7 +343,7 @@ def media_page(message: str = "", error: str = "") -> tuple[int, str]:
         for r in sorted(records, key=lambda r: r["observed_at"], reverse=True):
             out.append(f'<tr><td>{_e(r["observed_at"])}</td><td>{_e(r["subject"])}</td><td><code>{_e(r["file"])}</code></td>'
                        f'<td>{_e(r.get("width"))}×{_e(r.get("height"))}</td><td>{_e(r.get("duration_sec"))}s</td>'
-                       f'<td>{_e(r["gps"])}</td><td>{_e(r.get("observed_at_source"))}</td><td>{_e(r.get("note"))}</td></tr>')
+                       f'<td>{_e(r["gps"])}</td><td>{_e(words.shot_time(r.get("observed_at_source")))}</td><td>{_e(r.get("note"))}</td></tr>')
         out.append("</table>")
     else:
         out.append("<p>아직 없다.</p>")

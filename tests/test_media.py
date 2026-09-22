@@ -82,11 +82,15 @@ def test_register_with_manual_time_when_meta_missing(inbox):
 
 
 # ── 등록: 거부 ───────────────────────────────────────────────────────────────────
-def test_register_rejects_when_no_time_anywhere(inbox):
+def test_a_file_with_no_time_anywhere_is_taken_in_and_says_so(inbox):
+    """[발행자 2026-09-23] 전에는 여기서 **거절**했다. 카카오톡이 EXIF 를 지우므로 밭 사진이 언제나 거절당했다 —
+    *"농업인들에게 무리한 요구"* 다. 이제 사다리의 마지막 칸(올린 때)이 받되, **어디서 온 시각인지를 적는다**.
+    지어내는 것이 아니다: *"이 파일을 그때 받았다"* 는 참이고, 화면이 그 말을 그대로 한다."""
     (inbox / "b.mp4").write_bytes(make_mp4(None))
-    with pytest.raises(media.RegisterError, match="촬영 시각"):
-        media.register("b.mp4", SUBJ)
-    assert (inbox / "b.mp4").exists() and not media.list_records()   # 아무것도 안 바뀐다
+    rec = media.register("b.mp4", SUBJ, now=datetime(2026, 9, 23, 7, 40, tzinfo=timezone.utc))
+    assert rec["observed_at_source"] == "upload_time"
+    assert rec["observed_at"].startswith("2026-09-23T07:40")
+    assert len(media.list_records()) == 1
 
 
 def test_register_rejects_bad_time_format(inbox):

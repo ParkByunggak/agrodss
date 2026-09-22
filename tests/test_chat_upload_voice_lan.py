@@ -59,13 +59,15 @@ def test_save_upload_then_register_image_and_video():
     assert media.save_upload("dup.mp4", b"\x00" * 16) == "inbox:dup_1.mp4"   # 같은 이름이 inbox 에 있으면 뒤에 번호
 
 
-def test_image_without_time_needs_observed_at_and_stays_in_inbox():
+def test_an_image_without_exif_is_taken_in_and_a_typed_date_still_wins():
+    """[발행자 2026-09-23] EXIF 없는 사진도 들어간다(이름에도 날짜가 없으면 '올린 때'). 그리고 **적어 주신 날짜가 가장 세다**
+    — 발행자 요청 둘째: *"사진을 올릴 때 특정 날짜를 지정하면 그 날짜를 시스템이 인식해야 한다."*"""
     key = media.save_upload("no_exif.jpg", make_jpeg_with_exif(None))
-    with pytest.raises(media.RegisterError, match="촬영 시각이 없다"):
-        media.register(key, SID)
-    assert any(i["key"] == key for i in media.list_inbox())
-    rec = media.register(key, SID, observed_at="2026-09-19")
-    assert rec["observed_at_source"] == "manual"
+    rec = media.register(key, SID)
+    assert rec["observed_at_source"] == "upload_time"
+    key2 = media.save_upload("no_exif2.jpg", make_jpeg_with_exif(None) + b"\x00")   # 다른 바이트 — 같은 파일 거부와 섞지 않는다
+    rec2 = media.register(key2, SID, observed_at="2026-09-19")
+    assert rec2["observed_at_source"] == "manual" and rec2["observed_at"] == "2026-09-19"
 
 
 def test_chat_send_with_media_refs_makes_message_and_reply():
@@ -126,9 +128,15 @@ def test_upload_through_chat_composer(srv):
     assert len(recs) == 1 and recs[0]["kind"] == "observation.image" and recs[0]["note"] == "두둑 전경"
     msgs = chat.list_messages(SID)
     assert msgs[0]["media_refs"] == [recs[0]["id"]] and recs[0]["id"] in msgs[1]["text"]
-    st, _, body = _post_multipart(srv, f"/c/{quote(SID)}/send", {"text": "", "observed_at": ""}, [("file", "noexif.jpg", make_jpeg_with_exif(None))])
-    assert st == 400 and "촬영 시각이 없다" in body and "반입 대기함" in body
-    assert len(media.list_records(SID)) == 1 and any(i["name"] == "noexif.jpg" for i in media.list_inbox())
+    # [발행자 2026-09-23] 전에는 여기서 400 + "반입 대기함" 이었다 — EXIF 없는 사진은 **언제나** 거절당했다.
+    # 이제 사다리가 받고(이 이름엔 날짜가 없으니 '올린 때'), 답이 **어디서 온 시각인지**를 말한다.
+    st, loc, _ = _post_multipart(srv, f"/c/{quote(SID)}/send", {"text": "", "observed_at": ""},
+                                 [("file", "noexif.jpg", make_jpeg_with_exif(None) + b"\x01")])
+    assert st == 302
+    recs2 = media.list_records(SID)
+    assert len(recs2) == 2 and recs2[-1]["observed_at_source"] == "upload_time"
+    assert "올리신 때" in chat.list_messages(SID)[-1]["text"]
+    assert not any(i["name"].startswith("noexif") for i in media.list_inbox()), "이제 반입 대기함에 남지 않는다"
     st, _, body = _post_multipart(srv, f"/c/{quote(SID)}/send", {"text": "", "observed_at": ""}, [])
     assert st == 400 and "빈 발화" in body
 
