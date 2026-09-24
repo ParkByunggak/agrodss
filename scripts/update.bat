@@ -27,6 +27,9 @@ REM ASCII ONLY (cmd reads a batch in the console code page - cp949 on Korean Win
 REM No parentheses inside blocks - live_check.bat died that way once: a ")" closes the block early.
 setlocal
 cd /d "%~dp0.."
+set "PORT=8765"
+if not "%AGRODSS_FRONTEND_PORT%"=="" set "PORT=%AGRODSS_FRONTEND_PORT%"
+set "HOSTPORT=127.0.0.1:%PORT%"
 
 set "OLD="
 for /f "delims=" %%h in ('git rev-parse --short HEAD 2^>nul') do set "OLD=%%h"
@@ -55,12 +58,64 @@ echo [agrodss] already newest - nothing to pull.
 
 :start
 call "%~dp0keep_screen_up.bat"
+
+REM [publisher 2026-09-23] This used to print "the screen SHOULD now be running <new>" and stop. That is a CLAIM,
+REM not a measurement - and a claim is exactly what cost this project days: a pull lands, the already-running
+REM process keeps serving the OLD build, and nothing says so. Ask the screen what it is running and compare.
+call :measure
+if "%RUNNING%"=="%NEW%" goto isnew
+if "%RUNNING%"=="" goto cannotask
+
+echo [agrodss] the screen is still running %RUNNING% - it cannot swap itself onto the fix (R-6). Restarting it.
+call :restart
+call :measure
+if "%RUNNING%"=="%NEW%" goto isnew
+
 echo.
-echo [agrodss] done. The screen should now be running %NEW%
-echo [agrodss] check the footer: the AI notice, and the address ONCE.
+echo [ERROR] the screen is running %RUNNING% but the code here is %NEW%.
+echo [ERROR] close the black "agrodss" window by hand and double-click run_frontend.bat, then paste this window.
+echo.
+pause
+exit /b 1
+
+:isnew
+echo.
+echo [agrodss] measured: the screen is running %NEW%. This is the newest code.
+echo [agrodss] the footer should show the AI notice, centred, with the address ONCE.
 echo.
 pause
 exit /b 0
+
+:cannotask
+echo.
+echo [agrodss] could not ask the screen what it is running (no curl, or it is not up yet).
+echo [agrodss] open http://%HOSTPORT%/changes - it says "reflected" or "behind" at the top.
+echo.
+pause
+exit /b 0
+
+REM Ask the screen itself. Writes RUNNING = the commit the PROCESS started on (empty if it cannot be asked).
+:measure
+set "RUNNING="
+del "%TEMP%\agrodss_running.txt" >nul 2>&1
+curl -s -m 5 "http://%HOSTPORT%/running" > "%TEMP%\agrodss_running.txt" 2>nul
+for /f "tokens=2 delims==" %%h in ('findstr /B /C:"head=" "%TEMP%\agrodss_running.txt" 2^>nul') do set "RUNNING=%%h"
+del "%TEMP%\agrodss_running.txt" >nul 2>&1
+goto :eof
+
+REM Stop ONLY the process listening on our port, then let keep_screen_up start it again.
+REM Never a blanket taskkill - the port pins exactly one process and nothing else is touched.
+:restart
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /R /C:":%PORT% .*LISTENING"') do call :killpid %%p
+timeout /t 3 /nobreak >nul
+call "%~dp0keep_screen_up.bat"
+timeout /t 5 /nobreak >nul
+goto :eof
+
+:killpid
+echo [agrodss] stopping the old screen - PID %1 on port %PORT%
+taskkill /PID %1 /F >nul 2>&1
+goto :eof
 
 :pullfailed
 echo.

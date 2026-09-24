@@ -209,6 +209,33 @@ def test_install_and_uninstall_name_the_same_startup_entry():
         assert danger not in body, danger
 
 
+# ── 업데이터가 주장이 아니라 측정을 한다 (발행자 실측 2026-09-23) ────────────────────────
+#
+# 발행자가 붙여 준 창: "[agrodss] done. The screen SHOULD now be running ed45339". **주장**이다 — 재지 않았다.
+# pull 이 닿아도 이미 떠 있는 프로세스는 옛 빌드를 계속 낸다(R-6). 그것을 아무도 말해 주지 않아 며칠을 잃었다.
+# 이제 화면에게 `/running` 을 **묻고** 저장소 HEAD 와 비교한다 — 다르면 그 포트의 프로세스만 멈추고 다시 띄운다.
+
+def test_the_updater_asks_the_screen_before_it_says_what_is_running():
+    """'should now be running' 이 되돌아오면 안 된다 — 성공 문면은 **측정 뒤** 갈래에만 있다."""
+    text = _body(UPDATE)
+    assert "should now be running" not in text.lower(), "주장이 되돌아왔다 — 재고 말한다"
+    assert "/running" in text and "findstr /B /C:\"head=\"" in text, "화면에게 묻지 않는다"
+    ok = text[text.index(":isnew"):text.index(":cannotask")]
+    assert "measured" in ok and 'if "%RUNNING%"=="%NEW%" goto isnew' in text[:text.index(":isnew")]
+
+
+def test_the_updater_restarts_only_the_process_on_our_port_and_only_when_stale():
+    """죽이는 것은 **그 포트의 PID 하나**뿐이고, **측정이 어긋났을 때**뿐이다 — 이름으로 죽이면 남의 파이썬이 죽는다."""
+    text = _body(UPDATE)
+    kill = text[text.index(":killpid"):]
+    assert "taskkill /PID" in kill and "/IM" not in text, "이름(/IM)으로 죽이면 관계없는 프로세스가 죽는다"
+    assert text.count("taskkill") == 1, "죽이는 자리는 하나 — 늘면 범위가 넓어진 것"
+    restart = text[text.index(":restart"):text.index(":killpid")]
+    assert ":%PORT% .*LISTENING" in restart, "포트로 고르지 않는다"
+    before = text[:text.index("call :restart")]
+    assert "call :measure" in before and 'if "%RUNNING%"=="" goto cannotask' in before, "재지도 않고 다시 띄운다"
+
+
 def test_a_refusal_does_not_leave_the_publisher_without_a_screen():
     """둘 다 막혔을 때 **화면이 멈추는 것이 아니다** — 자동 재시작만 없는 것이다. 그 구별을 화면이 말한다.
 

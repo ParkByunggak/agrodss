@@ -466,6 +466,15 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_text(self, status: int, body: str) -> None:
+        """ASCII 평문 — 배치·스크립트가 읽는다. 한글은 안 싣는다(cmd 가 콘솔 코드페이지 cp949 로 읽어 깨진다)."""
+        data = body.encode("ascii", "replace")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/plain; charset=us-ascii")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def _authorized(self) -> tuple[bool, str | None]:
         """[D-16] LAN 토큰이 설정돼 있으면 ?t=<token> 또는 쿠키가 있어야 한다. 루프백 기본 설정(토큰 없음)에서는 항상 통과."""
         tok = config.LAN_TOKEN
@@ -517,6 +526,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(401, render.page("접근 불가", "", "<h1>토큰이 필요하다</h1><p>같은 Wi-Fi 동기화(D-16)는 첫 접속을 <code>?t=&lt;토큰&gt;</code> 으로 한다.</p>", "", ""))
             return
         loc = None
+        if p == "/running":
+            # [발행자 2026-09-23] `update.bat` 이 *"화면이 ed45339 를 돌고 있을 것"* 이라고 **주장**만 했다 — 재지 않았다.
+            # 이 트랙이 며칠을 잃은 형태가 바로 그것이다(커밋 완료 ≠ 반영 완료). 배치가 **읽을 수 있는** 줄을 낸다:
+            # 한글은 못 쓴다(cmd 가 cp949 로 읽는다) — ASCII 키=값이라 `findstr` 로 그대로 비교된다.
+            self._send_text(200, f"head={RUNNING_HEAD}\nrepo={git_head_short()}\nport={config.PORT}\n")
+            return
         if p == "/":
             status, body, loc = chat_home()
         elif p == "/c/new":
