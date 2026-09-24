@@ -647,9 +647,16 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         raise ChatError(f"없는 목록: {subject_id}")
     text = (text or "").strip()
     media_refs = media_refs or []
+    photo_only = False
     if not text and media_refs:
-        text = "[반입] " + " · ".join(f"{r.get('id')} {r.get('file', '')}" for r in media_refs)
+        # [발행자 화면 2026-09-24] 전에는 여기서 "[반입] img_… <경로>" 를 **시스템이 지어내** 발화로 삼고 그것을 분류했다 —
+        # 그래서 농가가 한 말도 아닌 문장이 '본 것' 초안이 되고, 확인하면 일지에 경로 목록이 한 줄 들어갔다(스크린샷 그대로).
+        # 사진 자체가 1층 사실이다(영상 원장). 말이 없으면 **초안을 만들지 않는다** — 지어내지 않는다.
+        n_img = sum(1 for r in media_refs if r.get("kind") == media.KIND_IMAGE)
+        n_vid = len(media_refs) - n_img
+        text = " · ".join(x for x in (f"사진 {n_img}장" if n_img else "", f"영상 {n_vid}개" if n_vid else "") if x)
         input_mode = "file"
+        photo_only = True
     if not text:
         raise ChatError("빈 발화")
     if input_mode not in INPUT_MODES:
@@ -659,7 +666,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
             raise ChatError(f"없는 메시지를 잇는다: {ref}")
     today = today or date.today()
     ts = _now(now).isoformat(timespec="seconds")
-    drafts = _attach_plan(subject_id, classify(text, today), today)   # 불이행 초안만 계획표(재배 단위별)에 잇는다
+    drafts = [] if photo_only else _attach_plan(subject_id, classify(text, today), today)   # 불이행 초안만 계획표(재배 단위별)에 잇는다
     rec: dict[str, Any] = {"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": role, "text": text[:2000],
                            "observed_at": today.isoformat(), "recorded_at": ts, "source": role, "resolution": RESOLUTION,
                            "drafts": drafts, "confirmed_refs": [], "input_mode": input_mode}
@@ -870,8 +877,13 @@ def diary(subject_id: str) -> list[dict[str, Any]]:
             txt = json.dumps(r, ensure_ascii=False)[:120]
         items.append({"day": (r.get("observed_at") or "")[:10], "kind": k, "label": KIND_LABEL.get(k, k), "text": txt,
                       "id": r.get("id"), "source": r.get("source"), "from_chat": bool(r.get("chat_ref"))})
+    from frontend import words as _w                     # 일지 줄의 말은 4층 정본(모듈 수준 import 는 층을 뒤집는다)
     for v in media.list_records(subject_id):
-        items.append({"day": (v.get("observed_at") or "")[:10], "kind": "observation.video", "label": "영상",
-                      "text": f"{v.get('file')} · {v.get('note') or ''}".strip(" ·"), "id": v.get("id"), "source": v.get("source"), "from_chat": False})
+        # [발행자 화면 2026-09-24] 사진을 '영상' 이라 부르고 본문이 **파일 경로**였다 — 농가가 읽을 줄이 아니다.
+        is_img = v.get("kind") == media.KIND_IMAGE
+        when = str(v.get("observed_at") or "")[11:16]
+        txt = f"찍은 때 {when} — {_w.shot_time(v.get('observed_at_source'))}" + (f" · {v.get('note')}" if v.get("note") else "")
+        items.append({"day": (v.get("observed_at") or "")[:10], "kind": v.get("kind") or "observation.video",
+                      "label": "사진" if is_img else "영상", "text": txt, "id": v.get("id"), "source": v.get("source"), "from_chat": False})
     items.sort(key=lambda x: (x["day"], x["id"] or ""), reverse=True)
     return items

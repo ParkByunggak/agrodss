@@ -140,3 +140,37 @@ def test_a_photo_is_called_a_photo_in_the_evidence_line():
 def test_the_file_name_rung_says_it_may_be_the_save_time():
     """[발행자 2026-09-24] *"파일명은 촬영 시각이 아니라 저장 시각일 수 있다"* — 라벨이 그 조건을 싣는다(조건 없는 값은 다른 사실이다)."""
     assert "저장" in words.shot_time("file_name") and "수 있" in words.shot_time("file_name")
+
+
+# ── 사진만 올리면 (발행자 화면 2026-09-24) ─────────────────────────────────────────
+def test_a_photo_only_upload_makes_no_draft_from_a_sentence_the_system_wrote():
+    """스크린샷: 사진 넉 장 → "[반입] img_… <경로>" 가 발화가 되고 → '본 것' 초안 → 확인 → 일지에 **경로 목록 한 줄**.
+    농가가 한 말이 아닌 문장을 분류한 것이다. 사진 자체가 1층 사실이므로 말이 없으면 초안을 만들지 않는다."""
+    from ingest import chat
+    recs = []
+    for i in range(2):
+        key = media.save_upload(f"KakaoTalk_20260923_074025068_0{i}.jpg", make_jpeg_with_exif(None) + bytes([i + 10]))
+        recs.append(media.register(key, SID, now=NOW))
+    m, r = chat.send(SID, "", media_refs=recs, today=date(2026, 9, 24), now=NOW)
+    assert m["text"] == "사진 2장" and m["drafts"] == []
+    assert "/" not in m["text"] and "img_" not in m["text"], "경로·id 가 발화 자리에 있다"
+    assert r and "받았습니다" in r["text"]
+
+
+def test_a_sentence_with_the_photo_is_still_classified():
+    """반대편 — 말이 **있으면** 그 말은 분류한다(사진은 곁들여진 것이다)."""
+    from ingest import chat
+    key = media.save_upload("KakaoTalk_20260923_074025068_09.jpg", make_jpeg_with_exif(None) + b"\x09")
+    rec = media.register(key, SID, now=NOW)
+    m, _ = chat.send(SID, "오늘 물 줬다", media_refs=[rec], today=date(2026, 9, 24), now=NOW)
+    assert m["drafts"] and m["drafts"][0]["kind"] == "event" and m["drafts"][0]["type"] == "관수"
+
+
+def test_the_diary_calls_a_photo_a_photo_and_shows_no_file_path():
+    """일지 줄이 '영상 · p001-…/20260923T074025_….jpg' 였다 — 농가가 읽을 줄이 아니다."""
+    from ingest import chat
+    key = media.save_upload("KakaoTalk_20260923_074025068_08.jpg", make_jpeg_with_exif(None) + b"\x08")
+    media.register(key, SID, now=NOW)
+    it = next(i for i in chat.diary(SID) if i["kind"] == "observation.image")
+    assert it["label"] == "사진" and "/" not in it["text"] and ".jpg" not in it["text"]
+    assert "찍은 때" in it["text"] and words.shot_time("file_name") in it["text"]

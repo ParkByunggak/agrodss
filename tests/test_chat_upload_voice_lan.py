@@ -74,7 +74,9 @@ def test_chat_send_with_media_refs_makes_message_and_reply():
     key = media.save_upload("a.jpg", make_jpeg_with_exif("2026:09:18 07:12:30"))
     rec = media.register(key, SID)
     m, r = chat.send(SID, "", media_refs=[rec], now=datetime(2026, 9, 19, tzinfo=timezone.utc))
-    assert m["input_mode"] == "file" and m["media_refs"] == [rec["id"]] and m["text"].startswith("[반입]")
+    # [발행자 화면 2026-09-24] 옛 판은 "[반입] img_… <경로>" 를 지어내 발화로 삼고 **그것을 분류해 '본 것' 초안**을 만들었다.
+    assert m["input_mode"] == "file" and m["media_refs"] == [rec["id"]] and m["text"] == "사진 1장"
+    assert m["drafts"] == [], "말이 없으면 초안을 만들지 않는다 — 시스템이 지어낸 문장을 분류하지 않는다"
     assert rec["id"] in r["text"]          # 받은 것을 말한다(문면은 사람 말로 바뀔 수 있다)
     m2, r2 = chat.send(SID, "잎 끝이 누렇게 보인다", media_refs=[rec], now=datetime(2026, 9, 19, tzinfo=timezone.utc))
     assert m2["drafts"][0]["kind"] == "observation.note" and rec["id"] in r2["text"]
