@@ -21,7 +21,7 @@ from typing import Any
 
 from ingest import events as ev
 from ingest import feedback as fb
-from ingest import media, subjects
+from ingest import dropped, media, subjects
 from schema import records as sch
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -554,6 +554,28 @@ def _with_stage(row: dict[str, Any]) -> str:
     return f"{task}(칸 {num})" if num.isdigit() else task
 
 
+def _capture_landed(subject_id: str, media_ids: list[str], today: date) -> str:
+    """[발행자 2026-09-24] *"촬영 칸으로 이어졌는지가 보이지 않습니다."* — 이어져 **있었다**(대조가 사진을 증거로 썼다).
+    화면이 그 말을 안 했을 뿐이다(G1 셋째 형태 — 흐르는데 표현 층이 침묵). 판정을 **여기서 다시 하지 않는다**:
+    같은 정본(`plan_vs_actual`)이 낸 줄을 읽어, 방금 받은 사진이 증거로 쓰인 촬영 줄만 말한다."""
+    from judge import run as judge_run          # 3층 봉투만 받는다(`answer` 와 같은 자리 · 같은 이유)
+
+    try:
+        env = next((e for e in judge_run.judgments_for(subject_id, today=today) if e.decision_id == "plan_vs_actual"), None)
+    except Exception as e:                       # 판정이 못 서도 반입 답은 나가야 한다 — 사유는 남긴다
+        dropped.note("촬영 대조", subject_id, f"{type(e).__name__}: {e}")
+        return ""
+    if env is None or env.kind != "판단함":
+        return ""
+    rows = [r for r in (env.result or {}).get("rows") or []
+            if r.get("kind") == "plan.capture" and any(mid and mid in (r.get("evidence") or "") for mid in media_ids)]
+    if not rows:
+        return ""
+    from frontend import words as _w             # '칸 3' → '3단계' — 사람 말은 4층 정본 하나가 정한다
+    said = _w.plain(" · ".join(_with_stage(r) for r in rows))
+    return f"이 사진으로 {said} 이(가) 한 것으로 잡혔습니다. "
+
+
 def summarize_envelope(e: Any, plain: bool = True) -> str:
     """판정 한 줄. `plain` 이면 **사람 말**로 옮긴다(4층 정본 `frontend.words`).
 
@@ -656,6 +678,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         media_line = "받았습니다 " + " · ".join(
             f"{r.get('id')}(찍은 때 {str(r.get('observed_at', ''))[:16]} — {_w.shot_time(r.get('observed_at_source'))})"
             for r in media_refs) + ". "
+        media_line += _capture_landed(subject_id, [r.get("id") for r in media_refs], today)
     if media_refs and not drafts:
         reply_text = media_line + "무엇을 했는지 함께 적으시면 그것도 같이 적어 둡니다."
     elif drafts and drafts[0]["kind"] == "question":

@@ -161,7 +161,8 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
                    if p["work_date"] <= (v.get("observed_at") or "")[:10] <= p["deadline_date"] and v.get("id") not in used_media]
             if hit:
                 used_media.add(hit[0].get("id"))
-                status, evidence = "이행", f"영상 {hit[0].get('id')} ({hit[0].get('observed_at', '')[:10]})"
+                what = "사진" if hit[0].get("kind") == media.KIND_IMAGE else "영상"      # 사진을 '영상' 이라 부르던 자리
+                status, evidence = "이행", f"{what} {hit[0].get('id')} ({hit[0].get('observed_at', '')[:10]})"
         else:
             m = _matched_event(p, evts, tol, d.params)
             if m:

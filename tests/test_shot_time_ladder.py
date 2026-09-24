@@ -32,15 +32,17 @@ NOW = datetime(2026, 9, 23, 7, 40, 25, tzinfo=timezone.utc)
 
 # ── 파일 이름 ──────────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("name, want", [
-    ("KakaoTalk_20260923_074025068_04.jpg", "2026-09-23T07:40:25+00:00"),   # 발행자가 실제로 올린 그 이름
-    ("IMG_20260920_161500.jpg", "2026-09-20T16:15:00+00:00"),               # 안드로이드 기본
-    ("VID_20260916_083012.mp4", "2026-09-16T08:30:12+00:00"),
-    ("PXL_20260919_073000123.jpg", "2026-09-19T07:30:00+00:00"),            # 픽셀 — 밀리초가 붙는다
-    ("Screenshot_20260918-121314.png", "2026-09-18T12:13:14+00:00"),
-    ("2026-09-18 12.30.00.jpg", "2026-09-18T12:30:00+00:00"),               # 맥·윈도우 저장 이름
-    ("20260917.jpg", "2026-09-17T00:00:00+00:00"),                          # 날짜만 — 시각은 0시
+    ("KakaoTalk_20260923_074025068_04.jpg", "2026-09-23T07:40:25+09:00"),   # 발행자가 실제로 올린 그 이름
+    ("IMG_20260920_161500.jpg", "2026-09-20T16:15:00+09:00"),               # 안드로이드 기본
+    ("VID_20260916_083012.mp4", "2026-09-16T08:30:12+09:00"),
+    ("PXL_20260919_073000123.jpg", "2026-09-19T07:30:00+09:00"),            # 픽셀 — 밀리초가 붙는다
+    ("Screenshot_20260918-121314.png", "2026-09-18T12:13:14+09:00"),
+    ("2026-09-18 12.30.00.jpg", "2026-09-18T12:30:00+09:00"),               # 맥·윈도우 저장 이름
+    ("20260917.jpg", "2026-09-17T00:00:00+09:00"),                          # 날짜만 — 시각은 0시
 ])
 def test_the_time_android_leaves_in_the_file_name_is_read(name, want):
+    """[발행자 실측 2026-09-24] 첫 판은 이 시각을 **UTC** 로 찍었다 — 휴대폰 파일명은 현지 시각이라 아홉 시간 어긋났다.
+    관문은 TZ=Asia/Seoul 로 돈다 — 그래서 기대값이 +09:00 이다(이 PC 의 시간대로 읽는다)."""
     assert media.time_from_name(name, T) == want
 
 
@@ -102,3 +104,39 @@ def test_the_reply_says_where_the_time_came_from():
     rec = media.register(key, SID, now=NOW)
     _, r = chat.send(SID, "", media_refs=[rec], today=T, now=NOW)
     assert words.shot_time("upload_time") in r["text"]
+
+
+# ── 칸으로 이어졌는지를 화면이 말한다 (발행자 2026-09-24) ─────────────────────────────
+def test_the_reply_says_which_capture_stage_the_photo_satisfied():
+    """*"촬영 칸으로 이어졌는지가 보이지 않습니다."* — 이어져 있었다(대조가 사진을 증거로 썼다). 화면이 침묵했을 뿐이다.
+    판정을 다시 하지 않고 같은 정본의 줄을 읽어 말한다 — 두 벌이면 언젠가 어긋난다."""
+    from ingest import chat
+    key = media.save_upload("KakaoTalk_20260923_074025068_01.jpg", make_jpeg_with_exif(None))
+    rec = media.register(key, SID, now=NOW)
+    _, r = chat.send(SID, "", media_refs=[rec], today=date(2026, 9, 24), now=NOW)
+    assert "촬영" in r["text"] and "한 것으로 잡혔습니다" in r["text"], r["text"]
+    assert "3단계" in r["text"], r["text"]                    # 9/23 은 칸 3 의 창(9/4~9/24) 안이다
+
+
+def test_a_photo_outside_every_capture_window_does_not_claim_a_stage():
+    """반대편 — 아무 창에도 안 드는 사진은 어느 칸도 잡았다고 말하지 않는다(있음을 세면 뚫린다)."""
+    from ingest import chat
+    key = media.save_upload("IMG_20260801_101010.jpg", make_jpeg_with_exif(None))
+    rec = media.register(key, SID, now=NOW)                   # 기준점(8/25) 이전 — 소급 촬영은 증거가 아니다
+    _, r = chat.send(SID, "", media_refs=[rec], today=date(2026, 9, 24), now=NOW)
+    assert "잡혔습니다" not in r["text"], r["text"]
+
+
+def test_a_photo_is_called_a_photo_in_the_evidence_line():
+    """사진을 '영상' 이라 부르던 자리 — 사람이 보는 줄이다."""
+    from judge import run as judge_run
+    key = media.save_upload("KakaoTalk_20260923_074025068_02.jpg", make_jpeg_with_exif(None) + b"\x02")
+    media.register(key, SID, now=NOW)
+    env = next(e for e in judge_run.judgments_for(SID, today=date(2026, 9, 24)) if e.decision_id == "plan_vs_actual")
+    row = next(r for r in env.result["rows"] if r["kind"] == "plan.capture" and r["status"] == "이행")
+    assert row["evidence"].startswith("사진 ")
+
+
+def test_the_file_name_rung_says_it_may_be_the_save_time():
+    """[발행자 2026-09-24] *"파일명은 촬영 시각이 아니라 저장 시각일 수 있다"* — 라벨이 그 조건을 싣는다(조건 없는 값은 다른 사실이다)."""
+    assert "저장" in words.shot_time("file_name") and "수 있" in words.shot_time("file_name")

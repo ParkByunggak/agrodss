@@ -399,7 +399,9 @@ def time_from_name(name: str, today: date | None = None) -> str | None:
         for m in rx.finditer(name):
             y, mo, d, hh, mm, ss = (g or "" for g in m.groups())
             try:
-                when = datetime(int(y), int(mo), int(d), int(hh or 0), int(mm or 0), int(ss or 0), tzinfo=timezone.utc)
+                # [발행자 실측 2026-09-24] 첫 판은 이 시각을 **UTC** 로 찍었다 — 휴대폰 파일명은 **현지 시각**이라 아홉 시간 어긋난다.
+                # 이 PC 의 시간대로 읽는다(휴대폰과 PC 가 같은 곳에 있다는 가정 — 그 가정도 라벨에 적힌다).
+                when = datetime(int(y), int(mo), int(d), int(hh or 0), int(mm or 0), int(ss or 0), tzinfo=datetime.now().astimezone().tzinfo)
             except ValueError:
                 continue                       # 20261332 같은 것 — 날짜가 아니다
             if when.date() > today:
