@@ -25,8 +25,26 @@ def default_parcel() -> str | None:
 
 
 def path() -> Path:
-    """호출 시점에 푼다 — 기본 인자·모듈 상수에 묶으면 격리가 안 닿는다(R-4 실측: 운영 등록부에 33줄 오염)."""
-    return media.subjects_path()
+    """**쓰기 대상 = 덮개**(git 밖). 호출 시점에 푼다 — 기본 인자·모듈 상수에 묶으면 격리가 안 닿는다(R-4 실측: 운영 등록부에 33줄 오염).
+    [U-24 2026-09-26] 전에는 추적 파일(씨앗)에 바로 썼다 — 발행자 pull 을 멈추는 형태. 씨앗은 `media.subjects_path()` 로 읽기만 한다."""
+    return media.subjects_local_path()
+
+
+def _upsert(rec: dict[str, Any]) -> None:
+    """덮개에만 쓴다 — 같은 id 가 덮개에 있으면 바꾸고 없으면 덧붙인다. 씨앗(추적 파일)은 사람이 커밋으로만 고친다(U-24)."""
+    p = path()
+    doc = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {
+        "_note": "재배 단위 덮개 — 이 PC 에서 런타임이 쓴 것(작목 추가 · 기준점 · 상태). git 밖. 같은 id 는 씨앗(subjects.json)을 덮는다.",
+        "subjects": []}
+    rows = doc.setdefault("subjects", [])
+    for i, r in enumerate(rows):
+        if r.get("id") == rec["id"]:
+            rows[i] = rec
+            break
+    else:
+        rows.append(rec)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 class SubjectError(ValueError):
@@ -78,7 +96,6 @@ def _slug(s: str) -> str:
 def add(crop: str, season: str, status: str = "계획", parcel: str | None = None, anchor: str | None = None,
         anchor_kind: str | None = None, cert: str | None = None, source: str = "farmer", note: str = "",
         now: datetime | None = None) -> dict[str, Any]:
-    p = path()
     parcel = (parcel or "").strip() or default_parcel()
     if not parcel:
         raise SubjectError("필지를 지정한다 — 등록된 필지가 하나가 아니라 기본값을 두지 않는다(fallback 대표값 금지)")
@@ -109,23 +126,20 @@ def add(crop: str, season: str, status: str = "계획", parcel: str | None = Non
     if note:
         rec["note"] = note[:300]
     sch.validate(rec, kind="subject")
-    data = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"subjects": []}
-    data.setdefault("subjects", []).append(rec)
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _upsert(rec)
     return rec
 
 
 def set_anchor(sid: str, anchor: str, anchor_kind: str = "파종") -> dict[str, Any]:
     """계획이던 목록이 파종되면 기준점을 넣고 '재배 중'으로 — 파종 사건 확인 시 채팅이 부른다."""
-    p = path()
-    data = json.loads(p.read_text(encoding="utf-8"))
-    for s in data.get("subjects", []):
-        if s["id"] == sid:
-            s["anchor"], s["anchor_kind"], s["status"] = anchor[:10], anchor_kind, "재배 중"
-            sch.validate(s, kind="subject")
-            p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            return s
-    raise SubjectError(f"없는 재배 단위: {sid}")
+    s = by_id(sid)                      # 씨앗 + 덮개에서 찾고, 바뀐 전체 레코드를 덮개에 둔다(덮개가 이긴다)
+    if s is None:
+        raise SubjectError(f"없는 재배 단위: {sid}")
+    s = dict(s)
+    s["anchor"], s["anchor_kind"], s["status"] = anchor[:10], anchor_kind, "재배 중"
+    sch.validate(s, kind="subject")
+    _upsert(s)
+    return s
 
 
 def set_status(sid: str, status: str, ended_at: str | None = None) -> dict[str, Any]:
@@ -135,16 +149,15 @@ def set_status(sid: str, status: str, ended_at: str | None = None) -> dict[str, 
         raise SubjectError(f"상태는 {' · '.join(sch.SUBJECT_STATUS)} 중 하나")
     if status == "종료" and not ended_at:
         raise SubjectError("종료에는 종료일(YYYY-MM-DD)이 있어야 한다 — 그날 뒤 계획을 놓침으로 세지 않기 위해")
-    p = path()
-    data = json.loads(p.read_text(encoding="utf-8"))
-    for s in data.get("subjects", []):
-        if s["id"] == sid:
-            s["status"] = status
-            if status == "종료":
-                s["ended_at"] = str(ended_at)[:10]
-            else:
-                s.pop("ended_at", None)
-            sch.validate(s, kind="subject")
-            p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            return s
-    raise SubjectError(f"없는 재배 단위: {sid}")
+    s = by_id(sid)
+    if s is None:
+        raise SubjectError(f"없는 재배 단위: {sid}")
+    s = dict(s)
+    s["status"] = status
+    if status == "종료":
+        s["ended_at"] = str(ended_at)[:10]
+    else:
+        s.pop("ended_at", None)
+    sch.validate(s, kind="subject")
+    _upsert(s)
+    return s

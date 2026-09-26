@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # 추적하면서 런타임도 쓰는 파일 — 사유를 적는다. 늘리려면 "왜 정본이면서 운영 상태인가" 를 여기 한 줄로 답한다.
 TRACKED_ON_PURPOSE = {
-    "data/subjects.json": "재배 단위 등록부 — 씨앗이자 운영 상태. 두 겹으로 가르는 것은 회수 대기(U-24)",
+    # data/subjects.json 은 [U-24 2026-09-26] 두 겹으로 갈라 여기서 뺐다 — 런타임은 data/subjects_local.json(git 밖)에만 쓴다
     "data/crop_names.csv": "작목 이름 정본 — 승인(U-14)이 한 줄 붙인다. 사람의 명시적 행위라 드물다",
     "data/organic/organic_materials_public.json": "공시자재 정본 — 갱신 작업이 통째로 바꾼다. 사람이 돌린다",
     "docs/crop_names.md": "정본 CSV 의 렌더 — 승인 때 다시 그린다",
@@ -45,7 +45,7 @@ WRITE_ACCESSORS = {
     "ingest.chat": ("chat_dir", "index_path"),
     "ingest.events": ("events_dir", "index_path"),
     "ingest.feedback": ("feedback_dir", "index_path"),
-    "ingest.media": ("media_dir", "inbox_dir", "index_path", "seen_path"),
+    "ingest.media": ("media_dir", "inbox_dir", "index_path", "seen_path", "subjects_local_path"),   # 덮개 — subjects.py 가 여기 쓴다(U-24)
     "ingest.organic_materials": ("data_path",),
     "ingest.parcels": ("local_path",),
     "ingest.profile": ("path",),

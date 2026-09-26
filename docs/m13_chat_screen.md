@@ -13,7 +13,7 @@
 ## 1. 화면 (`frontend/chat_pages.py` · `frontend/serve.py`)
 
 ```
-왼쪽   채팅 목록 = 재배 단위(data/subjects.json)   상태 pill(계획 / 재배 중) · 기준점 후 N일
+왼쪽   채팅 목록 = 재배 단위(씨앗 data/subjects.json + 덮개 data/subjects_local.json — U-24)   상태 pill(계획 / 재배 중) · 기준점 후 N일
        ＋ 새 채팅 → 작목 · 작기 · 상태 · 기준점(선택) · 인증(선택) · 필지
        화면(개선 · 판단 · 영상 · 사건) · 문서 목차
 가운데 대화 — 내 발화(오른쪽 말풍선) · 시스템 답(왼쪽) · 발화 아래 **초안 카드**(확인 → 원장)

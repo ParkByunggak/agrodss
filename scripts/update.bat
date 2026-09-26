@@ -15,9 +15,10 @@ REM U-18: the old registry file data\parcels.json was tracked and runtime writes
 REM "commit or stash". Its values live in data\parcels_local.json (git-ignored) now, so discarding that one edit loses
 REM nothing. Nothing else is DISCARDED - this file never throws your work away.
 REM
-REM [swept 2026-09-21] parcels.json was not the only file of that shape. Three tracked files under data\ are still
-REM written while the app runs - subjects.json (adding a crop, changing its status), crop_names.csv (approving a name)
-REM and organic\organic_materials_public.json (refreshing the materials canon). If one of those is edited here AND the
+REM [swept 2026-09-21] parcels.json was not the only file of that shape. Tracked files under data\ that are still
+REM written while the app runs: crop_names.csv (approving a name) and organic\organic_materials_public.json (refreshing
+REM the materials canon). [U-24 2026-09-26] subjects.json left this list - runtime writes now go to
+REM data\subjects_local.json (git-ignored), the seed file is only changed by commits. If one of those is edited here AND the
 REM pull carries a change to the same file, git stops with "commit or stash" and you are stuck on old code again -
 REM which is exactly the days-long stall this script exists to end. So before pulling, any locally edited tracked file
 REM under data\ is COPIED to data\_local_backup\ (git-ignored) and then restored, and this window says which ones.

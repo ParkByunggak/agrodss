@@ -149,7 +149,10 @@ def test_registry_writes_never_touch_operating_file(reg):
     subjects.add("배추", "2026 가을", status="계획", now=NOW)
     subjects.set_anchor("p001-배추-2026가을", "2026-09-15")
     assert media.SUBJECTS_PATH.read_bytes() == before
-    assert json.loads(reg.read_text(encoding="utf-8"))["subjects"][-1]["status"] == "재배 중"
+    # [U-24 2026-09-26] 쓰기는 덮개(subjects.path())로 간다 — 씨앗 사본(reg)도 그대로다. 읽으면 합쳐져 보인다
+    assert json.loads(reg.read_text(encoding="utf-8")) == json.loads(media.SUBJECTS_PATH.read_text(encoding="utf-8"))
+    assert json.loads(subjects.path().read_text(encoding="utf-8"))["subjects"][-1]["status"] == "재배 중"
+    assert subjects.by_id("p001-배추-2026가을")["status"] == "재배 중"
 
 
 def test_ambiguous_name_asks(reg):

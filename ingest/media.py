@@ -73,16 +73,40 @@ WATCH_LIST_LIMIT = 50
 
 
 # ── 재배 단위(subject) 등록부 ────────────────────────────────────────────────────
+# [U-24 2026-09-26] 등록부는 **두 겹**이다 — 필지 등록부(U-18)와 같은 형태. 추적 파일 `data/subjects.json` 은 사람이 커밋으로만
+# 고치는 **씨앗**, 런타임이 쓰는 것(작목 추가 · 기준점 · 상태 변경)은 gitignore 된 **덮개** `data/subjects_local.json` 에만.
+# 읽을 때 덮개가 씨앗을 id 로 덮고(자리는 씨앗 순서), 쓸 때는 덮개에만 쓴다. 왜: 추적 파일에 런타임이 쓰면 upstream 이 같은
+# 파일을 건드리는 순간 발행자 PC 의 pull 이 "commit or stash" 로 멈춘다(U-18 실측 — 며칠치 옛 코드가 돌았다).
+SUBJECTS_LOCAL_PATH = ROOT / "data" / "subjects_local.json"
+
+
 def subjects_path() -> Path:
-    """등록부 경로 — AGRODSS_SUBJECTS_PATH 로 바꿀 수 있다(테스트는 tmp 사본 — conftest). 호출 시점에 푼다(기본 인자에 묶지 않는다)."""
+    """씨앗(추적 파일) 경로 — 읽기만. AGRODSS_SUBJECTS_PATH 로 바꿀 수 있다(테스트는 tmp 사본 — conftest). 호출 시점에 푼다(기본 인자에 묶지 않는다)."""
     return Path(os.environ.get("AGRODSS_SUBJECTS_PATH") or SUBJECTS_PATH)
 
 
-def load_subjects(path: Path | None = None) -> list[dict[str, Any]]:
-    path = path or subjects_path()
+def subjects_local_path() -> Path:
+    """덮개(git 밖) 경로 — 런타임 쓰기는 전부 여기. AGRODSS_SUBJECTS_LOCAL_PATH 로 격리한다(R-4 — 호출 시점)."""
+    return Path(os.environ.get("AGRODSS_SUBJECTS_LOCAL_PATH") or SUBJECTS_LOCAL_PATH)
+
+
+def _subject_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    return [sch.validate(s, kind="subject") for s in json.loads(path.read_text(encoding="utf-8")).get("subjects", [])]
+    return list(json.loads(path.read_text(encoding="utf-8")).get("subjects", []))
+
+
+def load_subjects(path: Path | None = None) -> list[dict[str, Any]]:
+    """씨앗 + 덮개. 같은 id 는 덮개가 이기되 **씨앗의 자리**를 지킨다(목록 순서가 바뀌지 않는다). 덮개에만 있는 것은 뒤에 붙는다."""
+    rows = _subject_rows(path or subjects_path())
+    idx = {s.get("id"): i for i, s in enumerate(rows)}
+    for s in _subject_rows(subjects_local_path()):
+        if s.get("id") in idx:
+            rows[idx[s["id"]]] = s
+        else:
+            idx[s.get("id")] = len(rows)
+            rows.append(s)
+    return [sch.validate(s, kind="subject") for s in rows]
 
 
 def subject_ids() -> set[str]:
