@@ -95,7 +95,8 @@ def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv, mo
     st, _, body = _get(srv, "/judge")
     assert st == 200 and "<h2>웃거름 1회 " in body and "top_dressing_1" not in body
     assert "사유 기록됨 — 작업일 2026-09-16 · 마감 2026-09-24" in body and "· 사유: 쪽파 포장에는 웃거름 주지 않고" in body
-    assert "<h2>병해충 경보(칸 3) " in body and "<h2>배수 경보(칸 4) " in body
+    # [U-26 2026-09-26] /judge 도 사람 말로 낸다(칸 3 → 3단계) — 기대 문면을 낱말 정본에서 받는다(문면을 박으면 맞는 고침이 검사를 깨뜨린다)
+    assert f"<h2>{words.plain('병해충 경보(칸 3)')} " in body and f"<h2>{words.plain('배수 경보(칸 4)')} " in body
     assert "사건 예찰 2026-09-08" in body and "이행 <b>2</b>" in body                  # 3c 의 예찰 한 줄이 계획 대 실제의 이행이 됐다
     # [발행자 화면 판독 2026-09-21] 같은 이름 작업(촬영)이 여러 칸에 있으면 답이 **칸을 말해야** 구별된다 —
     # 칸이 없어서 발행자가 "칸 1 촬영이 놓침(B13 회귀)"으로 읽었는데 실제로는 칸 1 은 기록 없음, 놓침은 칸 2 였다.
@@ -107,7 +108,7 @@ def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv, mo
     # 4b. 처방 정본이 있으면 웃거름 카드가 **양**을 낸다(추비 N·K, kg/10a) — 발행자 2회차 live_check 뒤 화면에서 보라고 한 그 값
     assert "양 추비 N 7.6" in body and "K₂O 5.5" in body and "정본 대기" not in body[body.index("<h2>웃거름 1회 "):body.index("<h2>웃거름 2회")]
     assert f"오늘이 {TODAY} 로 고정돼 있다" in body                                     # 고정은 화면이 말한다(잊힌 고정 방지)
-    assert "기준점 후 25일" in body                                                     # 판정 자체가 고정된 오늘로 났다(실제 날짜면 26일 이상)
+    assert words.plain("기준점 후 25일") in body                                        # 판정 자체가 고정된 오늘로 났다(실제 날짜면 26일 이상) — 문면은 정본에서
     st, _, body = _get(srv, f"/c/{quote(SID)}")
     assert body.count(chat.SAVED_LABEL) >= 2 and _confirm_buttons(chat.CONFIRM_LABEL) not in body
     # 5. 영농일지에 불이행 사유 줄 · 변경 로그에 실행 중 = HEAD

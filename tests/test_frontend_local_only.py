@@ -143,7 +143,10 @@ def test_judge_page_shows_kind_first(monkeypatch):
         from ingest import media as _media
         _subj = [s for s in _media.load_subjects() if s["id"] == "p001-jjokpa-2026f"][0]
         _r = _H.judge(_subj, today=date(2026, 9, 19)).result
-        assert "판단함" in page and f"수확 창 {_r['window_start']} ~ {_r['window_end']}" in page and "신뢰 등급" in page
+        # [U-26 2026-09-26] 화면은 사람 말로 낸다 — 기대 문면도 낱말 정본(`frontend.words`)에서 받는다. 종류는 title 에 그대로 남는다.
+        from frontend import words as _W
+        assert 'title="판단함"' in page and _W.said("판단함") in page
+        assert _W.plain(f"수확 창 {_r['window_start']} ~ {_r['window_end']}") in page and _W.plain("신뢰 등급") in page
         assert "위험 경보" in page and "회복 가능 위험" in page      # M-10 ② 도 같은 화면에
         assert "사실 인용" in page and "공시" in page                 # M-15 ④ 자재 인용
         assert "계획 대 실제" in page and "이행" in page              # M-10 ③

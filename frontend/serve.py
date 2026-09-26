@@ -126,12 +126,13 @@ def doc_list() -> list[str]:
 def nav_html(current: str) -> str:
     parts = [chat_pages.BRAND_HTML, '<div class="grp">판단</div>']     # [발행자 2026-09-19] AGRODSS 홈 탭은 표 화면에도 있다
     cls = ' class="on"' if current == "/judge" else ""
-    parts.append(f'<a href="/judge"{cls}>수확 시기 · 위험 경보 (M-10)</a>')
+    # [U-26 2026-09-26] 표 화면 메뉴도 농가가 지나는 길이다 — 대장 번호(M-10 · I-7 · I-3)와 안쪽 말(불이행)을 뺀다
+    parts.append(f'<a href="/judge"{cls}>수확 시기 · 위험 경보</a>')
     parts.append('<div class="grp">입력</div>')
     cls = ' class="on"' if current == "/media" else ""
-    parts.append(f'<a href="/media"{cls}>영상 반입 (I-7)</a>')
+    parts.append(f'<a href="/media"{cls}>사진 · 영상 반입</a>')
     cls = ' class="on"' if current == "/events" else ""
-    parts.append(f'<a href="/events"{cls}>사건 · 불이행 사유 (I-3)</a>')
+    parts.append(f'<a href="/events"{cls}>밭일 · 못 한 이유</a>')
     parts.append('<div class="grp">문서</div>')
     for name in doc_list():
         cls = ' class="on"' if name == current else ""
@@ -154,12 +155,16 @@ LEVEL_CLASS = {"경보": "폐기", "주의": "진행", "예고": "대기"}
 
 
 def _render_env(out: list[str], e: dict, title: str) -> None:
-    badge = f'<span class="st st-{KIND_CLASS.get(e["kind"], "대기")}">{_e(e["kind"])}</span>'
+    # [U-26 2026-09-26] 발행자가 *"확인하실 곳은 /judge 의 계획 대 실제"* 라고 이 화면으로 갔다 — 들여다보는 화면이라고
+    # 미뤄 둔 것이 틀렸다. 종류·등급·자료 이름은 사람 말로 내되 **정확한 이름은 title 에 남긴다**(채팅 카드와 같은 형태).
+    # 이 함수가 내는 글자는 전부 시스템 문장이다(농가가 쓴 글은 여기 안 실린다) — 그래서 말미에 낱말 표를 한 번 댄다.
+    start = len(out)
+    badge = f'<span class="st st-{KIND_CLASS.get(e["kind"], "대기")}" title="{_e(e["kind"])}">{_e(words.said(e["kind"]))}</span>'
     out.append(f"<h2>{_e(title)} {badge}</h2>")
     r = e["result"]
     if e["kind"] == "판단함" and e["decision_id"] == "risk_alert":
         out.append(f"<p>기준점 후 {r['days_since_anchor']}일 · 보는 칸: {_e(' / '.join(r['stages']))} · {r['horizon_days']}일 앞까지 · "
-                   f"신뢰 등급 <b>{_e(e['grade'])}</b> · 재판정 {_e(e['revisit_at'])}</p>")
+                   f"근거 <b>{_e(words.grade(e['grade']))}</b> · 재판정 {_e(e['revisit_at'])}</p>")
         if r["alerts"]:
             out.append("<table><tr><th>수준</th><th>위험</th><th>칸</th><th>회복</th><th>근거</th></tr>" + "".join(
                 f'<tr><td><span class="st st-{LEVEL_CLASS.get(a["level"], "대기")}">{_e(a["level"])}</span></td><td><b>{_e(a["risk"])}</b></td>'
@@ -169,7 +174,7 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         out.append(f"<p class=\"meta\">회복 가능 위험 {r['watched_recoverable']}건은 신호가 임계를 넘을 때만 나온다(확률 충분할 때만).</p>")
     elif e["kind"] == "판단함" and e["decision_id"] == "harvest_timing":
         out.append(f"<p><b>수확 창 {_e(r['window_start'])} ~ {_e(r['window_end'])}</b> (중심 {_e(r['center'])}, ±{r['error_days']}일) · "
-                   f"신뢰 등급 <b>{_e(e['grade'])}</b> · 기준점 후 {r['days_since_anchor']}일 · {_e(r['position'])} · 재판정 {_e(e['revisit_at'])}</p>")
+                   f"근거 <b>{_e(words.grade(e['grade']))}</b> · 기준점 후 {r['days_since_anchor']}일 · {_e(r['position'])} · 재판정 {_e(e['revisit_at'])}</p>")
         out.append(f"<p class=\"meta\">근거: {_e(r['basis'])} · {_e(r['final_say'])}</p>")
         if e["caps"]:
             out.append("<ul>" + "".join(f"<li><b>상한 제약</b> {_e(c['name'])} — {_e(c['basis'])}</li>" for c in e["caps"]) + "</ul>")
@@ -206,11 +211,11 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
                 out.append(f"<p><b>{_e(head)}</b>{proxy} — <span class=\"st st-보류\">{_e(g['status'])}</span> {_e(g.get('note') or '')}</p>")
         out.append(f"<p class=\"meta\">{_e(c['note'])}</p>")
     elif e["kind"] == "판단 불가(데이터)":
-        out.append("<ul>" + "".join(f"<li>없는 축 <code>{_e(m['axis'])}</code> — 채울 수 있는 자: {_e(m['who_can_fill'])}</li>" for m in e["missing"]) + "</ul>")
+        out.append("<ul>" + "".join(f'<li>없는 자료 <b title="{_e(m["axis"])}">{_e(words.axis(m["axis"]))}</b> — 채울 수 있는 사람: {_e(m["who_can_fill"])}</li>' for m in e["missing"]) + "</ul>")
     elif e["kind"] == "판단함" and r.get("summary"):
         # [2026-09-20 실측 — 표현 층 왜곡] M-10 단계 결정(웃거름 · 병해충 · 배수)의 '판단함' 봉투가 이 화면에서 배지와 입력 축 표만 보였다 —
         # 요약(상태 · 작업일 · 양 · 사유 · 경보)이 result 에 있는데 화면이 안 실었다. 발행자에게 "/judge 에서 양을 보라"고 해 놓고 화면엔 없었다
-        out.append(f"<p><b>{_e(r['summary'])}</b> · 신뢰 등급 <b>{_e(e['grade'])}</b> · 재판정 {_e(e['revisit_at'])}</p>")
+        out.append(f"<p><b>{_e(r['summary'])}</b> · 근거 <b>{_e(words.grade(e['grade']))}</b> · 재판정 {_e(e['revisit_at'])}</p>")
         if r.get("alerts"):
             out.append("<table><tr><th>수준</th><th>위험</th><th>칸</th><th>회복</th><th>근거</th></tr>" + "".join(
                 f'<tr><td><span class="st st-{LEVEL_CLASS.get(a["level"], "대기")}">{_e(a["level"])}</span></td><td><b>{_e(a["risk"])}</b></td>'
@@ -218,15 +223,18 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
     else:
         out.append(f"<p>{_e(r.get('why', ''))} {_e(r.get('who', ''))}</p>")
     if e["inputs"]:
-        out.append("<table><tr><th>쓴 축</th><th>관측 시각</th><th>출처</th><th>해상도</th><th>등급</th></tr>" +
-                   "".join(f"<tr><td>{_e(i['axis'])}</td><td>{_e(i['observed_at'])}</td><td>{_e(i['source'])}</td><td>{_e(i['resolution'])}</td><td>{_e(i['grade'])}</td></tr>" for i in e["inputs"]) + "</table>")
+        out.append("<table><tr><th>본 자료</th><th>잰 때</th><th>출처</th><th>해상도</th><th>근거</th></tr>" +
+                   "".join(f'<tr><td title="{_e(i["axis"])}">{_e(words.axis(i["axis"]))}</td><td>{_e(i["observed_at"])}</td><td>{_e(i["source"])}</td>'
+                           f'<td>{_e(i["resolution"])}</td><td>{_e(words.grade(i["grade"]))}</td></tr>' for i in e["inputs"]) + "</table>")
     if e["notes"]:
         out.append("<ul>" + "".join(f"<li class=\"meta\">{_e(n)}</li>" for n in e["notes"]) + "</ul>")
+    # 이 판단 블록이 낸 시스템 문장 전부에 사람 말 표를 댄다(기준점 → 심은 날 · 재판정 → 다시 보는 날 · 칸 N → N단계).
+    out[start:] = [words.plain(x) for x in out[start:]]
 
 
 def judge_page() -> tuple[int, str]:
-    out = ["<h1>판단 — 3층 산출 봉투</h1>",
-           "<p class=\"meta\">화면은 봉투만 받는다(4층). 종류(kind)가 먼저 보이고, 값은 그 다음이다. 소비자 노출은 D-2 전까지 전부 아니오.</p>"]
+    out = ["<h1>판단 — 무엇을 어떻게 봤는가</h1>",
+           "<p class=\"meta\">밭마다 판단이 어떻게 보이는지가 먼저 나오고, 무슨 자료를 봤는지가 그 다음입니다. 정확한 이름은 글자 위에 마우스를 올리면 보입니다.</p>"]
     if config.today_frozen():
         out.append(f'<p class="err"><b>오늘이 {_e(config.today_frozen())} 로 고정돼 있다</b> ({config.TODAY_ENV} — 검사·재현용. 운영이면 .env 에서 지운다)</p>')
     for s, envs, info in judge_run.all_judgments(config.today()):
@@ -237,9 +245,9 @@ def judge_page() -> tuple[int, str]:
             # 사본이 먼저 걸리니 정본을 고쳐도 이 화면만 안 바뀐다(정본 역전). 그리고 실제로 어긋나 있었다: 사본의
             # "자재 인용(유기 공시)" 는 PSIS(관행 등록약제)가 붙기 전 이름이라, 관행 인용까지 싣는 지금은 틀린 말이다.
             _render_env(out, e, chat_pages.DECISION_LABEL.get(e["decision_id"], e["decision_id"]))
-        out.append(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 예찰: {_e(info.get('pest', ''))}</p>")
+        out.append(words.plain(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 예찰: {_e(info.get('pest', ''))}</p>"))    # 3층 사유 문장 — 사람 말로만 옮긴다
     footer = footer_text()
-    return 200, render.page("AGRODSS —판단", nav_html("/judge"), "".join(out), "3층 산출 — I-1 봉투 8종 중 하나", footer)
+    return 200, render.page("AGRODSS —판단", nav_html("/judge"), "".join(out), "판단은 여덟 가지 말 중 하나로 답합니다", footer)
 
 
 def events_page(message: str = "", error: str = "") -> tuple[int, str]:

@@ -29,7 +29,9 @@ from judge import envelope as env
 JARGON = ("원장", "초안", "서술문", "봉투", "격자", "재배 단위", "판단 불가", "해당 없음", "예측 불가",
           "답하지 않음", "사실 인용", "선택지+대가", "상한 제약", "대장", "래칫", "정본",
           "불이행", "개선 요구", "작기 종료", "스키마", "레코드", "분류", "기준점", "미확인")
-FARMER_PAGES = ("/c/{sid}", "/diary/{sid}", "/me")
+# [U-26 회수 2026-09-26] /judge 를 더한다 — 발행자가 *"확인하실 곳은 /judge 의 계획 대 실제"* 라고 스스로 그 화면으로
+# 갔다. 들여다보는 화면이라고 미뤄 둔 것이 틀렸다: 농가가 답을 찾으러 가는 곳이면 농가 화면이다.
+FARMER_PAGES = ("/c/{sid}", "/diary/{sid}", "/me", "/judge")
 TODAY = "2026-09-19"      # 화면의 오늘을 고정 — 실제 날짜로 걸으면 창 밖이 되어 문장이 달라진다(시점 축)
 
 
@@ -112,3 +114,31 @@ def test_the_kind_word_survives_a_round_trip_through_the_summary():
     said = chat.summarize_envelope(e)
     assert words.said("해당 없음") in said and "해당 없음" not in said
     assert chat.summarize_envelope(e, plain=False).startswith("[해당 없음]")
+
+
+def test_judge_names_the_data_it_used_in_plain_words_and_keeps_the_ids(srv):
+    """[U-26] 쓴 자료 표가 `anchor` · `soil_chem` 같은 안쪽 id 를 냈다. 사람 말로 내되 id 는 title 에 남긴다."""
+    status, body = _get(srv, "/judge")
+    assert status == 200
+    seen = _visible(body)
+    assert words.axis("anchor") in seen, "쓴 자료가 사람 말로 안 나온다"
+    assert 'title="anchor"' in body, "정확한 id 가 어디에도 안 남았다"
+    # [주입 D 가 드러낸 겹침 2026-09-26 · §7.1 4번] 표에서 'anchor' 가 빠지면 `words.axis` 는 id 를 그대로 돌려주고, 그 id 가
+    # 화면에도 있어 위 검사가 통과했다 — 기대 문자열이 원 결함 문면과 같았다. 그래서 **id 자체가 안 보이는가**를 따로 본다.
+    for raw in ("anchor", "soil_chem", "pest_regional"):
+        assert raw not in seen, f"안쪽 id '{raw}' 가 화면에 그대로 나온다"
+
+
+def test_every_axis_the_judgement_can_use_has_a_plain_word():
+    """자료(축) 정본은 `grid.schema.AXES` 다 — 축이 늘면 사람 말도 함께 는다(봉투 종류 검사와 같은 형태)."""
+    from grid import schema as grid_schema
+    missing = sorted(a for a in grid_schema.AXES if a not in words.AXIS_SAID)
+    assert missing == [], f"사람 말이 없는 자료: {missing}"
+    for a, said in words.AXIS_SAID.items():
+        assert a not in said and said.strip(), f"{a}: 사람 말이 id 를 담고 있다 — {said}"
+
+
+def test_judge_badge_is_the_plain_kind_with_the_exact_kind_kept(srv):
+    _, body = _get(srv, "/judge")
+    assert words.said("판단함") in _visible(body)
+    assert 'title="판단함"' in body or 'title="해당 없음"' in body
