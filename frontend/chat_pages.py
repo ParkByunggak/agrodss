@@ -58,7 +58,7 @@ aside.side { background:var(--side); border-right:1px solid var(--line); padding
 .side .lnk { display:block; padding:5px 10px; font-size:13px; color:var(--muted); text-decoration:none; } .side .lnk:hover { color:var(--fg); }
 aside.side { display:flex; flex-direction:column; }
 """ + render.USER_MENU_CSS + """
-main.thread { display:flex; flex-direction:column; min-height:100vh; }
+main.thread { display:flex; flex-direction:column; min-height:100vh; min-width:0; }   /* [U-34] 그리드 항목의 min-width:auto 가 안쪽 폼 폭(size=60)에 밀려 화면을 넘겼다(390px 실측: 개선 화면 832 · 내 정보 475) */
 .thead { position:sticky; top:0; background:var(--bg); border-bottom:1px solid var(--line); padding:12px 24px; display:flex; justify-content:space-between; align-items:center; z-index:2; }
 .thead h1 { font-size:16px; margin:0; font-weight:600; } .thead .meta { color:var(--muted); font-size:12px; }
 .thead a { font-size:13px; color:var(--muted); margin-left:12px; }
@@ -111,9 +111,13 @@ aside.panel { border-left:1px solid var(--line); background:var(--panel); paddin
 .form label { display:block; margin:10px 0 4px; font-size:13px; color:var(--muted); }
 .form input, .form select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; }
 .err { color:var(--err-fg); background:var(--err); padding:8px 12px; border-radius:8px; margin:10px 0; } .ok { color:var(--ok-fg); background:var(--ok); padding:8px 12px; border-radius:8px; margin:10px 0; }
+.msgs code { overflow-wrap:anywhere; }   /* [U-34] 긴 code(경로 · 명령)가 줄을 안 바꿔 390px 에서 넘쳤다(내 정보 446 · 개선 화면 494 실측) — 주석에 화면 경로를 적지 않는다(검사 문자열과 겹친다 · §7.1 4번) */
 table.tb { border-collapse:collapse; width:100%; font-size:13px; } .tb th, .tb td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; } .tb th { color:var(--muted); font-weight:500; }
 @media (max-width:1100px) { .app { grid-template-columns:220px 1fr; } aside.panel { display:none; } .composer { right:0; left:220px; } }
 @media (max-width:720px) { .app { grid-template-columns:1fr; } aside.side { position:static; height:auto; } .composer { left:0; } .msgs { padding-inline:16px; } }
+/* [U-34 2026-09-26 · 실제 브라우저 390px 실측] 좁은 화면에서 넘치던 것 — 폼 입력칸(size=40·60) · 표 · 긴 머리글. 폭은 화면이 정하고 표는 제자리에서 옆으로 민다 */
+.msgs { min-width:0; } .msgs input, .msgs select, .msgs textarea { max-width:100%; box-sizing:border-box; } .msgs form { max-width:100%; }   /* 폭 전부 — 768px 에서도 size=60 이 넘쳤다(실측 811) */
+@media (max-width:720px) { table.tb { display:block; overflow-x:auto; } .thead { flex-wrap:wrap; gap:6px; } .thead h1 { overflow-wrap:anywhere; } }
 """
 
 
@@ -135,7 +139,7 @@ def shell(title: str, side: str, main: str, panel: str | None, footer: str) -> s
     """
     cols = "" if panel is not None else "<style>.app{grid-template-columns:260px 1fr}.composer{right:0}</style>"
     title = title if title.startswith(BRAND) else f"{BRAND} — {title}"
-    return (f'<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+    return (f'<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:,">'
             f"<title>{_e(title)}</title><style>{CSS}</style>{cols}</head><body><div class=\"app\">"
             f'<aside class="side">{side}</aside><main class="thread">{main}</main>'
             + (f'<aside class="panel">{panel}</aside>' if panel is not None else "")

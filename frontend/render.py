@@ -114,7 +114,10 @@ nav .umenu .pill { background:var(--head); }
 main { flex:1; padding:16px 24px; max-width:1100px; box-sizing:border-box; min-width:0; }
 h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:16px; margin:28px 0 8px; padding-top:12px; border-top:1px solid var(--line); }
 h3 { font-size:14px; margin:20px 0 6px; }
-code { font-size:12.5px; background:var(--head); padding:1px 4px; border-radius:3px; }
+code { font-size:12.5px; background:var(--head); padding:1px 4px; border-radius:3px; overflow-wrap:anywhere; }
+/* [U-34 2026-09-26 · 실제 브라우저 390px 실측] 표 화면의 폼 입력칸(size=40)이 화면을 넘겼고, 좁은 화면에서 왼쪽 메뉴 240px 이 본문을 150px 로 눌렀다 */
+input, select { max-width:100%; box-sizing:border-box; }
+@media (max-width:720px) { .wrap { flex-direction:column; } nav { width:auto; border-right:0; border-bottom:1px solid var(--line); } }
 pre { background:var(--head); padding:10px; overflow-x:auto; border-radius:4px; }
 table { border-collapse:collapse; width:100%; margin:8px 0 12px; font-size:13px; display:block; overflow-x:auto; }
 th,td { border:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top; }
@@ -134,6 +137,6 @@ footer { color:var(--muted); font-size:12px; border-top:1px solid var(--line); m
 
 def page(title: str, nav_html: str, body_html: str, meta_html: str, footer_html: str) -> str:
     return f"""<!DOCTYPE html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:,">
 <title>{title}</title><style>{CSS}</style></head>
 <body><div class="wrap"><nav>{nav_html}</nav><main><div class="meta">{meta_html}</div>{body_html}<footer>{footer_html}</footer></main></div></body></html>"""
