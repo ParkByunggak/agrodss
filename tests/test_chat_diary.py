@@ -115,7 +115,7 @@ def test_question_answered_from_envelope_kind_first():
     assert t.startswith(f"[{words.said('판단함')}]") and "지금 할 것" in t and "다음 예정" in t and "놓침" in t, t
     assert t.index("지금 할 것") < t.index("다음 예정") < t.index("놓침") and "웃거름 1회" in t and "예찰" in t, t
     _, r2 = chat.send(SID, "달이 왜 둥근가?", today=TODAY, now=NOW)
-    assert "판단 불가(지식)" in r2["text"]                                  # 지어내지 않는다
+    assert r2["text"].startswith(words.said("판단 불가(지식)"))               # 지어내지 않는다 — 문면은 사람 말 정본(2026-09-26)
 
 
 def test_sowing_confirm_sets_anchor_on_planned_subject(reg):

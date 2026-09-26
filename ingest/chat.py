@@ -44,6 +44,16 @@ OBS_WORDS = ("보인다", "보여", "보임", "생겼", "누렇", "누래", "시
              # [발행자 2026-09-19 첫 발화 "오늘 상황은 줄기가 매우 왕성한 모습이다" → 분류 안 됨] 생육 상태 서술 어휘
              "줄기", "뿌리", "잎 ", "잎은", "잎도", "싹", "꽃", "알이", "구가", "왕성", "모습", "상태", "자랐", "자라", "컸다", "크다",
              "작다", "웃자", "쓰러", "누웠", "빽빽", "성글", "고르", "듬성")
+# [발행자 2026-09-26] **증상** 어휘 — 물음 안에 이것이 있으면 ① 관찰로도 남기고(I-3: 질의의 관찰 이중 사용 — 실측 재료의 유일한 통로)
+# ② 답은 '아직 모른다(기준 없음)' 다: 증상에서 원인을 좁히는 판단이 등록부에 없다(D-18). 가진 것(계획표)을 꺼내지 않는다.
+SYMPTOM_WORDS = ("노랗", "노란", "노래", "누렇", "누래", "황화", "시들", "시드", "말라", "마르", "마름", "처지", "처졌", "썩", "물러", "무름",
+                 "반점", "곰팡이", "구멍", "갉아", "갉혀", "이상하", "안 자라", "안 크", "웃자라", "죽어", "죽었", "죽는", "타들", "탔")
+
+
+def symptom_in(text: str) -> bool:
+    return any(w in text for w in SYMPTOM_WORDS)
+
+
 PLAN_WORDS = ("예정", "할 것", "하려고", "하려 한다", "계획", "할까 한다", "할 생각", "하겠다", "할게", "해야겠")
 # [시점 걷기 2026-09-20] 작기 종료 선언 — 사건 어휘('정리했' · '수확')보다 앞에서 본다. 명시 문구만(원문 '끝났다'류는 사건·관찰과 겹친다)
 END_WORDS = ("작기 종료", "작기 끝", "재배 종료", "농사 끝", "농사 종료", "올해 농사 마", "이번 작기 마", "작기를 마", "작기 마감")
@@ -98,7 +108,9 @@ TOPIC: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("pest_alert", ("벌레", "병", "나방", "파리", "진딧물")),
     ("risk_alert", ("서리", "추위", "얼", "비가", "장마", "위험", "경보", "습")),
     ("material_citation", ("약", "자재", "비료", "공시", "뿌려도", "써도", "쳐도")),
-    ("plan_vs_actual", ("해야", "할 일", "계획", "뭐", "무엇", "다음", "관리", "항목", "챙겨", "신경", "지금")),   # "현재 관리해야 할 항목" → 계획 대 실제
+    # [발행자 2026-09-26 "잎 끝이 노란 형상을 어떻게 **대처해야** 하는가?" → 계획표] 맨 '해야' 가 모든 "…해야 하나" 를 계획 대 실제로
+    # 끌고 갔다. 계획을 묻는 꼴("해야 할 · 뭐 · 다음 · 지금")만 남긴다 — "현재 관리해야 할 항목" 은 그대로 계획 대 실제
+    ("plan_vs_actual", ("해야 할", "해야 되", "할 일", "계획", "뭐", "뭘", "무엇", "다음", "관리", "항목", "챙겨", "신경", "지금")),
 
 )
 # [U-16] 피해 어휘 — 갈래는 judge.evolve.RISK_FAMILIES 와 같은 이름(대조가 갈래로 잇는다)
@@ -139,6 +151,7 @@ PLAIN_BY_KEY = {
     "no_damage": "피해가 없었다는 것으로 적었습니다",
     "alt_after_negation": "대신 하신 일을 본 것으로도 남겨 둡니다",
     "undecided": "무엇으로 적을지 정하지 못해 우선 본 것으로 두었습니다",
+    "asked_about_symptom": "물으신 말 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
 }
 
 
@@ -459,7 +472,14 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
     if any(w in t for w in REQ_WORDS) and not _farm_work_not_a_request(t):
         return [{"kind": "feedback.request", "text": t, "target": "other", "why": "교정·요구 어휘"}]
     if "?" in t or any(w in t for w in Q_WORDS) or _indirect_question(t):
-        return [{"kind": "question", "why": "물음표·의문·요청형 어휘"}]
+        drafts_q: list[dict[str, Any]] = [{"kind": "question", "why": "물음표·의문·요청형 어휘"}]
+        if symptom_in(t):
+            # [발행자 2026-09-26] "잎 끝이 노랗다" 는 관찰이다 — 물음으로만 읽으면 관찰 원장에 안 남아 실측 재료가 물음에서 샌다.
+            # 원문 그대로 관찰 초안을 하나 더 둔다(확인은 사람). 질의의 관찰 이중 사용(I-3).
+            drafts_q.append({"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
+                             "why": "물음 안의 증상 어휘 — 관찰로도 남긴다(I-3 이중 사용 · 원문 그대로)",
+                             "why_key": "asked_about_symptom", "needs": []})
+        return drafts_q
     et = _event_type(t)
     # [처방 직후 전수 2026-09-20 · C15 형태] 교정 어휘를 고친 직후 같은 형태를 다른 갈래에서 셌다 — **갈래 어휘가 밭일 서술 안에
     # 들어 있으면 그 갈래가 사건보다 먼저 가로챈다**. 실측: "계획대로 웃거름을 줬다" · "예정대로 파종했다" → 계획(한 일이 계획이 된다).
@@ -530,9 +550,18 @@ def topic_of(text: str) -> str | None:
 
 def answer(subject: dict[str, Any], text: str, today: date) -> str:
     from judge import run as judge_run   # 4층 화면과 같은 규율 — 3층 봉투만 받는다
+    from frontend import words as _w     # 문면은 4층 정본(모듈 수준 import 는 층을 뒤집는다)
+    dont_know = _w.said("판단 불가(지식)")
+    can = "지금 답할 수 있는 것: 수확 시기 · 위험 경보 · 약제와 자재 · 할 일"
+    if symptom_in(text):
+        # [발행자 2026-09-26 "잎 끝이 노란 형상을 어떻게 대처해야 하는가?" → 계획표가 나갔다] 증상에서 원인을 좁히는 판단이
+        # 등록부에 없다. **없는 것은 없다고 말한다** — 가진 것(계획표)을 꺼내면 답한 것처럼 보인다(들깨 응답과 같은 형태).
+        # 주제 어휘(웃거름 · 약)가 함께 있어도 그 판단은 증상에 답하지 않는다 — 같은 규칙. 결정을 만들지는 발행자 몫(D-18).
+        return (f"{dont_know}. 증상(잎 색 · 시듦 · 무름 같은 것)에서 원인을 좁히는 판단은 아직 만들어지지 않았습니다. "
+                f"지어내지 않습니다. {can}.")
     did = topic_of(text)
     if not did:
-        return "판단 불가(지식) — 이 질문에 대응하는 결정이 등록돼 있지 않다. 지어내지 않는다. (수확 시기 · 위험 경보 · 자재 · 계획 대 실제 는 답한다)"
+        return f"{dont_know}. 이 물음에 답하는 판단이 아직 등록되지 않았습니다. 지어내지 않습니다. {can}."
     envs = judge_run.judgments_for(subject["id"], today=today)
     e = next((x for x in envs if x.decision_id == did), None)
     if e is None:
@@ -690,6 +719,8 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         reply_text = media_line + "무엇을 했는지 함께 적으시면 그것도 같이 적어 둡니다."
     elif drafts and drafts[0]["kind"] == "question":
         reply_text = answer(s, text, today)
+        if len(drafts) > 1:                  # 물음 안의 본 것 — 관찰 초안이 함께 섰다(확인은 사람)
+            reply_text += f" {plain_why(drafts[1])}. '{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
     elif drafts:
         d = drafts[0]
         need = d.get("needs") or []
