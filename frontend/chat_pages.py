@@ -511,7 +511,8 @@ def new_main(error: str = "", form: dict[str, str] | None = None) -> str:
 
 
 def improve_main(today: date, message: str = "", error: str = "", cycle: dict[str, Any] | None = None) -> str:
-    out = ['<div class="thead"><div><h1>개선 · 자율진화 (J · D-14)</h1><div class="meta">보이게까지 자동 — 보수(등급 하향)는 자동 반영, 확장(임계·규칙·칸)은 제안까지. 채택은 사람.</div></div></div><div class="msgs">']
+    # [U-26 잔여 2026-09-26] 이 화면도 사람 말로 — 발행자가 '고쳐 달라는 말' 을 넣고 확인하러 오는 곳이다. 대장 번호(J · D-14 · U-14 · M-10)는 뺀다.
+    out = ['<div class="thead"><div><h1>개선 · 자율진화</h1><div class="meta">보이게까지는 자동입니다 — 보수(근거를 낮추는 쪽)는 자동 반영, 넓히는 쪽(임계·규칙·단계)은 제안까지. 채택은 사람이 합니다.</div></div></div><div class="msgs">']
     if error:
         out.append(f'<p class="err">{_e(error)}</p>')
     if message:
@@ -522,7 +523,7 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
     subs = subjects.load()
     sel = "".join(f'<option value="{_e(s["id"])}">{_e(s["label"])}</option>' for s in subs)
     tg = "".join(f'<option value="{t}">{t}</option>' for t in ("other", "grid", "decision", "dictionary", "screen", "schema", "input"))
-    out.append(f'<h2 style="font-size:14px">개선 요구 (사용자)</h2><form method="post" action="/improve/request" class="draft" style="margin-left:0"><input name="text" size="60" placeholder="무엇이 틀렸거나 불편한가" required> <select name="target">{tg}</select> <select name="subject"><option value="">(목록 없음)</option>{sel}</select> <button class="btn pri">접수</button></form>')
+    out.append(f'<h2 style="font-size:14px">고쳐 달라는 말 (사용자)</h2><form method="post" action="/improve/request" class="draft" style="margin-left:0"><input name="text" size="60" placeholder="무엇이 틀렸거나 불편한가" required> <select name="target">{tg}</select> <select name="subject"><option value="">(목록 없음)</option>{sel}</select> <button class="btn pri">접수</button></form>')
     reqs = list(fb.latest_by_id("feedback.request").values())
     if reqs:
         out.append('<table class="tb"><tr><th>상태</th><th>요구</th><th>대상</th><th>목록</th><th>개선 항목</th></tr>')
@@ -532,7 +533,7 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
     out.append('<h2 style="font-size:14px">개선 항목</h2>')
     items = list(fb.latest_by_id("improvement.item").values())
     if not items:
-        out.append("<p>아직 없다 — 빗나감 · 불이행 사유 · 개선 요구가 생기면 제안이 만들어진다.</p>")
+        out.append("<p>아직 없다 — 빗나감 · 못 한 이유 · 고쳐 달라는 말이 생기면 제안이 만들어진다.</p>")
     else:
         out.append('<table class="tb"><tr><th>상태</th><th>방향</th><th>제안</th><th>출처</th><th>검증</th><th>처리</th></tr>')
         for it in reversed(items):
@@ -557,7 +558,7 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
     # [U-14] 사전에 없는 작목 이름 후보 — 승인(정본명에 잇기)은 사람
     from names import candidates as nc
     cands = nc.open_candidates()
-    out.append('<h2 style="font-size:14px">작목 이름 후보 (U-14 — 사투리 · 이명)</h2>')
+    out.append('<h2 style="font-size:14px">작목 이름 후보 (사투리 · 이명)</h2>')
     if not cands:
         out.append('<p style="color:var(--muted)">열린 후보 없음 — 새 채팅에서 사전에 없는 이름을 적으면 여기 쌓인다.</p>')
     else:
@@ -570,7 +571,7 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
                        f'<button class="btn pri" name="act" value="approve">승인 → 사전</button> <button class="btn" name="act" value="reject">거부</button></form></td></tr>')
         out.append("</table>")
     lives = fb.list_records("verification.live")
-    out.append('<h2 style="font-size:14px">라이브 3/3 재현 (M-10 관문)</h2>')
+    out.append('<h2 style="font-size:14px">라이브 3/3 재현</h2>')
     if not lives:
         out.append('<p style="color:var(--muted)">아직 없다 — <code>python scripts\\live_reproduce.py</code> 가 독립 프로세스 3회로 재현해 여기 적는다. 외부 원천(키)이 없으면 미성립으로 적힌다.</p>')
     else:
@@ -579,7 +580,7 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
             out.append(f'<tr><td>{_e(v["observed_at"])}</td><td>{_e(v["code_head"])}</td><td>{_e(v["verdict"])}</td><td>{v["agree"]}/{v["total"]}</td><td>{_e(v["cache_suspect"] or "없음")}</td></tr>')
         out.append("</table>")
     preds = fb.list_records("feedback.prediction")
-    out.append(f'<p style="color:var(--muted);font-size:12px">예측 원장 {len(preds)} 줄(바뀔 때만 한 줄) · 오늘 {today}</p></div>')
+    out.append(f'<p style="color:var(--muted);font-size:12px">예측 일지 {len(preds)} 줄(바뀔 때만 한 줄) · 오늘 {today}</p></div>')
     return "".join(out)
 
 

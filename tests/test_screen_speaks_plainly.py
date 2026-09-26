@@ -31,7 +31,8 @@ JARGON = ("원장", "초안", "서술문", "봉투", "격자", "재배 단위", 
           "불이행", "개선 요구", "작기 종료", "스키마", "레코드", "분류", "기준점", "미확인")
 # [U-26 회수 2026-09-26] /judge 를 더한다 — 발행자가 *"확인하실 곳은 /judge 의 계획 대 실제"* 라고 스스로 그 화면으로
 # 갔다. 들여다보는 화면이라고 미뤄 둔 것이 틀렸다: 농가가 답을 찾으러 가는 곳이면 농가 화면이다.
-FARMER_PAGES = ("/c/{sid}", "/diary/{sid}", "/me", "/judge")
+FARMER_PAGES = ("/c/{sid}", "/diary/{sid}", "/me", "/judge", "/improve")     # /improve 도 2026-09-26 — 고쳐 달라는 말이 닿는 곳
+# /changes 는 아래 별도 검사 — 커밋 제목은 **인용된 기록**이라(농가 글과 같은 축) 표를 걷어 낸 뒤 화면의 제 문장만 본다
 TODAY = "2026-09-19"      # 화면의 오늘을 고정 — 실제 날짜로 걸으면 창 밖이 되어 문장이 달라진다(시점 축)
 
 
@@ -127,6 +128,18 @@ def test_judge_names_the_data_it_used_in_plain_words_and_keeps_the_ids(srv):
     # 화면에도 있어 위 검사가 통과했다 — 기대 문자열이 원 결함 문면과 같았다. 그래서 **id 자체가 안 보이는가**를 따로 본다.
     for raw in ("anchor", "soil_chem", "pest_regional"):
         assert raw not in seen, f"안쪽 id '{raw}' 가 화면에 그대로 나온다"
+
+
+def test_changes_page_says_nothing_only_a_developer_would_know_outside_the_quoted_record(srv):
+    """[U-26 잔여 2026-09-26] /changes 의 안쪽 말 6곳 중 4곳이 **커밋 제목** 안이었다 — 인용된 기록은 바꾸지 않는다(농가 글과 같은 축).
+    검사 대상 범위를 먼저 자른다(§7.1 4번): 표(커밋 이력 · 읽다 버린 것)를 걷어 내고 화면의 제 문장만 본다."""
+    status, body = _get(srv, "/changes")
+    assert status == 200
+    own = re.sub(r"<table.*?</table>", " ", body, flags=re.S)
+    assert "<table" not in own and "git log" in own, "자르는 범위가 어긋났다 — 표가 남았거나 제 문장이 사라졌다"
+    seen = _visible(own)
+    found = sorted({w for w in JARGON if w in seen})
+    assert found == [], f"/changes: 화면의 제 문장이 안쪽 말을 한다 — {found}"
 
 
 def test_every_axis_the_judgement_can_use_has_a_plain_word():

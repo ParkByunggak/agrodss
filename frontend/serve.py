@@ -107,11 +107,12 @@ def changes_page() -> tuple[int, str]:
                      "<p style='color:var(--muted)'>시스템이 제 손으로 쓴 파일을 읽지 못해 **없는 것처럼** 지나간 자리다 — "
                      "판정이 '정본 미도착'이라고 말하면 실제로는 이쪽일 수 있다. 기동하면 비고, 읽을 때마다 다시 쌓인다.</p>")
     else:
-        drop_html = ('<p style="color:var(--muted)">읽다 버린 것 없음 — 저장소의 레코드를 전부 읽었다'
+        drop_html = ('<p style="color:var(--muted)">읽다 버린 것 없음 — 저장소의 기록을 전부 읽었다'
                      '(시스템이 제 손으로 쓴 파일을 못 읽으면 여기 뜬다).</p>')
     body = (f"<h1>변경 로그</h1><p>{state}</p>{drop_html}"
             f"<table><thead><tr><th>커밋</th><th>날짜</th><th>제목</th></tr></thead><tbody>{rows or '<tr><td colspan=3>git 이력을 읽지 못했다</td></tr>'}</tbody></table>"
-            "<p style='color:var(--muted)'>저장소 정본 <code>git log</code> 의 제목 20건 — 무엇이 언제 바뀌었는지. 반영 상태는 위 한 줄이다(커밋 완료 ≠ 반영 완료).</p>")
+            # [U-26 2026-09-26] 커밋 제목은 **인용된 기록**이라 낱말 표를 대지 않는다(농가 글과 같은 축) — 화면의 제 문장만 사람 말로
+            "<p style='color:var(--muted)'>저장소 <code>git log</code> 의 제목 20건 — 무엇이 언제 바뀌었는지. 반영 상태는 위 한 줄이다(커밋 완료 ≠ 반영 완료).</p>")
     meta = "실행 중 코드와 저장소 HEAD 를 대조한다 — 뒤처지면 자동 재기동(run_frontend.bat) 뒤 새로고침"
     footer = footer_text()
     return 200, render.page("AGRODSS —변경 로그", nav_html("/changes"), body, meta, footer)
