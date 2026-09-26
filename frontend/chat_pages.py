@@ -340,7 +340,7 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
     out.append("</div>")
     out.append(f'<div class="composer"><form method="post" action="/c/{quote(s["id"])}/send" id="composer" enctype="multipart/form-data">'
                '<input type="hidden" name="input_mode" id="input_mode" value="text"><input type="hidden" name="edit_of" id="edit_of" value="">'
-               '<textarea name="text" id="text" placeholder="예) 오늘 물 줬다 / 잎 끝이 누렇다 / 9월 25일에 웃거름 주려고 한다 / 수확 창이 너무 넓다 / 언제 캐면 되나?"></textarea>'
+               '<textarea name="text" id="text" title="엔터로 보냅니다 — 줄바꿈은 Shift+Enter" placeholder="예) 오늘 물 줬다 / 잎 끝이 누렇다 / 9월 25일에 웃거름 주려고 한다 / 수확 창이 너무 넓다 / 언제 캐면 되나?"></textarea>'
                '<div class="files" id="files" hidden><span id="filenames"></span> <label>찍은 날 <input name="observed_at" id="observed_at" placeholder="적으시면 이 날짜로 (2026-09-19) — 비우셔도 됩니다" size="30"></label></div>'
                '<div class="row"><span class="hint" id="hint">한 일 · 본 것 · 할 일 · 고쳐 달라는 말 · 물음 — 날짜는 "9월 20일" · "어제" · "2026-09-20"</span>'
                '<span><input type="file" name="file" id="file" accept="image/*,video/*" multiple hidden>'
@@ -398,6 +398,15 @@ ACTION_JS = """<script>
 (function(){
   const $ = (s, r) => (r || document).querySelector(s);
   const text = (id) => { const el = document.getElementById(id); return el ? el.textContent : ""; };
+  // [발행자 2026-09-26] "다시 시도하거나 새로운 질문을 하면 커서의 위치가 첫 질문의 위치로 가지 않고, 현재의 커서 위치에 있어야 한다."
+  // 보내기·다시 시도·넣기는 전부 화면을 다시 그린다 — 브라우저는 새 문서를 맨 위(첫 질문)에서 연다. 새로 뜬 답은 맨 아래에 있으니
+  // 거기로 가고, 커서는 입력칸 끝에 둔다(사람이 다음 말을 바로 이어 적는 자리).
+  const ta = $("#text");
+  window.scrollTo(0, document.documentElement.scrollHeight);
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  // [발행자 2026-09-26] "엔터키를 치면 보내기를 하지 않아도 문자가 전송이 되야 한다." 엔터 = 보내기, 줄바꿈은 Shift+Enter.
+  // 한글은 조합 중(isComposing)에 엔터가 먼저 오므로 그때는 보내지 않는다 — 마지막 글자가 잘리거나 두 번 보내진다.
+  if (ta) ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#composer").requestSubmit(); } });
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("button.act"); if (!b) return;
     const act = b.dataset.act, t = text(b.dataset.target || "");
