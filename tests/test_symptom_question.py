@@ -55,6 +55,36 @@ def test_the_answer_to_a_symptom_question_says_we_do_not_know_yet_not_a_plan():
     assert not chat.answer(s, "지금 뭘 해야 하죠", TODAY).startswith(words.said("판단 불가(지식)"))
 
 
+def test_a_symptom_inside_a_plan_or_a_request_or_an_end_is_also_kept_as_an_observation():
+    """[처방 직후 전수 §7.5] 물음만이 아니었다 — 계획 · 교정 요구 · 작기 종료는 원문을 원장에 안 남긴다(탐침 9 중 3 유실)."""
+    for text, first in (("잎이 노래서 내일 웃거름 주려고", "plan.farmer"),
+                        ("잎이 노란데 수확 창이 너무 넓어요 고쳐주세요", "feedback.request"),
+                        ("잎이 노란데 이번 작기 끝낼게요", "subject.end")):
+        ds = chat.classify(text, TODAY)
+        assert [d["kind"] for d in ds] == [first, "observation.note"], (text, ds)
+        assert ds[1]["text"] == text and ds[1]["why_key"] == "symptom_alongside"
+        assert chat.plain_why(ds[1]) == chat.PLAIN_BY_KEY["symptom_alongside"]
+    # 반대편 — 원문을 이미 남기는 갈래(사건 note · 불이행 reason · 관찰)에는 붙이지 않는다(같은 말을 두 번 적지 않는다)
+    for text, only in (("잎이 노래서 오늘 약 쳤다", "event"), ("잎 끝이 노란데 웃거름 안 줬다", "decision.noncompliance"),
+                       ("잎 끝이 노랗게 변했어요", "observation.note")):
+        assert [d["kind"] for d in chat.classify(text, TODAY)] == [only], text
+
+
+def test_no_decision_word_is_a_single_syllable_that_hides_inside_other_words():
+    """[처방 직후 전수 §7.5] 한 글자 어휘(캐 · 병 · 얼 · 습 · 약)가 다른 말 속에 걸려 엉뚱한 판단을 꺼냈다 — 형태 독립 래칫."""
+    # 뒤에 공백이 붙은 꼴("약 " · "병 ")은 경계 표지라 두 글자로 센다. 의문사(뭐 · 뭘)는 내용어가 아니라 물음 자체라 예외로 둔다.
+    interrogatives = {"뭐", "뭘"}
+    short = [(did, w) for did, words in chat.TOPIC for w in words if len(w) < 2 and w not in interrogatives]
+    assert short == [], f"한 글자 결정 어휘 — 다른 말 속에 걸린다: {short}"
+    # 탐침(인공 질문 · 그 어휘가 다른 뜻으로 든 물음)은 결정으로 가지 않는다
+    for q in ("병원 다녀와서 밭에 가도 되나", "얼마나 자주 물 줘야 하나", "습관적으로 물을 주는데 괜찮나", "비가림 없이 키워도 되나", "캐릭터 이름은 어떻게 지을까"):
+        assert chat.topic_of(q) is None, (q, chat.topic_of(q))
+    # 반대편 — 진짜 그 뜻이면 그대로 간다
+    for q, did in (("언제 캐면 되나?", "harvest_timing"), ("병이 온 것 같은데 약 있나", "pest_alert"), ("서리 오면 어떻게 하죠", "risk_alert"),
+                   ("지금 쓸 수 있는 약 있나요", "material_citation"), ("비가 많이 오면 위험한가", "risk_alert"), ("고랑이 과습인데", "drainage_alert")):
+        assert chat.topic_of(q) == did, (q, chat.topic_of(q))
+
+
 def _post(port: int, path: str, fields: dict) -> tuple[int, str]:
     c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
     body = urlencode(fields)

@@ -104,10 +104,13 @@ TOPIC: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("replant", ("보식", "결주", "안 난", "안 났", "듬성")),
     ("sowing_window", ("파종", "심을 때", "심어도", "언제 심")),
     ("drainage_alert", ("배수", "물 빠", "고랑", "물이 고")),
-    ("harvest_timing", ("수확", "캐", "뽑을", "거둘")),
-    ("pest_alert", ("벌레", "병", "나방", "파리", "진딧물")),
-    ("risk_alert", ("서리", "추위", "얼", "비가", "장마", "위험", "경보", "습")),
-    ("material_citation", ("약", "자재", "비료", "공시", "뿌려도", "써도", "쳐도")),
+    # [U-32 처방 직후 전수 2026-09-26] 한 글자 어휘(캐 · 병 · 얼 · 습 · 약)가 다른 말 속에 걸려 엉뚱한 판단을 꺼냈다 — 탐침 8 중 5
+    # ("병원 다녀와서" → 병해충 · "얼마나 자주" → 서리 · "습관적으로" → 위험 · "비가림" → 위험 · "캐릭터" → 수확). 어미·조사가 붙은 꼴만 둔다.
+    ("harvest_timing", ("수확", "캐도", "캐야", "캐면", "캐나", "캐는", "캐기", "캘까", "캘 ", "뽑을", "거둘")),
+    ("pest_alert", ("벌레", "병이", "병 ", "병에", "병해", "병충", "나방", "파리", "진딧물")),
+    ("risk_alert", ("서리", "추위", "얼어", "얼었", "얼까", "얼면", "얼지", "비 오", "비가 오", "비 온", "비가 많", "폭우", "장마", "위험", "경보",
+                    "과습", "습해", "습기", "습하")),
+    ("material_citation", ("약 ", "약을", "약이", "약은", "약도", "약제", "농약", "약 쳐", "약치", "약칠", "자재", "비료", "공시", "뿌려도", "써도", "쳐도")),
     # [발행자 2026-09-26 "잎 끝이 노란 형상을 어떻게 **대처해야** 하는가?" → 계획표] 맨 '해야' 가 모든 "…해야 하나" 를 계획 대 실제로
     # 끌고 갔다. 계획을 묻는 꼴("해야 할 · 뭐 · 다음 · 지금")만 남긴다 — "현재 관리해야 할 항목" 은 그대로 계획 대 실제
     ("plan_vs_actual", ("해야 할", "해야 되", "할 일", "계획", "뭐", "뭘", "무엇", "다음", "관리", "항목", "챙겨", "신경", "지금")),
@@ -152,6 +155,7 @@ PLAIN_BY_KEY = {
     "alt_after_negation": "대신 하신 일을 본 것으로도 남겨 둡니다",
     "undecided": "무엇으로 적을지 정하지 못해 우선 본 것으로 두었습니다",
     "asked_about_symptom": "물으신 말 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
+    "symptom_alongside": "말씀 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
 }
 
 
@@ -460,7 +464,32 @@ def _farm_work_not_a_request(t: str) -> bool:
 
 
 def classify(text: str, today: date) -> list[dict[str, Any]]:
-    """발화 → 초안 목록. 하나도 못 나누면 [] (되묻는다). 초안은 확인 전까지 아무 원장에도 안 들어간다."""
+    """발화 → 초안 목록. 하나도 못 나누면 [] (되묻는다). 초안은 확인 전까지 아무 원장에도 안 들어간다.
+    말미에 **증상 이중 사용** 한 번 — 갈래마다 넣지 않고 산출 말미 1회(§7.5 지점 축 · 차단·필터 위치 규율과 같은 형태)."""
+    return _with_symptom_observation(_classify(text, today), text.strip(), today)
+
+
+def _keeps_the_text(d: dict[str, Any], t: str) -> bool:
+    """이 초안이 원문을 원장에 남기는가 — 관찰 메모(text) · 사건(note) · 불이행 사유(reason). 계획·교정 요구·작기 종료는 남기지 않는다."""
+    k = d.get("kind")
+    return (k == "observation.note" or (k == "event" and t in (d.get("note") or ""))
+            or (k == "decision.noncompliance" and t in (d.get("reason") or "")))
+
+
+def _with_symptom_observation(drafts: list[dict[str, Any]], t: str, today: date) -> list[dict[str, Any]]:
+    """[발행자 2026-09-26] "잎 끝이 노랗다" 는 관찰이다 — 물음으로만 읽으면 관찰 원장에 안 남아 **실측 재료가 물음에서 샌다**(I-3 의 질의
+    이중 사용이 여기서 새고 있었다). 처방 직후 전수(§7.5): 물음만이 아니었다 — 계획("잎이 노래서 내일 웃거름 주려고") · 교정 요구 ·
+    작기 종료도 원문을 원장에 안 남긴다(9 탐침 중 3 유실). 그래서 갈래마다가 아니라 **말미 1회**: 증상 어휘가 있고 어느 초안도 원문을
+    남기지 않으면 원문 그대로의 관찰 초안을 뒤에 붙인다(첫 초안의 종류는 그대로 · 확인은 사람)."""
+    if not drafts or not symptom_in(t) or any(_keeps_the_text(d, t) for d in drafts):
+        return drafts
+    key = "asked_about_symptom" if drafts[0]["kind"] == "question" else "symptom_alongside"
+    day_past = parse_day(t, today, past=True)
+    return drafts + [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
+                      "why": "말 안의 증상 어휘 — 관찰로도 남긴다(I-3 이중 사용 · 원문 그대로)", "why_key": key, "needs": []}]
+
+
+def _classify(text: str, today: date) -> list[dict[str, Any]]:
     t = text.strip()
     if not t:
         return []
@@ -472,14 +501,7 @@ def classify(text: str, today: date) -> list[dict[str, Any]]:
     if any(w in t for w in REQ_WORDS) and not _farm_work_not_a_request(t):
         return [{"kind": "feedback.request", "text": t, "target": "other", "why": "교정·요구 어휘"}]
     if "?" in t or any(w in t for w in Q_WORDS) or _indirect_question(t):
-        drafts_q: list[dict[str, Any]] = [{"kind": "question", "why": "물음표·의문·요청형 어휘"}]
-        if symptom_in(t):
-            # [발행자 2026-09-26] "잎 끝이 노랗다" 는 관찰이다 — 물음으로만 읽으면 관찰 원장에 안 남아 실측 재료가 물음에서 샌다.
-            # 원문 그대로 관찰 초안을 하나 더 둔다(확인은 사람). 질의의 관찰 이중 사용(I-3).
-            drafts_q.append({"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
-                             "why": "물음 안의 증상 어휘 — 관찰로도 남긴다(I-3 이중 사용 · 원문 그대로)",
-                             "why_key": "asked_about_symptom", "needs": []})
-        return drafts_q
+        return [{"kind": "question", "why": "물음표·의문·요청형 어휘"}]     # 물음 안의 증상은 classify() 말미가 관찰로도 세운다
     et = _event_type(t)
     # [처방 직후 전수 2026-09-20 · C15 형태] 교정 어휘를 고친 직후 같은 형태를 다른 갈래에서 셌다 — **갈래 어휘가 밭일 서술 안에
     # 들어 있으면 그 갈래가 사건보다 먼저 가로챈다**. 실측: "계획대로 웃거름을 줬다" · "예정대로 파종했다" → 계획(한 일이 계획이 된다).
