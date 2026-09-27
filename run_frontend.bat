@@ -7,10 +7,13 @@ REM below, then restarts it on new code). A git pull that changes this file make
 REM OLD offset - exactly what update.bat did on 2026-09-27 ("'/f' is not recognized"). So a TEMP copy runs instead; the
 REM repo folder comes in as an argument because %~dp0 inside the copy is TEMP. The hand-off is WITHOUT "call" so cmd
 REM never comes back to this file.
+REM The copy's name is different on every run - a fixed name would let a second start overwrite a copy that is still
+REM running (the same trap, just moved). A few KB per start stay in TEMP.
 if /i "%~1"=="--from-temp" goto :run
-copy /y "%~f0" "%TEMP%\agrodss_run_frontend.bat" >nul
+set "TMPBAT=%TEMP%\agrodss_run_frontend_%RANDOM%%RANDOM%.bat"
+copy /y "%~f0" "%TMPBAT%" >nul
 if errorlevel 1 goto :run
-"%TEMP%\agrodss_run_frontend.bat" --from-temp "%~dp0"
+"%TMPBAT%" --from-temp "%~dp0"
 
 :run
 setlocal

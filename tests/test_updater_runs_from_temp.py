@@ -38,9 +38,12 @@ def _split(rel: str) -> tuple[str, str]:
 def test_the_batch_copies_itself_to_temp_and_hands_off_without_call(rel):
     spec = BATCHES[rel]
     stub, run = _split(rel)
-    assert 'copy /y "%~f0" "%TEMP%\\' + spec["temp"] + '"' in stub, f"{rel}: pull 이 바꾸는 파일을 그대로 실행한다"
+    stem = spec["temp"].removesuffix(".bat")
+    # 사본 이름은 실행마다 다르다 — 고정이면 두 번째 실행이 **도는 사본을 덮어쓴다**(같은 함정이 자리만 옮긴 것 · 감시 루프 재시작이 그 경우)
+    assert re.search(r'^set "TMPBAT=%TEMP%\\' + re.escape(stem) + r'_%RANDOM%%RANDOM%\.bat"\s*$', stub, re.M), f"{rel}: 사본 이름이 고정이다"
+    assert 'copy /y "%~f0" "%TMPBAT%"' in stub, f"{rel}: pull 이 바꾸는 파일을 그대로 실행한다"
     assert 'if /i "%~1"=="--from-temp" goto :run' in stub                    # 사본은 곧장 본문으로
-    assert re.search(r'^"%TEMP%\\' + re.escape(spec["temp"]) + r'" --from-temp "%~dp0"\s*$', stub, re.M), f"{rel}: 사본으로 넘겨주지 않는다"
+    assert re.search(r'^"%TMPBAT%" --from-temp "%~dp0"\s*$', stub, re.M), f"{rel}: 사본으로 넘겨주지 않는다"
     assert 'call "%TEMP%' not in stub and "exit /b" not in stub, f"{rel}: call 로 넘기면 사본이 끝난 뒤 바뀐 이 파일로 돌아온다 — 같은 함정"
     assert "git" not in stub, f"{rel}: 사본으로 넘어가기 전에 저장소를 건드린다"
     assert "if errorlevel 1 goto :run" in stub, f"{rel}: 사본을 못 만들면 아무것도 안 하고 끝난다 — 옛 방식으로라도 돈다"

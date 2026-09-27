@@ -35,10 +35,13 @@ REM file the pull rewrites: copy it to TEMP first and run the copy; the copy get
 REM %~dp0 inside the copy would point at TEMP.
 REM The hand-off is WITHOUT "call": cmd then never comes back to this file. With "call" it would resume here after
 REM the copy finished - and by then the pull has rewritten this file too, so the resume point is the same trap.
+REM The copy's name is different on every run: a fixed name would let a second run overwrite a copy that is still
+REM running (the same trap again, just moved). A few KB per run stay in TEMP - that is the price, and it is small.
 if /i "%~1"=="--from-temp" goto :run
-copy /y "%~f0" "%TEMP%\agrodss_update.bat" >nul
+set "TMPBAT=%TEMP%\agrodss_update_%RANDOM%%RANDOM%.bat"
+copy /y "%~f0" "%TMPBAT%" >nul
 if errorlevel 1 goto :run
-"%TEMP%\agrodss_update.bat" --from-temp "%~dp0"
+"%TMPBAT%" --from-temp "%~dp0"
 
 :run
 setlocal

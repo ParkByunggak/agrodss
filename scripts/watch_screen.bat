@@ -14,10 +14,13 @@ REM No multi-line blocks - a ")" inside one closes it early (live_check.bat died
 REM [R-7 2026-09-27] This loop runs forever, and cmd reads a batch by BYTE OFFSET - a git pull that changes this file
 REM would make cmd resume inside the new file at the old offset (what update.bat did on 2026-09-27). So a TEMP copy
 REM runs; the scripts folder comes in as an argument because %~dp0 inside the copy is TEMP. Hand-off WITHOUT "call".
+REM The copy's name is different on every run - a fixed name would let a second start (install_autostart.bat again)
+REM overwrite the copy this loop is still running from. A few KB per start stay in TEMP.
 if /i "%~1"=="--from-temp" goto :run
-copy /y "%~f0" "%TEMP%\agrodss_watch_screen.bat" >nul
+set "TMPBAT=%TEMP%\agrodss_watch_screen_%RANDOM%%RANDOM%.bat"
+copy /y "%~f0" "%TMPBAT%" >nul
 if errorlevel 1 goto :run
-"%TEMP%\agrodss_watch_screen.bat" --from-temp "%~dp0"
+"%TMPBAT%" --from-temp "%~dp0"
 
 :run
 setlocal
