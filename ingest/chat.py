@@ -141,6 +141,7 @@ assert set(KIND_PLAIN) == set(KIND_LABEL)      # 종류가 늘면 사람 말도 
 
 CONFIRM_LABEL = "일지에 넣기"            # 옛 문면 "확인 → 원장"
 OTHER_KIND_LABEL = "다르게 적을까요?"     # 옛 문면 "다른 종류:"
+CHOSEN_WHY = "사람이 고름"               # 사람이 종류를 고른 초안의 표지 — 오분류 측정(scripts/measure_misclassified.py)이 이 표지를 읽는다(정본 하나)
 SAVED_LABEL = "일지에 넣었습니다"         # 옛 문면 "원장에 들어감"
 PENDING_LABEL = "아직 안 넣은 것"         # 옛 문면 "미확인 초안"
 
@@ -809,19 +810,19 @@ def choose_kind(msg_id: str, kind: str, today: date | None = None) -> dict[str, 
     day = parse_day(t, today)
     day_past = parse_day(t, today, past=True)      # 관찰·불이행은 이미 지난 것 — classify 와 같은 규율(전에는 이 이름이 없어 관찰 선택이 NameError 였다)
     if kind == "event":
-        d = {"kind": "event", "type": _event_type(t) or "기타", "observed_at": day_past, "note": t, "why": "사람이 고름", "needs": [] if day_past else ["observed_at"]}
+        d = {"kind": "event", "type": _event_type(t) or "기타", "observed_at": day_past, "note": t, "why": CHOSEN_WHY, "needs": [] if day_past else ["observed_at"]}
     elif kind == "observation.note":
-        d = {"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(), "why": "사람이 고름", "needs": []}
+        d = {"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(), "why": CHOSEN_WHY, "needs": []}
     elif kind == "plan.farmer":
-        d = {"kind": "plan.farmer", "task": t[:60], "planned_day": day, "note": t, "why": "사람이 고름", "needs": [] if day else ["planned_day"]}
+        d = {"kind": "plan.farmer", "task": t[:60], "planned_day": day, "note": t, "why": CHOSEN_WHY, "needs": [] if day else ["planned_day"]}
     elif kind == "feedback.request":
-        d = {"kind": "feedback.request", "text": t, "target": "other", "why": "사람이 고름"}
+        d = {"kind": "feedback.request", "text": t, "target": "other", "why": CHOSEN_WHY}
     elif kind == "decision.noncompliance":
         et = _event_type(_NEG_FOLD.sub("", t)) or t[:60]
-        d = {"kind": "decision.noncompliance", "task_type": et, "planned_task": et, "planned_day": day_past, "reason": t, "why": "사람이 고름",
+        d = {"kind": "decision.noncompliance", "task_type": et, "planned_task": et, "planned_day": day_past, "reason": t, "why": CHOSEN_WHY,
              "needs": [] if day_past else ["planned_day"]}
     elif kind == "subject.end":
-        d = {"kind": "subject.end", "ended_at": day_past or today.isoformat(), "note": t, "why": "사람이 고름", "needs": []}
+        d = {"kind": "subject.end", "ended_at": day_past or today.isoformat(), "note": t, "why": CHOSEN_WHY, "needs": []}
     else:
         raise ChatError(f"고를 수 없는 종류: {kind}")
     rec = dict(m)

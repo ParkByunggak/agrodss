@@ -95,7 +95,7 @@ def test_statement_is_proposed_as_note_and_human_may_change_kind():
     assert m["drafts"][0]["kind"] == "observation.note" and chat.KIND_PLAIN["observation.note"] in r["text"]
     assert "분류 안 됨" not in r["text"]
     m2 = chat.choose_kind(m["id"], "feedback.request", today=TODAY)
-    assert m2["drafts"][0]["kind"] == "feedback.request" and m2["drafts"][0]["why"] == "사람이 고름"
+    assert m2["drafts"][0]["kind"] == "feedback.request" and m2["drafts"][0]["why"] == chat.CHOSEN_WHY   # 정본 표지(측정기가 읽는 그것)
     rec = chat.confirm(m["id"], 0, now=NOW)
     assert rec["kind"] == "feedback.request" and rec["text"] == "날씨가 좋다"
 
