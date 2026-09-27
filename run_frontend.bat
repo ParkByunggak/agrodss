@@ -2,8 +2,21 @@
 REM run_frontend.bat - start the internal screen (localhost only, opens a new browser window).
 REM Finds a usable Python by itself (VELA venv first - CLAUDE.md venv rule), skips pip when markdown is present,
 REM and keeps this window open at the end so any error stays visible (2026-09-19: blank console = Store alias stub).
+REM [R-7 2026-09-27] cmd reads a batch by BYTE OFFSET while it runs, and this file runs for DAYS (it waits on the server
+REM below, then restarts it on new code). A git pull that changes this file makes cmd resume inside the NEW file at the
+REM OLD offset - exactly what update.bat did on 2026-09-27 ("'/f' is not recognized"). So a TEMP copy runs instead; the
+REM repo folder comes in as an argument because %~dp0 inside the copy is TEMP. The hand-off is WITHOUT "call" so cmd
+REM never comes back to this file.
+if /i "%~1"=="--from-temp" goto :run
+copy /y "%~f0" "%TEMP%\agrodss_run_frontend.bat" >nul
+if errorlevel 1 goto :run
+"%TEMP%\agrodss_run_frontend.bat" --from-temp "%~dp0"
+
+:run
 setlocal
-cd /d "%~dp0"
+set "HERE=%~2"
+if "%HERE%"=="" set "HERE=%~dp0"
+cd /d "%HERE%"
 set "PY="
 if exist "D:\vela\backend_new\venv\Scripts\python.exe" set "PY=D:\vela\backend_new\venv\Scripts\python.exe"
 if not defined PY ( py -3 -c "import sys" >nul 2>&1 && set "PY=py -3" )

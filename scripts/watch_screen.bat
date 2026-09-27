@@ -11,14 +11,25 @@ REM brings the watcher back. Nothing here kills anything: keep_screen_up.bat onl
 REM
 REM ASCII ONLY - cmd reads a batch in the console code page (cp949 on Korean Windows).
 REM No multi-line blocks - a ")" inside one closes it early (live_check.bat died of exactly that).
+REM [R-7 2026-09-27] This loop runs forever, and cmd reads a batch by BYTE OFFSET - a git pull that changes this file
+REM would make cmd resume inside the new file at the old offset (what update.bat did on 2026-09-27). So a TEMP copy
+REM runs; the scripts folder comes in as an argument because %~dp0 inside the copy is TEMP. Hand-off WITHOUT "call".
+if /i "%~1"=="--from-temp" goto :run
+copy /y "%~f0" "%TEMP%\agrodss_watch_screen.bat" >nul
+if errorlevel 1 goto :run
+"%TEMP%\agrodss_watch_screen.bat" --from-temp "%~dp0"
+
+:run
 setlocal
-cd /d "%~dp0"
+set "HERE=%~2"
+if "%HERE%"=="" set "HERE=%~dp0"
+cd /d "%HERE%"
 set "EVERY=300"
 if not "%AGRODSS_WATCH_SECONDS%"=="" set "EVERY=%AGRODSS_WATCH_SECONDS%"
 
 echo [agrodss] watching the screen - a check every %EVERY% seconds. Closing this window stops the watching.
 
 :loop
-call "%~dp0keep_screen_up.bat"
+call "%HERE%keep_screen_up.bat"
 timeout /t %EVERY% /nobreak >nul
 goto loop

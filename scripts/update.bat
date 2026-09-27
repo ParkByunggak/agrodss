@@ -33,11 +33,12 @@ REM "pulling ...". cmd reads a batch file BY BYTE OFFSET while it runs. That pul
 REM carried on inside the NEW file at the OLD offset and landed in the middle of a "for /f" line. A batch must never be the
 REM file the pull rewrites: copy it to TEMP first and run the copy; the copy gets the repo folder as an argument because
 REM %~dp0 inside the copy would point at TEMP.
+REM The hand-off is WITHOUT "call": cmd then never comes back to this file. With "call" it would resume here after
+REM the copy finished - and by then the pull has rewritten this file too, so the resume point is the same trap.
 if /i "%~1"=="--from-temp" goto :run
 copy /y "%~f0" "%TEMP%\agrodss_update.bat" >nul
 if errorlevel 1 goto :run
-call "%TEMP%\agrodss_update.bat" --from-temp "%~dp0"
-exit /b %errorlevel%
+"%TEMP%\agrodss_update.bat" --from-temp "%~dp0"
 
 :run
 setlocal
