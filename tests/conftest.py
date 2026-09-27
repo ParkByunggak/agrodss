@@ -37,6 +37,8 @@ def _isolate_media_dir(tmp_path, monkeypatch):
     names_csv = tmp_path / "crop_names.csv"                                        # 정본 CSV 도 쓰기 대상(승인) — 사본으로
     names_csv.write_text((Path(__file__).resolve().parent.parent / "data" / "crop_names.csv").read_text(encoding="utf-8-sig"), encoding="utf-8")
     monkeypatch.setenv("AGRODSS_NAMES_CSV", str(names_csv))
+    monkeypatch.setenv("AGRODSS_NAMES_LOCAL_CSV", str(tmp_path / "crop_names_local.csv"))     # [U-38] 승인 덮개(쓰기 대상) — 없는 경로로 시작
+    monkeypatch.setenv("AGRODSS_NAMES_BACKUP_CSV", str(tmp_path / "crop_names_backup.csv"))   # [U-38] update.bat 사본(읽기)
     from names import resolve as _names
     _names.reload()
     yield

@@ -35,9 +35,9 @@ ROOT = Path(__file__).resolve().parent.parent
 # 추적하면서 런타임도 쓰는 파일 — 사유를 적는다. 늘리려면 "왜 정본이면서 운영 상태인가" 를 여기 한 줄로 답한다.
 TRACKED_ON_PURPOSE = {
     # data/subjects.json 은 [U-24 2026-09-26] 두 겹으로 갈라 여기서 뺐다 — 런타임은 data/subjects_local.json(git 밖)에만 쓴다
-    "data/crop_names.csv": "작목 이름 정본 — 승인(U-14)이 한 줄 붙인다. 사람의 명시적 행위라 드물다",
+    # data/crop_names.csv · docs/crop_names.md 는 [U-38 2026-09-27] 두 겹으로 갈라 뺐다 — 승인은 data/crop_names_local.csv(git 밖)에만,
+    # 렌더는 스크립트(사람)가 씨앗에서 다시 그린다. 다음 update.bat 이 승인을 되돌리던 형태(U-37 과 같다)를 닫았다.
     "data/organic/organic_materials_public.json": "공시자재 정본 — 갱신 작업이 통째로 바꾼다. 사람이 돌린다",
-    "docs/crop_names.md": "정본 CSV 의 렌더 — 승인 때 다시 그린다",
 }
 
 # 쓰는 모듈 → 그 모듈의 **쓰기 대상** 접근자. 읽기 전용 접근자는 아래 READ_ONLY 에 적어 둘 다 분류를 강제한다.
@@ -53,13 +53,16 @@ WRITE_ACCESSORS = {
     "ingest.soil_store": ("soil_dir",),
     "ingest.subjects": ("path",),
     "names.candidates": ("names_dir", "index_path"),
+    "names.resolve": ("names_local_csv_path",),          # [U-38] 승인 덮개 CSV — append_local 이 여기 쓴다(완전성 검사가 이 줄을 요구했다)
 }
 READ_ONLY = {
     "ingest.media": ("subjects_path", "subjects_backup_path"),   # 재배 단위 씨앗 · update.bat 사본 — 둘 다 읽기만(U-37)
     "ingest.parcels": ("parcels_path", "legacy_path"),   # 씨앗(추적) · 옛 파일 — 둘 다 읽기 전용(U-18)
+    "names.resolve": ("names_csv_path", "names_backup_csv_path"),   # 씨앗 CSV · update.bat 사본 — 읽기만(U-38)
 }
-# 접근자가 아닌 자리에서 쓰는 것 — 여기 손으로 적는다(자동 완전성 밖이라는 것을 문면으로 남긴다)
-EXTRA_TARGETS = (("names.resolve", "names_csv_path"),)
+# 접근자가 아닌 자리에서 쓰는 것 — 여기 손으로 적는다(자동 완전성 밖이라는 것을 문면으로 남긴다).
+# [U-38] names.resolve 가 직접 쓰게 되어(append_local) 자동 측정에 들어갔다 — 손 목록은 비었다
+EXTRA_TARGETS: tuple[tuple[str, str], ...] = ()
 
 
 def _git(*args: str) -> subprocess.CompletedProcess:
@@ -111,9 +114,10 @@ def test_the_declared_exceptions_are_really_tracked_and_really_written(no_env):
     for rel, why in TRACKED_ON_PURPOSE.items():
         assert rel in tracked, f"{rel} 은 더는 추적 파일이 아니다 — 목록에서 뺀다"
         assert len(why) > 10, f"{rel} 의 사유가 비어 있다"
-    # docs/crop_names.md 는 접근자가 아니라 상수로 쓰인다(EXTRA 밖) — 그 사실을 문면으로 고정한다
+    # docs/crop_names.md 는 [U-38] 런타임이 더는 안 쓴다 — 스크립트(사람)만 그린다. 승인 코드가 그 경로를 다시 잡으면 여기서 깨진다
     assert "docs/crop_names.md" not in written
-    assert "NAMES_DOC_PATH" in (ROOT / "names" / "candidates.py").read_text(encoding="utf-8")
+    assert "NAMES_DOC_PATH" not in (ROOT / "names" / "candidates.py").read_text(encoding="utf-8")
+    assert "NAMES_DOC_PATH" in (ROOT / "scripts" / "build_crop_axes_doc.py").read_text(encoding="utf-8")
 
 
 def test_the_profile_registry_cannot_be_committed_by_accident():

@@ -717,6 +717,8 @@ def make_server() -> ThreadingHTTPServer:
     _parcels.ensure_local()
     from ingest import subjects as _subjects  # [U-37] update.bat 사본에 남은 재배 단위(두 겹 이전 런타임 줄)를 덮개로 — 덧붙이기만
     _subjects.ensure_local()
+    from names import resolve as _names       # [U-38] 같은 형태 — 사본에 남은 승인 줄을 덮개 CSV 로
+    _names.ensure_local()
     return ThreadingHTTPServer((host, config.PORT), Handler)
 
 

@@ -50,12 +50,14 @@ def test_approve_is_human_only_and_needs_known_canonical():
 def test_approve_appends_csv_reloads_dictionary_and_new_chat_works():
     csv_path = Path(names.names_csv_path())
     assert csv_path.resolve() != names.NAMES_CSV.resolve()                        # 정본은 사본으로 격리
-    before = csv_path.read_text(encoding="utf-8")
+    before = csv_path.read_bytes()
+    local = Path(names.names_local_csv_path())
+    assert not local.exists()
     c = nc.add("땡파", context="new_chat", now=NOW)
     r = nc.approve(c["id"], "길경", alias_kind="사투리", by="publisher", now=NOW)   # 이명으로 적어도 정본(도라지)에 잇는다
     assert r["status"] == "승인" and r["canonical"] == "도라지" and r["source"] == "publisher"
-    after = csv_path.read_text(encoding="utf-8")
-    assert after.startswith(before) and "도라지,땡파,동일,사투리,발행자 승인 2026-09-19" in after
+    assert csv_path.read_bytes() == before, "[U-38] 승인이 씨앗(추적 CSV)에 썼다 — 다음 update.bat 이 되돌린다"
+    assert "도라지,땡파,동일,사투리,발행자 승인 2026-09-19" in local.read_text(encoding="utf-8")   # 덮개에만
     assert names.resolve("땡파").status == "alias" and names.resolve("땡파").canonical == "도라지"
     assert nc.open_candidates() == []
     s = subjects.add("땡파", "2026 가을", status="계획", now=NOW)                    # 이제 새 채팅이 통한다

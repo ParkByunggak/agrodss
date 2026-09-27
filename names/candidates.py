@@ -88,8 +88,10 @@ def add(query: str, context: str = "chat", subject: str | None = None, source: s
 
 
 def approve(cand_id: str, canonical: str, alias_kind: str = "사투리", by: str = "publisher", note: str = "",
-            now: datetime | None = None, regenerate_doc: bool | None = None) -> dict[str, Any]:
-    """발행자 승인 — 후보를 정본명에 잇는다. 정본명은 사전에 있어야 한다(이명이면 그 정본으로). CSV 에 한 줄 붙이고 사전을 다시 읽는다."""
+            now: datetime | None = None) -> dict[str, Any]:
+    """발행자 승인 — 후보를 정본명에 잇는다. 정본명은 사전에 있어야 한다(이명이면 그 정본으로).
+    [U-38] 덮개 CSV(git 밖)에 한 줄 붙이고 사전을 다시 읽는다 — 씨앗(추적 CSV)과 그 렌더(docs/crop_names.md)는 건드리지 않는다.
+    전에는 둘 다 썼고, 다음 update.bat 이 둘 다 되돌려 승인이 사라지는 형태였다. 씨앗으로 옮기는 것은 세션이 커밋으로."""
     if by not in sch.HUMAN_SOURCES:
         raise CandidateError("승인은 사람만(farmer · publisher) — 자동 등재 금지(D-14)")
     cur = latest_by_id().get(cand_id)
@@ -103,19 +105,9 @@ def approve(cand_id: str, canonical: str, alias_kind: str = "사투리", by: str
     canon = r.canonical
     if names._norm(cur["query"]) == canon:
         raise CandidateError("후보와 정본명이 같다")
-    csv_path = names.names_csv_path()
     day = (now or datetime.now(timezone.utc).astimezone()).date().isoformat()
-    with csv_path.open("a", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow([canon, cur["query"], names.IDENTITY, alias_kind, f"발행자 승인 {day}", (note or f"채집 {cur['context']} · 후보 {cand_id}")[:200]])
-    names.reload()
-    if regenerate_doc is None:
-        regenerate_doc = csv_path.resolve() == names.NAMES_CSV.resolve()
-    if regenerate_doc:
-        import sys
-        sys.path.insert(0, str(ROOT / "scripts"))
-        import build_crop_axes_doc as b  # noqa: WPS433
-        b.NAMES_DOC_PATH.write_text(b.build_names(b.load_names(csv_path)), encoding="utf-8")
+    names.append_local({"정본명": canon, "이명": cur["query"], "관계": names.IDENTITY, "이명종류": alias_kind,
+                        "출처": f"발행자 승인 {day}", "비고": (note or f"채집 {cur['context']} · 후보 {cand_id}")[:200]})
     ts = _now(now)
     rec = dict(cur)
     rec.update({"status": "승인", "canonical": canon, "alias_kind": alias_kind, "recorded_at": ts, "source": by})
