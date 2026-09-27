@@ -59,6 +59,18 @@ const say = (k, v) => console.log(`${k}: ${typeof v === "string" ? v : JSON.stri
   await Promise.all([page.waitForNavigation(), page.keyboard.press("Enter")]);
   say("photo_reply", (await page.locator(".msg.sys .bub").allTextContents()).pop());
 
+  // [U-32] 증상 물음 — 답은 '아직 모릅니다(기준 없음)' 이고, 물음 안의 본 것이 초안 카드로 서서 넣기까지 된다(계획표를 꺼내지 않는다)
+  await page.fill("#text", "잎 끝이 노란 형상을 어떻게 대처해야 하는가?");
+  await Promise.all([page.waitForNavigation(), page.keyboard.press("Enter")]);
+  const symptomReply = (await page.locator(".msg.sys .bub").allTextContents()).pop() || "";
+  const symptomDraft = page.locator(".draft").last();
+  const symptomDraftText = await symptomDraft.textContent();
+  say("symptom_reply", symptomReply.slice(0, 80));
+  say("symptom_draft", (symptomDraftText || "").slice(0, 60));
+  if (!symptomReply.startsWith("아직 모릅니다") || symptomReply.includes("다음 예정") || !(symptomDraftText || "").includes("본 것")) bad++;
+  await Promise.all([page.waitForNavigation(), symptomDraft.locator('button[type="submit"]').first().click()]);
+  say("symptom_saved", (await page.locator("p.ok").allTextContents()).join(" | "));
+
   say("errors", errors);
   if (errors.length) bad++;
   say("result", bad ? `문제 ${bad}` : "ok");
