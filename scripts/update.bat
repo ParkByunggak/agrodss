@@ -27,8 +27,23 @@ REM Copied, not discarded: nothing you typed is lost, and the session can merge 
 REM
 REM ASCII ONLY (cmd reads a batch in the console code page - cp949 on Korean Windows).
 REM No parentheses inside blocks - live_check.bat died that way once: a ")" closes the block early.
+REM
+REM [publisher paste 2026-09-27] After the pull the window printed "'/f' is not recognized as a command" and then a SECOND
+REM "pulling ...". cmd reads a batch file BY BYTE OFFSET while it runs. That pull changed this very file (9 lines), so cmd
+REM carried on inside the NEW file at the OLD offset and landed in the middle of a "for /f" line. A batch must never be the
+REM file the pull rewrites: copy it to TEMP first and run the copy; the copy gets the repo folder as an argument because
+REM %~dp0 inside the copy would point at TEMP.
+if /i "%~1"=="--from-temp" goto :run
+copy /y "%~f0" "%TEMP%\agrodss_update.bat" >nul
+if errorlevel 1 goto :run
+call "%TEMP%\agrodss_update.bat" --from-temp "%~dp0"
+exit /b %errorlevel%
+
+:run
 setlocal
-cd /d "%~dp0.."
+set "HERE=%~2"
+if "%HERE%"=="" set "HERE=%~dp0"
+cd /d "%HERE%.."
 set "PORT=8765"
 if not "%AGRODSS_FRONTEND_PORT%"=="" set "PORT=%AGRODSS_FRONTEND_PORT%"
 set "HOSTPORT=127.0.0.1:%PORT%"
@@ -59,7 +74,7 @@ goto start
 echo [agrodss] already newest - nothing to pull.
 
 :start
-call "%~dp0keep_screen_up.bat"
+call "%HERE%keep_screen_up.bat"
 
 REM [publisher 2026-09-23] This used to print "the screen SHOULD now be running <new>" and stop. That is a CLAIM,
 REM not a measurement - and a claim is exactly what cost this project days: a pull lands, the already-running
@@ -110,7 +125,7 @@ REM Never a blanket taskkill - the port pins exactly one process and nothing els
 :restart
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr /R /C:":%PORT% .*LISTENING"') do call :killpid %%p
 timeout /t 3 /nobreak >nul
-call "%~dp0keep_screen_up.bat"
+call "%HERE%keep_screen_up.bat"
 timeout /t 5 /nobreak >nul
 goto :eof
 
