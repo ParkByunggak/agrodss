@@ -40,3 +40,18 @@ def _isolate_media_dir(tmp_path, monkeypatch):
     _names.reload()
     yield
     _names.reload()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _isolate_organic_canon(tmp_path_factory):
+    """[격리 완전성 2026-09-27] 쓰기 접근자 전수(test_runtime_state_files.WRITE_ACCESSORS)와 이 파일의 격리 목록을 대조하니
+    `organic_materials.data_path`(AGRODSS_ORGANIC_PATH) 하나가 빠져 있었다 — 갱신 작업을 부르는 검사가 생기면 운영 정본(790KB)에
+    쓴다. 매 검사마다 복사하면 관문 한 번에 700MB 를 쓰므로 **세션에 한 번** 사본을 뜨고 그쪽을 가리킨다(읽기는 같고 쓰기는 사본)."""
+    import shutil
+    src = Path(__file__).resolve().parent.parent / "data" / "organic" / "organic_materials_public.json"
+    dst = tmp_path_factory.mktemp("organic") / "organic_materials_public.json"
+    shutil.copyfile(src, dst)
+    mp = pytest.MonkeyPatch()
+    mp.setenv("AGRODSS_ORGANIC_PATH", str(dst))
+    yield
+    mp.undo()

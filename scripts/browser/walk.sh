@@ -17,6 +17,7 @@ PORT="${AGRODSS_WALK_PORT:-8799}"
 cp "$ROOT/data/subjects.json" "$W/subjects.json"
 cp "$ROOT/data/parcels_seed.json" "$W/parcels.json"
 cp "$ROOT/data/crop_names.csv" "$W/crop_names.csv"
+cp "$ROOT/data/organic/organic_materials_public.json" "$W/organic_materials_public.json"
 # 사진 올리기 걷기용 — EXIF 없는 JPEG 하나(검사 헬퍼 재사용 · tmp 에만)
 ( cd "$ROOT" && PYTHONDONTWRITEBYTECODE=1 python -B -c 'import sys; sys.path.insert(0, "."); from tests.test_chat_upload_voice_lan import make_jpeg_with_exif; open(sys.argv[1], "wb").write(make_jpeg_with_exif(None))' "$W/KakaoTalk_20260923_074025068_04.jpg" )
 export TZ=Asia/Seoul AGRODSS_TODAY="${AGRODSS_TODAY:-2026-09-24}" AGRODSS_FRONTEND_PORT="$PORT" AGRODSS_RELOAD=0
@@ -24,6 +25,7 @@ export AGRODSS_MEDIA_DIR="$W/media" AGRODSS_EVENTS_DIR="$W/events" AGRODSS_FEEDB
 export AGRODSS_SUBJECTS_PATH="$W/subjects.json" AGRODSS_SUBJECTS_LOCAL_PATH="$W/subjects_local.json"
 export AGRODSS_PARCELS_PATH="$W/parcels.json" AGRODSS_PARCELS_LOCAL_PATH="$W/parcels_local.json" AGRODSS_PARCELS_LEGACY_PATH="$W/none.json"
 export AGRODSS_PROFILE_PATH="$W/profile.json" AGRODSS_SOIL_DIR="$W/soil" AGRODSS_PSIS_DIR="$W/psis" AGRODSS_NAMES_DIR="$W/names" AGRODSS_NAMES_CSV="$W/crop_names.csv"
+export AGRODSS_ORGANIC_PATH="$W/organic_materials_public.json"
 cd "$ROOT"
 PYTHONDONTWRITEBYTECODE=1 python -B frontend/serve.py --no-browser > "$W/server.log" 2>&1 &
 PID=$!
