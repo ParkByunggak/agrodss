@@ -715,6 +715,8 @@ def make_server() -> ThreadingHTTPServer:
     config.check_today()                     # [검토 ⑤] 잘못된 AGRODSS_TODAY 는 기동에서 막는다 — 요청마다 500 이 나고 원인이 숨던 형태
     from ingest import parcels as _parcels   # [U-18] 첫 기동에 씨앗의 PII 를 덮개(git 밖)로 옮긴다 — 발행자 PC 에서 pull 뒤 자동
     _parcels.ensure_local()
+    from ingest import subjects as _subjects  # [U-37] update.bat 사본에 남은 재배 단위(두 겹 이전 런타임 줄)를 덮개로 — 덧붙이기만
+    _subjects.ensure_local()
     return ThreadingHTTPServer((host, config.PORT), Handler)
 
 

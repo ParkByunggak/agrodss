@@ -55,7 +55,7 @@ WRITE_ACCESSORS = {
     "names.candidates": ("names_dir", "index_path"),
 }
 READ_ONLY = {
-    "ingest.media": ("subjects_path",),          # 재배 단위를 읽기만 한다
+    "ingest.media": ("subjects_path", "subjects_backup_path"),   # 재배 단위 씨앗 · update.bat 사본 — 둘 다 읽기만(U-37)
     "ingest.parcels": ("parcels_path", "legacy_path"),   # 씨앗(추적) · 옛 파일 — 둘 다 읽기 전용(U-18)
 }
 # 접근자가 아닌 자리에서 쓰는 것 — 여기 손으로 적는다(자동 완전성 밖이라는 것을 문면으로 남긴다)

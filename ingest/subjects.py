@@ -30,6 +30,40 @@ def path() -> Path:
     return media.subjects_local_path()
 
 
+def ensure_local() -> int:
+    """[U-37 2026-09-27] 두 겹(U-24) **이전**에 런타임이 씨앗(추적 파일)에 써 넣은 재배 단위를 되살린다 — 덧붙이기만.
+
+    발행자 PC 의 `update.bat` 은 수정된 추적 data 파일을 `data/_local_backup/` 으로 옮기고 되돌린 뒤 pull 한다. 두 겹 이전에
+    채팅으로 작목을 추가했거나 상태를 바꿨다면 그 줄은 씨앗에 있었고, 되돌리는 순간 **화면에서 사라진다**(사본에만 남는다).
+    필지 등록부가 같은 함정을 밟았다(`parcels.ensure_local` — 좌표가 사라졌다). 그래서 기동마다 사본을 보고, 씨앗에 없거나
+    씨앗과 다른 줄을 덮개에 **없을 때만** 덧붙인다. 덮개의 기존 줄은 절대 안 건드리고(덮개가 정본) 씨앗도 안 건드린다.
+    사본이 없으면 아무것도 만들지 않는다(지어내지 않는다). 돌려주는 값은 덧붙인 줄 수."""
+    bp = media.subjects_backup_path()
+    if not bp.exists():
+        return 0
+    try:
+        backup = json.loads(bp.read_text(encoding="utf-8")).get("subjects", [])
+    except (json.JSONDecodeError, AttributeError) as e:
+        dropped.note("재배 단위 사본", bp.name, f"{type(e).__name__}: {e}")
+        return 0
+    seed = {s.get("id"): s for s in media._subject_rows(media.subjects_path())}
+    local = {s.get("id"): s for s in media._subject_rows(media.subjects_local_path())}
+    added = 0
+    for rec in backup:
+        sid = rec.get("id")
+        if not sid or sid in local or seed.get(sid) == rec:
+            continue                          # 덮개가 이미 안다 · 씨앗과 같다 — 되살릴 것이 없다
+        try:
+            sch.validate(dict(rec), kind="subject")
+        except Exception as e:                # noqa: BLE001 — 깨진 줄 하나가 되살리기를 통째로 막지 않게, 그러나 조용히는 아니다
+            dropped.note("재배 단위 사본", f"{bp.name}:{sid}", f"{type(e).__name__}: {e}")
+            continue
+        _upsert(dict(rec))
+        local[sid] = rec
+        added += 1
+    return added
+
+
 def _upsert(rec: dict[str, Any]) -> None:
     """덮개에만 쓴다 — 같은 id 가 덮개에 있으면 바꾸고 없으면 덧붙인다. 씨앗(추적 파일)은 사람이 커밋으로만 고친다(U-24)."""
     p = path()

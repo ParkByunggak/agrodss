@@ -22,6 +22,7 @@ def _isolate_media_dir(tmp_path, monkeypatch):
     reg.write_text(_REAL_SUBJECTS.read_text(encoding="utf-8"), encoding="utf-8")   # 운영 등록부의 사본 — 읽기는 같고 쓰기는 tmp
     monkeypatch.setenv("AGRODSS_SUBJECTS_PATH", str(reg))
     monkeypatch.setenv("AGRODSS_SUBJECTS_LOCAL_PATH", str(tmp_path / "subjects_local.json"))   # [U-24] 덮개(쓰기 대상) — 없는 경로로 시작
+    monkeypatch.setenv("AGRODSS_SUBJECTS_BACKUP_PATH", str(tmp_path / "subjects_backup.json"))  # [U-37] update.bat 사본(읽기) — 이 PC 의 실제 사본이 검사에 새지 않게
     parcels = tmp_path / "parcels.json"                                            # [코드 평가 C4] 필지 등록부 — R-4 전수에서 빠졌던 한 곳
     parcels.write_text((_REAL_SUBJECTS.parent / "parcels_seed.json").read_text(encoding="utf-8"), encoding="utf-8")   # [U-18 2단계] 씨앗(PII 없음)의 사본
     monkeypatch.setenv("AGRODSS_PARCELS_PATH", str(parcels))

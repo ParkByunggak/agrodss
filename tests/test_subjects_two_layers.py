@@ -67,6 +67,50 @@ def test_the_overlay_is_outside_git_and_is_the_only_write_path(monkeypatch, tmp_
     assert subjects.path() == tmp_path / "x.json"
 
 
+def _backup() -> Path:
+    return Path(os.environ["AGRODSS_SUBJECTS_BACKUP_PATH"])
+
+
+def _write_backup(rows: list[dict]) -> None:
+    _backup().write_text(json.dumps({"subjects": rows}, ensure_ascii=False), encoding="utf-8")
+
+
+def test_rows_the_updater_backed_up_come_back_through_the_overlay_only():
+    """[U-37] 두 겹 이전에 채팅이 씨앗에 써 넣은 재배 단위 — update.bat 이 사본으로 옮기고 되돌리면 화면에서 사라진다. 기동이 되살린다."""
+    seed_rows = json.loads(_seed().read_text(encoding="utf-8"))["subjects"]
+    changed = dict(seed_rows[0]); changed["status"] = "종료"; changed["ended_at"] = "2026-11-30"
+    new = {"id": "p001-배추-2026가을", "parcel": "p001", "label": "배추 · 2026 가을", "crop": "배추", "season": "2026 가을",
+           "source": "farmer", "status": "계획", "recorded_at": "2026-09-20T10:00:00+00:00"}
+    _write_backup([changed, new])
+    before = _seed().read_bytes()
+    assert subjects.ensure_local() == 2
+    assert _seed().read_bytes() == before, "씨앗을 건드렸다"
+    rows = media.load_subjects()
+    assert rows[0]["id"] == changed["id"] and rows[0]["status"] == "종료" and rows[0]["ended_at"] == "2026-11-30"   # 바뀐 줄이 덮개로
+    assert any(r["id"] == new["id"] and r["crop"] == "배추" for r in rows)                                         # 새 줄이 덮개로
+    assert subjects.ensure_local() == 0, "두 번째 기동이 또 덧붙인다 — 멱등이 아니다"
+
+
+def test_the_overlay_wins_over_the_backup_and_nothing_is_invented_without_one():
+    sid = media.load_subjects()[0]["id"]
+    assert subjects.ensure_local() == 0 and not _local().exists(), "사본이 없는데 덮개를 만들었다 — 지어낸 것"
+    subjects.set_status(sid, "종료", ended_at="2026-12-01")           # 덮개가 먼저 안다
+    changed = dict(json.loads(_seed().read_text(encoding="utf-8"))["subjects"][0]); changed["status"] = "재배 중"
+    _write_backup([changed])
+    assert subjects.ensure_local() == 0
+    assert media.load_subjects()[0]["ended_at"] == "2026-12-01", "사본이 덮개의 기존 줄을 덮었다 — 덮개가 정본이다"
+
+
+def test_a_backup_row_identical_to_the_seed_is_not_copied_and_the_server_wires_the_restore():
+    seed_rows = json.loads(_seed().read_text(encoding="utf-8"))["subjects"]
+    _write_backup(list(seed_rows))
+    assert subjects.ensure_local() == 0 and not _local().exists()
+    from frontend import serve
+    src = open(serve.__file__, encoding="utf-8").read()
+    body = src[src.index("def make_server"):src.index("\ndef ", src.index("def make_server") + 10)]
+    assert "_subjects.ensure_local()" in body, "기동이 되살리기를 부르지 않는다 — 함수만 있고 배선이 없다"
+
+
 def test_the_runtime_state_ledger_no_longer_lists_subjects_as_an_exception():
     """전수 목록(운영 상태 파일)이 낡지 않게 — 두 겹으로 가른 뒤에도 예외로 남아 있으면 다음 사람이 '아직' 으로 읽는다."""
     from tests import test_runtime_state_files as R

@@ -90,6 +90,14 @@ def subjects_local_path() -> Path:
     return Path(os.environ.get("AGRODSS_SUBJECTS_LOCAL_PATH") or SUBJECTS_LOCAL_PATH)
 
 
+SUBJECTS_BACKUP_PATH = ROOT / "data" / "_local_backup" / "subjects.json"
+
+
+def subjects_backup_path() -> Path:
+    """[U-37] `update.bat` 이 수정된 추적 파일을 옮겨 두는 자리(읽기만) — 두 겹 이전에 런타임이 씨앗에 써 넣은 재배 단위가 여기 남는다."""
+    return Path(os.environ.get("AGRODSS_SUBJECTS_BACKUP_PATH") or SUBJECTS_BACKUP_PATH)
+
+
 def _subject_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
