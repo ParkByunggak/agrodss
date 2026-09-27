@@ -281,9 +281,7 @@ def events_page(message: str = "", error: str = "") -> tuple[int, str]:
             for r in reversed(recs)) + "</table>")
     else:
         out.append("<p>아직 없다. 파종은 기준점(재배 단위 등록부)이 사건을 대신한다.</p>")
-    style = ("<style>.reg{border:1px solid var(--line);border-radius:6px;padding:10px;margin:8px 0;display:grid;grid-template-columns:minmax(0,1fr);gap:6px}"
-             ".reg label{display:block}.err{color:var(--drop-fg);background:var(--drop);padding:6px 10px;border-radius:4px}"
-             ".ok{color:var(--done-fg);background:var(--done);padding:6px 10px;border-radius:4px}</style>")
+    style = ""      # [U-35] 폼·알림 스타일은 render.CSS 정본 하나 — 여기 두 벌 인라인이던 것을 뺐다(U-34 가 둘 다 고쳐야 했다)
     footer = footer_text()
     return (400 if error else 200), render.page("AGRODSS —사건", nav_html("/events"), style + "".join(out),
                                                 "사건(I-3 §2) · 결정(§5 불이행 사유) — 대상 시각 없이는 기록되지 않는다", footer)
@@ -356,9 +354,7 @@ def media_page(message: str = "", error: str = "") -> tuple[int, str]:
         out.append("</table>")
     else:
         out.append("<p>아직 없다.</p>")
-    style = ("<style>.reg{border:1px solid var(--line);border-radius:6px;padding:10px;margin:8px 0;display:grid;grid-template-columns:minmax(0,1fr);gap:6px}"
-             ".reg label{display:block}.err{color:var(--drop-fg);background:var(--drop);padding:6px 10px;border-radius:4px}"
-             ".ok{color:var(--done-fg);background:var(--done);padding:6px 10px;border-radius:4px}</style>")
+    style = ""      # [U-35] 폼·알림 스타일은 render.CSS 정본 하나 — 여기 두 벌 인라인이던 것을 뺐다(U-34 가 둘 다 고쳐야 했다)
     meta = "1층 관찰(영상) — 촬영 시각 · 출처 · 해상도가 붙어야 등록된다. 좌표는 화면에 내지 않는다"
     footer = footer_text()
     return (400 if error else 200), render.page("AGRODSS —영상 반입", nav_html("/media"), style + "".join(out), meta, footer)

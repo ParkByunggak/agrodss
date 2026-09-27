@@ -48,11 +48,12 @@ def test_the_table_screens_fit_a_phone():
     phone = _phone_block(css)
     assert "flex-direction:column" in _rule(phone, ".wrap"), "좁은 화면에서 왼쪽 메뉴 240px 이 본문을 눌러 150px 만 남는다"
     # 표 화면의 폼(.reg)은 grid 인데 열이 auto 라 항목의 max-width:100% 가 무효였다(순환) — 열을 minmax(0,1fr) 로.
-    # 그 스타일은 serve.py 에 **두 벌** 인라인이다(지점 축) — 한 벌만 고치면 다른 화면이 그대로 넘친다. 전부를 센다.
+    # [U-35] 그 스타일은 serve.py 에 **두 벌** 인라인이었다(지점 축 — U-34 가 둘 다 고쳐야 했다). 이제 정본은 render.CSS 하나이고,
+    # serve.py 에는 .reg 규칙이 없어야 한다(다시 생기면 두 벌이 된다).
+    assert "grid-template-columns:minmax(0,1fr)" in _rule(css, ".reg")
     from frontend import serve
     src = open(serve.__file__, encoding="utf-8").read()
-    rules = re.findall(r"\.reg\{[^}]*\}", src)
-    assert rules and all("grid-template-columns:minmax(0,1fr)" in r for r in rules), rules
+    assert not re.search(r"\.reg\s*\{", src), "표 화면 폼 스타일이 serve.py 에 다시 인라인됐다 — 정본은 render.CSS 하나"
 
 
 def test_no_page_asks_for_a_favicon_it_does_not_have(srv):

@@ -117,6 +117,11 @@ h3 { font-size:14px; margin:20px 0 6px; }
 code { font-size:12.5px; background:var(--head); padding:1px 4px; border-radius:3px; overflow-wrap:anywhere; }
 /* [U-34 2026-09-26 · 실제 브라우저 390px 실측] 표 화면의 폼 입력칸(size=40)이 화면을 넘겼고, 좁은 화면에서 왼쪽 메뉴 240px 이 본문을 150px 로 눌렀다 */
 input, select { max-width:100%; box-sizing:border-box; }
+/* [U-35 2026-09-27] 표 화면 폼(.reg)·알림(.err/.ok) 스타일 — serve.py 에 **두 벌** 인라인이던 것을 정본 하나로(U-34 가 두 벌을 둘 다 고쳐야 했다 · 지점 축) */
+.reg { border:1px solid var(--line); border-radius:6px; padding:10px; margin:8px 0; display:grid; grid-template-columns:minmax(0,1fr); gap:6px; }
+.reg label { display:block; }
+.err { color:var(--drop-fg); background:var(--drop); padding:6px 10px; border-radius:4px; }
+.ok { color:var(--done-fg); background:var(--done); padding:6px 10px; border-radius:4px; }
 @media (max-width:720px) { .wrap { flex-direction:column; } nav { width:auto; border-right:0; border-bottom:1px solid var(--line); } }
 pre { background:var(--head); padding:10px; overflow-x:auto; border-radius:4px; }
 table { border-collapse:collapse; width:100%; margin:8px 0 12px; font-size:13px; display:block; overflow-x:auto; }
