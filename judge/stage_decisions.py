@@ -133,7 +133,8 @@ SYMPTOM_TRIAGE = _R(registry.Decision(
     optional_axes=("pest_regional", "temp", "precip", "soil_water"), forbidden_axes=FORB,
     rule="[D-18 발행자 결정 대기] 격자 칸 3·4 의 symptom_rules — [{symptoms:[증상 어휘], causes:[{name, check, recoverable}], first_check}] — 가 채워지면, "
          "최근 관찰(observation.note) 중 증상 어휘가 든 것에 대해 원인 **후보**와 먼저 할 확인 하나를 낸다(단정 없음 · 회복 불가 후보 먼저 · 등급 추정). "
-         "규칙이 비어 있으면 판단 불가(지식) — 어느 격자의 어느 키가 비었는지 말한다. 증상 관찰이 없으면 판단 불가(데이터).",
+         "규칙이 비어 있으면 판단 불가(지식) — 어느 격자의 어느 키가 비었는지 말한다. 증상 관찰이 없으면 판단 불가(데이터). "
+         "관찰에 증상은 있으나 규칙 어휘와 안 맞으면 판단 불가(지식) — 기준이 아는 말을 함께 낸다. 규칙의 증상 어휘는 1층 라우팅에도 덧붙는다(어휘 한 벌).",
     revisit_days=1,
     params={"rules_key": SYMPTOM_RULES_KEY, "stage_orders": (3, 4), "lookback_days": 14,
             "source": "D-18 — 발행자가 쓴 감별(양분 부족 · 과습/뿌리 부패 · 고자리파리 유충 · 노균병/잎마름 · 확인 하나 = 인경 밑)이 정본 후보"}))
@@ -427,6 +428,37 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
                             "summary": f"{verdict} — 계획일 {target}"}, notes=notes)
 
 
+def _symptom_rules(unit: dict[str, Any], key: str, orders: tuple[int, ...]) -> list[dict[str, Any]]:
+    return [r for s in unit.get("stages", []) if s.get("order") in orders and isinstance(s.get(key), list) for r in s[key] if isinstance(r, dict)]
+
+
+def _rule_words(rules: list[dict[str, Any]]) -> tuple[str, ...]:
+    out: list[str] = []
+    for r in rules:
+        for w in r.get("symptoms") or []:
+            if isinstance(w, str) and w and w not in out:
+                out.append(w)
+    return tuple(out)
+
+
+def _unit_id(subject: dict[str, Any], unit: dict[str, Any]) -> str:
+    return str(subject.get("grid_unit") or (unit.get("unit") or {}).get("id") or "")     # 격자 id 는 unit.unit.id
+
+
+def symptom_words_for(subject: dict[str, Any]) -> tuple[str, ...]:
+    """이 재배 단위의 격자 규칙(symptom_rules)이 아는 증상 어휘. 규칙이 없거나 격자를 못 읽으면 ().
+
+    [어휘 한 벌 2026-09-27] 채팅의 라우팅 목록(1층 정본)과 격자 규칙의 어휘가 **두 벌**이었다 — 발행자가 규칙에 라우팅 목록
+    밖의 말(예: "하얗")을 쓰면 규칙은 맞는데 채팅이 증상 물음으로 보지 않아 문이 안 열린다(직렬 게이트의 앞 문). 1층은 이 목록을
+    **덧붙여** 쓴다 — 규칙이 아는 말은 정본이 하나(격자)다.
+    """
+    unit, miss = grid_schema.load_unit(subject)
+    if miss is not None:
+        return ()
+    d = registry.get("symptom_triage")
+    return _rule_words(_symptom_rules(unit, d.params["rules_key"], tuple(d.params["stage_orders"])))
+
+
 def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]] | None = None) -> Envelope:
     """[D-18 자리] 증상 → 원인 후보. 지식(격자 symptom_rules)이 없으면 어디가 비었는지 말하고, 있으면 후보 + 확인 하나(단정 없음)."""
     did, sid, as_of = "symptom_triage", subject.get("id", "?"), _now()
@@ -435,13 +467,12 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
         return units.envelope_for(miss, did, sid, as_of)
     d = registry.get(did)
     key, orders, lookback = d.params["rules_key"], tuple(d.params["stage_orders"]), int(d.params["lookback_days"])
-    rules = [r for s in unit.get("stages", []) if s.get("order") in orders and isinstance(s.get(key), list) for r in s[key] if isinstance(r, dict)]
+    rules = _symptom_rules(unit, key, orders)
+    uid = _unit_id(subject, unit)                                          # 문면에 격자 이름과 고칠 파일을 함께
+    where = f"격자 {uid} 칸 {'·'.join(str(o) for o in orders)} 의 {key}"
     if not rules:
-        orders_txt = "·".join(str(o) for o in orders)
-        uid = str(subject.get("grid_unit") or (unit.get("unit") or {}).get("id") or "")     # 격자 id 는 unit.unit.id — 문면에 이름과 파일을 함께
         return Envelope("판단 불가(지식)", did, sid, as_of,
-                        result={"why": f"격자 {uid} 칸 {orders_txt} 에 {key}(증상 → 원인 후보 · 확인) 미채움 — D-18 발행자 결정 대기 · "
-                                       f"고칠 파일 {grid_schema.unit_file_name(uid)}",
+                        result={"why": f"{where}(증상 → 원인 후보 · 확인) 미채움 — D-18 발행자 결정 대기 · 고칠 파일 {grid_schema.unit_file_name(uid)}",
                                 "summary": "증상에서 원인을 좁히는 기준이 아직 없습니다 — 기준이 서면 원인 후보와 먼저 할 확인 하나를 냅니다"})
     anchor = subject.get("anchor")
     if not anchor:
@@ -451,6 +482,15 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
     hits = [(r, [o for o in obs if any(w in (o.get("text") or "") for w in (r.get("symptoms") or []))]) for r in rules]
     hits = [(r, m) for r, m in hits if m]
     if not hits:
+        # [어휘 한 벌 2026-09-27] 관찰에 증상은 있는데 규칙 어휘와 안 맞는 것은 **지식**의 빈자리다 — "관찰이 없다" 로 내면 농가가 본 것을
+        # 부정하는 문면이 된다(조건 탈락과 같은 급). 증상인지의 판정은 1층 정본 하나(chat.symptom_in)로 — 여기 목록을 두 벌째 두지 않는다.
+        from ingest.chat import symptom_in                                 # 함수 안에서 — 3층이 1층 어휘를 판정에 쓰는 유일한 자리
+        known = " · ".join(_rule_words(rules))
+        if any(symptom_in(o.get("text") or "") for o in obs):
+            return Envelope("판단 불가(지식)", did, sid, as_of,
+                            result={"why": f"최근 {lookback}일 관찰 {len(obs)}건에 증상이 있으나 {where} 어휘({known})와 안 맞는다 — D-18 · "
+                                           f"고칠 파일 {grid_schema.unit_file_name(uid)}",
+                                    "summary": f"본 것이 기준이 아는 증상 말과 안 맞습니다 — 기준이 아는 말: {known}. 기준을 넓히면 원인 후보를 냅니다"})
         return Envelope("판단 불가(데이터)", did, sid, as_of,
                         missing=[{"axis": "observation", "who_can_fill": "농가 — 밭에서 본 것 한 줄(잎 색 · 시듦 · 무름 · 반점 …)"}],
                         result={"why": f"최근 {lookback}일 관찰에 증상 어휘가 없다 — 최종 심급은 농가 관찰", "summary": "증상 관찰 대기"})

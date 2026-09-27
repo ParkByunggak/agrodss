@@ -50,11 +50,11 @@ def test_with_the_real_grid_it_says_which_key_of_which_grid_is_empty():
     assert e.result["summary"] and "기준" in e.result["summary"]
 
 
-def _synthetic_grid(tmp_path, monkeypatch):
+def _synthetic_grid(tmp_path, monkeypatch, rules=RULES):
     unit = copy.deepcopy(grid_schema.load(grid_schema.GRID_DIR / "jjokpa_autumn.json"))
     for s in unit["stages"]:
         if s["order"] == 3:
-            s[SD.SYMPTOM_RULES_KEY] = RULES
+            s[SD.SYMPTOM_RULES_KEY] = rules
     (tmp_path / "jjokpa_autumn.json").write_text(json.dumps(unit, ensure_ascii=False), encoding="utf-8")
     monkeypatch.setattr(grid_schema, "GRID_DIR", tmp_path)
 
@@ -137,3 +137,50 @@ def test_judge_page_shows_each_candidate_with_its_check(tmp_path, monkeypatch, s
         assert words.plain(cause["name"]) in body and words.plain(cause["check"]) in body, cause
     assert body.index("과습 · 뿌리 상함") < body.index("양분 부족")                                    # 회복 불가가 앞
     assert "{'name'" not in body and "candidates" not in body                                       # 안쪽 이름·dict 표기가 새지 않는다
+
+
+# ── [어휘 한 벌 2026-09-27] 라우팅 목록(chat.SYMPTOM_WORDS)과 격자 규칙 어휘가 두 벌이었다 ────────────────────────────────────────
+# 직렬 게이트의 **앞 문**: 발행자가 규칙에 라우팅 목록 밖의 말을 쓰면 규칙은 맞는데 채팅이 증상 물음으로 안 봐서 결정에 닿지 않는다.
+# 그리고 관찰에 증상은 있는데 규칙 어휘와 안 맞으면 "관찰이 없다" 로 나갔다 — 농가가 본 것을 부정하는 문면(조건 탈락과 같은 급).
+RULES_SYNTH = [{"symptoms": ["하얗", "하얘"], "causes": [{"name": "합성 원인 A", "check": "합성 확인 A", "recoverable": True}], "first_check": "합성 확인 A"}]
+Q_SYNTH = "잎 끝이 하얗게 되는데 왜 이런가"
+
+
+def test_a_rule_word_outside_the_routing_list_still_opens_the_door(tmp_path, monkeypatch):
+    assert not any(w in Q_SYNTH for w in chat.SYMPTOM_WORDS)                    # 전제 — 라우팅 목록은 이 말을 모른다(알게 되면 이 검사가 무의미해진다)
+    s = _subject()
+    assert SD.symptom_words_for(s) == () and chat.grid_symptom_words(s) == () and chat.grid_symptom_words(None) == ()   # 실제 격자: 규칙 없음
+    assert [d["kind"] for d in chat.classify(Q_SYNTH, TODAY, subject=s)] == ["question"]                  # 규칙 없으면 정본 목록만 — 관찰 초안 없음
+    _synthetic_grid(tmp_path, monkeypatch, RULES_SYNTH)
+    assert SD.symptom_words_for(s) == ("하얗", "하얘") and chat.grid_symptom_words(s) == ("하얗", "하얘")
+    assert [d["kind"] for d in chat.classify(Q_SYNTH, TODAY, subject=s)] == ["question", "observation.note"]   # 규칙이 아는 말 → 관찰로도
+    assert [d["kind"] for d in chat.classify(Q_SYNTH, TODAY)] == ["question"]                             # 재배 단위 없이는 정본 목록만
+    a = chat.answer(s, Q_SYNTH, TODAY)
+    assert a.startswith(f"[{words.said('판단함')}]") and "합성 원인 A" in a and "다음 예정" not in a, a
+
+
+def test_a_symptom_the_rules_do_not_know_is_a_knowledge_gap_not_a_missing_observation(tmp_path, monkeypatch):
+    _synthetic_grid(tmp_path, monkeypatch)                                       # 규칙은 노랗 계열만 안다
+    s = _subject()
+    e = SD.judge_symptom_triage(s, TODAY, observations=[{"id": "o", "text": "잎에 반점이 생겼다", "observed_at": TODAY.isoformat()}])
+    assert e.kind == "판단 불가(지식)" and not e.missing
+    assert "노랗" in e.result["why"] and ".json" in e.result["why"] and "D-18" in e.result["why"]
+    assert "기준이 아는 말" in e.result["summary"] and "노랗" in e.result["summary"]
+    e2 = SD.judge_symptom_triage(s, TODAY, observations=[{"id": "o", "text": "오늘 물 줬다", "observed_at": TODAY.isoformat()}])
+    assert e2.kind == "판단 불가(데이터)" and e2.missing[0]["axis"] == "observation"   # 증상이 아예 없으면 그대로 데이터 미비
+    a = chat.answer(s, "잎에 반점이 생겼는데 어떻게 하나", TODAY)
+    assert a.startswith(f"[{words.said('판단 불가(지식)')}]") and "기준이 아는 말" in a and "관찰이 없" not in a
+
+
+def test_the_symptom_judgement_has_one_vocabulary_canon():
+    """3층이 '증상인가' 를 자기 목록으로 판정하지 않는다 — 1층 정본 함수(chat.symptom_in)를 부른다. 두 벌이면 한쪽이 자란 만큼 어긋난다."""
+    src = (grid_schema.ROOT / "judge" / "stage_decisions.py").read_text(encoding="utf-8")
+    body = src[src.index("def judge_symptom_triage"):]
+    body = body[:body.index("\ndef ", 10)]
+    assert "from ingest.chat import symptom_in" in body and "symptom_in(o.get" in body
+    assert "SYMPTOM_WORDS = " not in src and "chat.SYMPTOM_WORDS" not in src and "import SYMPTOM_WORDS" not in src   # 목록을 복사하지도, 직접 읽지도 않는다(함수만 부른다)
+    csrc = (grid_schema.ROOT / "ingest" / "chat.py").read_text(encoding="utf-8")
+    ans = csrc[csrc.index("def answer("):]
+    ans = ans[:ans.index("\ndef ", 10)]
+    assert "symptom_in(text, grid_symptom_words(subject))" in ans                # 라우팅이 격자 말을 덧붙여 쓴다
+    assert "classify(text, today, subject=s)" in csrc                            # send 도 재배 단위를 넘긴다

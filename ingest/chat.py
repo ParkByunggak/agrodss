@@ -50,8 +50,18 @@ SYMPTOM_WORDS = ("노랗", "노란", "노래", "누렇", "누래", "황화", "�
                  "반점", "곰팡이", "구멍", "갉아", "갉혀", "이상하", "안 자라", "안 크", "웃자라", "죽어", "죽었", "죽는", "타들", "탔")
 
 
-def symptom_in(text: str) -> bool:
-    return any(w in text for w in SYMPTOM_WORDS)
+def symptom_in(text: str, extra: tuple[str, ...] = ()) -> bool:
+    """증상 어휘 — 정본 목록 + 이 재배 단위의 격자 규칙이 아는 말(extra · `grid_symptom_words`). 3층도 이 함수로 판정한다(어휘 한 벌)."""
+    return any(w in text for w in (*SYMPTOM_WORDS, *extra))
+
+
+def grid_symptom_words(subject: dict[str, Any] | None) -> tuple[str, ...]:
+    """[어휘 한 벌 2026-09-27] 격자 규칙(symptom_rules)이 아는 증상 말 — 라우팅 목록 밖의 말을 규칙에 쓰면 규칙은 맞는데 채팅이 증상
+    물음으로 안 봐서 문이 안 열리던 형태(직렬 게이트의 앞 문). 규칙이 없으면 () 이라 지금 실제 격자에서는 정본 목록만 쓴다."""
+    if not subject:
+        return ()
+    from judge import stage_decisions as SD      # 함수 안에서 — answer 와 같은 층 규율(모듈 수준 import 는 층을 뒤집는다)
+    return SD.symptom_words_for(subject)
 
 
 PLAN_WORDS = ("예정", "할 것", "하려고", "하려 한다", "계획", "할까 한다", "할 생각", "하겠다", "할게", "해야겠")
@@ -464,10 +474,11 @@ def _farm_work_not_a_request(t: str) -> bool:
     return bool(_event_type(t)) and _past_ending(t)
 
 
-def classify(text: str, today: date) -> list[dict[str, Any]]:
+def classify(text: str, today: date, subject: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """발화 → 초안 목록. 하나도 못 나누면 [] (되묻는다). 초안은 확인 전까지 아무 원장에도 안 들어간다.
-    말미에 **증상 이중 사용** 한 번 — 갈래마다 넣지 않고 산출 말미 1회(§7.5 지점 축 · 차단·필터 위치 규율과 같은 형태)."""
-    return _with_symptom_observation(_classify(text, today), text.strip(), today)
+    말미에 **증상 이중 사용** 한 번 — 갈래마다 넣지 않고 산출 말미 1회(§7.5 지점 축 · 차단·필터 위치 규율과 같은 형태).
+    `subject` 를 주면 그 격자 규칙이 아는 증상 말도 증상으로 본다(어휘 한 벌) — 없으면 정본 목록만."""
+    return _with_symptom_observation(_classify(text, today), text.strip(), today, grid_symptom_words(subject))
 
 
 def _keeps_the_text(d: dict[str, Any], t: str) -> bool:
@@ -477,12 +488,12 @@ def _keeps_the_text(d: dict[str, Any], t: str) -> bool:
             or (k == "decision.noncompliance" and t in (d.get("reason") or "")))
 
 
-def _with_symptom_observation(drafts: list[dict[str, Any]], t: str, today: date) -> list[dict[str, Any]]:
+def _with_symptom_observation(drafts: list[dict[str, Any]], t: str, today: date, extra: tuple[str, ...] = ()) -> list[dict[str, Any]]:
     """[발행자 2026-09-26] "잎 끝이 노랗다" 는 관찰이다 — 물음으로만 읽으면 관찰 원장에 안 남아 **실측 재료가 물음에서 샌다**(I-3 의 질의
     이중 사용이 여기서 새고 있었다). 처방 직후 전수(§7.5): 물음만이 아니었다 — 계획("잎이 노래서 내일 웃거름 주려고") · 교정 요구 ·
     작기 종료도 원문을 원장에 안 남긴다(9 탐침 중 3 유실). 그래서 갈래마다가 아니라 **말미 1회**: 증상 어휘가 있고 어느 초안도 원문을
     남기지 않으면 원문 그대로의 관찰 초안을 뒤에 붙인다(첫 초안의 종류는 그대로 · 확인은 사람)."""
-    if not drafts or not symptom_in(t) or any(_keeps_the_text(d, t) for d in drafts):
+    if not drafts or not symptom_in(t, extra) or any(_keeps_the_text(d, t) for d in drafts):
         return drafts
     key = "asked_about_symptom" if drafts[0]["kind"] == "question" else "symptom_alongside"
     day_past = parse_day(t, today, past=True)
@@ -576,7 +587,7 @@ def answer(subject: dict[str, Any], text: str, today: date) -> str:
     from frontend import words as _w     # 문면은 4층 정본(모듈 수준 import 는 층을 뒤집는다)
     dont_know = _w.said("판단 불가(지식)")
     can = "지금 답할 수 있는 것: 수확 시기 · 위험 경보 · 약제와 자재 · 할 일"
-    if symptom_in(text):
+    if symptom_in(text, grid_symptom_words(subject)):      # 정본 목록 + 이 격자 규칙이 아는 말(어휘 한 벌)
         # [발행자 2026-09-26 "잎 끝이 노란 형상을 어떻게 대처해야 하는가?" → 계획표가 나갔다] 증상 물음은 증상 결정으로 간다 —
         # 가진 것(계획표)을 꺼내면 답한 것처럼 보인다(들깨 응답과 같은 형태). 주제 어휘(웃거름 · 약)가 함께 있어도 같은 규칙.
         # [D-18 자리 2026-09-27] 답은 이제 3층 봉투(`symptom_triage`)에서 온다 — 지식(격자 symptom_rules)이 비어 있으면 봉투가
@@ -724,7 +735,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
             raise ChatError(f"없는 메시지를 잇는다: {ref}")
     today = today or date.today()
     ts = _now(now).isoformat(timespec="seconds")
-    drafts = [] if photo_only else _attach_plan(subject_id, classify(text, today), today)   # 불이행 초안만 계획표(재배 단위별)에 잇는다
+    drafts = [] if photo_only else _attach_plan(subject_id, classify(text, today, subject=s), today)   # 불이행 초안만 계획표(재배 단위별)에 잇는다
     rec: dict[str, Any] = {"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": role, "text": text[:2000],
                            "observed_at": today.isoformat(), "recorded_at": ts, "source": role, "resolution": RESOLUTION,
                            "drafts": drafts, "confirmed_refs": [], "input_mode": input_mode}

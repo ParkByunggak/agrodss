@@ -68,7 +68,7 @@ def test_the_kind_can_still_be_changed_by_the_person():
 def test_if_the_rules_ever_come_back_empty_send_still_decides_instead_of_asking(monkeypatch):
     """미검사 가드를 덮는다 — 지금은 규칙이 늘 무언가를 내므로 이 자리는 안 닿는다. 그래도 **닿으면 묻지 않는다**가
     이 자리의 약속이다(규칙이 넓어질 때 조용히 물음으로 되돌아가지 않게)."""
-    monkeypatch.setattr(chat, "classify", lambda text, today: [])
+    monkeypatch.setattr(chat, "classify", lambda text, today, subject=None: [])   # send 는 재배 단위도 넘긴다(어휘 한 벌) — 형태를 박지 않는다
     me, sys_ = chat.send(SID, "규칙이 못 고르는 말", today=TODAY)
     assert me["drafts"] and me["drafts"][0]["kind"] == "observation.note"
     assert me["drafts"][0]["text"] == "규칙이 못 고르는 말"          # 내용은 원문 그대로 — 지어내지 않는다
