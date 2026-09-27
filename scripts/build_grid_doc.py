@@ -51,6 +51,19 @@ def build(unit: dict) -> str:
         if isinstance(cap, dict):
             out.append(f"- 촬영: {'**찍는다** — ' + cap['scene'] if cap.get('shoot') else '안 찍음'}")
         out.append(f"- 결정: {', '.join(s.get('decisions', []) or []) or '—'}")
+        rules = s.get(schema.SYMPTOM_RULES_KEY)
+        if isinstance(rules, list) and rules:
+            # [D-18 미리 걷기 2026-09-27] 규칙을 넣어도 이 문서가 안 실었다 — "정본이 있는데 문서가 안 싣는" G1 형태. 발행자가 넣은 감별이 여기 보여야 한다
+            out.append("\n| 증상 말 | 원인 후보 | 가르는 확인 | 회복 | 먼저 할 확인 |\n|---|---|---|---|---|")
+            for r in rules:
+                if not isinstance(r, dict):
+                    continue
+                sy = " · ".join(w for w in (r.get("symptoms") or []) if isinstance(w, str)) if isinstance(r.get("symptoms"), list) else "—"
+                cs = [c for c in (r.get("causes") or []) if isinstance(c, dict)] if isinstance(r.get("causes"), list) else []
+                names = "<br>".join(str(c.get("name", "")) for c in cs) or "—"
+                checks = "<br>".join(str(c.get("check") or "—") for c in cs) or "—"
+                rec = "<br>".join("가능" if c.get("recoverable") else "**불가**" for c in cs) or "—"
+                out.append(f"| {sy} | {names} | {checks} | {rec} | {r.get('first_check') or '—'} |")
         risks = s.get("risks")
         if risks == NA:
             out.append("- 위험: 해당없음")

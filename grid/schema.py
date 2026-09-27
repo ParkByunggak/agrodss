@@ -122,6 +122,40 @@ def _canonical_names() -> set[str]:
     return set(R.load().canonical)
 
 
+SYMPTOM_RULES_KEY = "symptom_rules"     # 칸의 증상 → 원인 좁히기 규칙(D-18) — 판정기 등록부(stage_decisions)가 같은 이름을 쓴다
+
+
+def _validate_symptom_rules(rules: Any, tag: str, err) -> None:
+    """[D-18] 형식 검사 — 값(어휘 · 원인)은 발행자 지식이라 안 본다. 형태만: 목록 · 어휘는 빈 문자열 아닌 str 목록 · 원인은 name/check/recoverable(bool)."""
+    if not isinstance(rules, list) or not rules:
+        err(f"{tag}: symptom_rules 는 비어 있지 않은 목록 — 없으면 키를 뺀다(빈 목록은 '기준 없음' 과 구별이 안 된다)")
+        return
+    for n, r in enumerate(rules, 1):
+        rt = f"{tag} symptom_rules[{n}]"
+        if not isinstance(r, dict):
+            err(f"{rt}: 규칙은 {{symptoms, causes, first_check}} dict")
+            continue
+        sy = r.get("symptoms")
+        if not (isinstance(sy, list) and sy and all(isinstance(w, str) and w.strip() for w in sy)):
+            err(f"{rt}: symptoms 는 빈 문자열 없는 str **목록**(문자열 하나를 주면 글자 단위로 매칭된다)")
+        cs = r.get("causes")
+        if not (isinstance(cs, list) and cs):
+            err(f"{rt}: causes 는 비어 있지 않은 목록")
+        else:
+            for c in cs:
+                ct = f"{rt} cause {c.get('name')!r}" if isinstance(c, dict) else rt
+                if not isinstance(c, dict) or not (isinstance(c.get("name"), str) and c["name"].strip()):
+                    err(f"{ct}: 원인은 name(str) 이 있는 dict")
+                    continue
+                if not isinstance(c.get("recoverable"), bool):
+                    err(f"{ct}: recoverable 은 bool — 회복 불가 후보가 먼저 서는 정렬이 이 값을 믿는다")
+                if "check" in c and not isinstance(c["check"], str):
+                    err(f"{ct}: check 는 str")
+        fc = r.get("first_check")
+        if fc is not None and not (isinstance(fc, str) and fc.strip()):
+            err(f"{rt}: first_check 는 str 또는 생략")
+
+
 def validate(unit: dict[str, Any], canonical: set[str] | None = None) -> Report:
     rep = Report()
     err = rep.errors.append
@@ -232,6 +266,11 @@ def validate(unit: dict[str, Any], canonical: set[str] | None = None) -> Report:
             any_shoot = True
             if not cap.get("scene"):
                 err(f"{tag}: capture.shoot 이면 scene 필요")
+        # [D-18 미리 걷기 2026-09-27] symptom_rules 의 **형태**를 본다 — 판정기(judge_symptom_triage)는 이 키를 믿고 읽는다. 검사가 없으면
+        # `symptoms: "노랗"`(문자열) 이 글자 단위로 매칭되고, `recoverable: "false"` 가 회복 가능으로 정렬된다(A5 와 같은 형태). 키가 없는
+        # 칸은 정상(지식 미채움 — 판정기가 판단 불가(지식)로 말한다). 형식: [{symptoms:[어휘], causes:[{name, check, recoverable}], first_check}]
+        if "symptom_rules" in s:
+            _validate_symptom_rules(s["symptom_rules"], tag, err)
     if stages and not any_shoot:
         err("촬영 시점 칸(capture.shoot=true)이 하나도 없다 — 영상이 상세페이지다(몰-C)")
     return rep

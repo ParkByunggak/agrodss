@@ -140,3 +140,45 @@ def test_reject_parcel_correction_without_pest_axis(unit):
         u["stages"][0]["risks"][0]["parcel_correction"] = True   # axes: anchor/temp/forecast
     rep = _mut(unit, f)
     assert any("parcel_correction" in e for e in rep.errors)
+
+
+# ── [D-18 미리 걷기 2026-09-27] symptom_rules — 발행자가 넣을 키의 형태를 검증기가 보고, 문서 생성기가 싣는다 ──────────────────────
+# 규칙을 넣은 워크트리에서 재니: 검증기는 형태를 안 봤고(문자열 symptoms 가 글자 단위로 매칭될 형태), 생성 문서는 그 표를 안 실었다(G1).
+def _rules():
+    from tests.test_symptom_triage import RULES     # 발행자 감별 넷의 형식 예 — 한 벌만 둔다
+    return copy.deepcopy(RULES)
+
+
+def test_symptom_rules_pass_validation_and_render_in_the_doc(unit):
+    u = copy.deepcopy(unit)
+    u["stages"][2][schema.SYMPTOM_RULES_KEY] = _rules()
+    rep = schema.validate(u)
+    assert rep.ok, rep.errors
+    doc = bg.build(u)
+    assert "| 증상 말 | 원인 후보 | 가르는 확인 | 회복 | 먼저 할 확인 |" in doc
+    for c in _rules()[0]["causes"]:
+        assert c["name"] in doc and c["check"] in doc
+    assert _rules()[0]["first_check"] in doc and "**불가**" in doc and "노랗 · 노란 · 누렇" in doc
+    assert schema.SYMPTOM_RULES_KEY == "symptom_rules"                              # 판정기 등록부가 같은 이름을 쓴다(정본 하나)
+    # `is` 비교는 리터럴 인터닝 때문에 두 벌이어도 통과한다(주입 실측 2026-09-27 — 미적발) → 소스로 본다: 판정기는 스키마의 이름을 **가져온다**
+    sd_src = (ROOT / "judge" / "stage_decisions.py").read_text(encoding="utf-8")
+    assert "SYMPTOM_RULES_KEY = grid_schema.SYMPTOM_RULES_KEY" in sd_src and '"symptom_rules"' not in sd_src
+
+
+@pytest.mark.parametrize("mutate, word", [
+    (lambda r: r[0].__setitem__("symptoms", "노랗"), "목록"),                                  # 문자열 하나 — 글자 단위 매칭
+    (lambda r: r[0].__setitem__("symptoms", []), "목록"),
+    (lambda r: r[0]["causes"][0].__setitem__("recoverable", "false"), "recoverable"),        # A5 형태
+    (lambda r: r[0].__setitem__("causes", []), "causes"),
+    (lambda r: r[0]["causes"].append({"check": "이름 없음"}), "name"),
+    (lambda r: r[0].__setitem__("first_check", 3), "first_check"),
+    (lambda r: r.append("문자열 규칙"), "dict"),
+    (lambda r: r.clear(), "목록"),
+])
+def test_reject_malformed_symptom_rules(unit, mutate, word):
+    u = copy.deepcopy(unit)
+    rules = _rules()
+    mutate(rules)
+    u["stages"][2][schema.SYMPTOM_RULES_KEY] = rules
+    rep = schema.validate(u)
+    assert not rep.ok and any(word in e and "symptom_rules" in e for e in rep.errors), rep.errors

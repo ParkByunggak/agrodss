@@ -43,16 +43,28 @@ def test_how_to_deal_with_is_not_routed_to_the_plan():
         assert chat.topic_of(q) == "plan_vs_actual", q                # 반대편 — 할 일을 묻는 꼴은 그대로
 
 
-def test_the_answer_to_a_symptom_question_says_we_do_not_know_yet_not_a_plan():
+def _symptom_head(s, q):
+    """증상 물음의 답 머리는 **그 봉투의 종류**다 — 지금 실제 격자는 판단 불가(지식)이고, D-18 이 열리면 판단함이 된다.
+    [D-18 미리 걷기 2026-09-27] 종류를 박아 두면 발행자가 규칙을 넣는 커밋에 이 검사가 붉어진다(계약 대신 상태를 박은 형태 — d933afe 전례)."""
+    from judge import run as judge_run
+    e = next(x for x in judge_run.judgments_for(s["id"], today=TODAY, said=[ev.said_observation(s["id"], q, TODAY.isoformat())])
+             if x.decision_id == "symptom_triage")
+    assert e.kind in ("판단 불가(지식)", "판단함"), e.kind
+    return f"[{words.said(e.kind)}]"
+
+
+def test_the_answer_to_a_symptom_question_comes_from_the_symptom_decision_not_a_plan():
     s = media.load_subjects()[0]
     a = chat.answer(s, Q, TODAY)
-    assert a.startswith(f"[{words.said('판단 불가(지식)')}]"), a
+    assert a.startswith(_symptom_head(s, Q)), a
     for bad in ("다음 예정", "놓침", "판단 불가", "계획 대 실제"):
         assert bad not in a, (bad, a)
     # 주제 어휘(웃거름)가 함께 있어도 증상 물음이다 — 그 판단은 증상에 답하지 않으니 가진 것을 꺼내지 않는다
-    assert chat.answer(s, "잎 끝이 노란데 웃거름 줘야 하나?", TODAY).startswith(f"[{words.said('판단 불가(지식)')}]")
-    # 반대편 — 증상이 없는 주제 물음은 그 판단으로 답한다
-    assert not chat.answer(s, "지금 뭘 해야 하죠", TODAY).startswith(f"[{words.said('판단 불가(지식)')}]")
+    q2 = "잎 끝이 노란데 웃거름 줘야 하나?"
+    assert chat.answer(s, q2, TODAY).startswith(_symptom_head(s, q2))
+    # 반대편 — 증상이 없는 주제 물음은 그 판단(계획 대 실제)으로 답한다 — 증상 갈래의 꼬리("지어내지 않습니다 …")가 없다
+    plan = chat.answer(s, "지금 뭘 해야 하죠", TODAY)
+    assert "지어내지 않습니다" not in plan and "원인 후보" not in plan and "기준이 아는 말" not in plan, plan
 
 
 def test_a_symptom_inside_a_plan_or_a_request_or_an_end_is_also_kept_as_an_observation():
@@ -103,7 +115,7 @@ def test_walk_the_publisher_question_to_the_diary(srv, monkeypatch):
     msgs = chat.list_messages(sid)
     mine = [m for m in msgs if m.get("role") == "farmer"][-1]
     reply = [m for m in msgs if m.get("role") == "system"][-1]["text"]
-    assert reply.startswith(f"[{words.said('판단 불가(지식)')}]") and "다음 예정" not in reply and chat.CONFIRM_LABEL in reply
+    assert reply.startswith(_symptom_head(media.load_subjects()[0], Q)) and "다음 예정" not in reply and chat.CONFIRM_LABEL in reply
     assert [d["kind"] for d in mine["drafts"]] == ["question", "observation.note"]
     st, body = _post(srv, f"/c/{quote(sid)}/confirm", {"msg": mine["id"], "i": "1"})
     assert st in (200, 302, 303)

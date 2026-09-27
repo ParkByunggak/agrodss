@@ -127,7 +127,7 @@ SHIP_OR_STORE = _R(registry.Decision(
 # 말하는 판단 불가(지식)가 3층에서 나오고(채팅의 고정 문장이 아니라), 발행자가 결정하면 격자 한 수정으로 답이 열린다(B6 전례).
 # 이 결정은 격자 칸의 decisions 목록에 **선언되지 않는다** — 칸 하나의 결정이 아니라 칸 3·4 에 걸친 '왜 이런가' 결정이고, 그 선언은
 # symptom_rules 키 자체다(키가 있는 칸이 이 결정을 연 칸이다).
-SYMPTOM_RULES_KEY = "symptom_rules"
+SYMPTOM_RULES_KEY = grid_schema.SYMPTOM_RULES_KEY      # 이름 정본은 격자 스키마 하나(검증기 · 문서 생성기 · 판정기가 같은 키를 본다)
 SYMPTOM_TRIAGE = _R(registry.Decision(
     id="symptom_triage", name="증상 → 원인 좁히기", required_axes=("anchor",),      # 관찰은 축이 아니라 **기록**이다(원장) — replant 와 같다
     optional_axes=("pest_regional", "temp", "precip", "soil_water"), forbidden_axes=FORB,
@@ -435,7 +435,10 @@ def _symptom_rules(unit: dict[str, Any], key: str, orders: tuple[int, ...]) -> l
 def _rule_words(rules: list[dict[str, Any]]) -> tuple[str, ...]:
     out: list[str] = []
     for r in rules:
-        for w in r.get("symptoms") or []:
+        sy = r.get("symptoms")
+        if not isinstance(sy, list):          # 문자열 하나면 글자 단위로 돌아 '노'·'랗' 이 어휘가 된다 — 목록만 읽는다(검증기가 먼저 거부한다)
+            continue
+        for w in sy:
             if isinstance(w, str) and w and w not in out:
                 out.append(w)
     return tuple(out)
@@ -479,7 +482,8 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
         return Envelope("판단 불가(데이터)", did, sid, as_of, missing=[{"axis": "anchor", "who_can_fill": "농가 — 파종일"}], result={"why": "기준점이 없다"})
     since = (today - timedelta(days=lookback)).isoformat()
     obs = [o for o in (observations or []) if (o.get("observed_at") or "")[:10] >= since]
-    hits = [(r, [o for o in obs if any(w in (o.get("text") or "") for w in (r.get("symptoms") or []))]) for r in rules]
+    # 어휘는 _rule_words 와 같은 규율로 읽는다(str 목록만) — `symptoms: "노랗"` 이 글자 단위로 매칭되는 형태를 판정기에서도 막는다(검증기와 짝)
+    hits = [(r, [o for o in obs if any(w in (o.get("text") or "") for w in _rule_words([r]))]) for r in rules]
     hits = [(r, m) for r, m in hits if m]
     if not hits:
         # [어휘 한 벌 2026-09-27] 관찰에 증상은 있는데 규칙 어휘와 안 맞는 것은 **지식**의 빈자리다 — "관찰이 없다" 로 내면 농가가 본 것을

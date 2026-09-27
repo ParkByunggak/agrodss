@@ -43,7 +43,9 @@ def test_the_decision_is_registered_and_judged_with_the_others():
 
 
 def test_with_the_real_grid_it_says_which_key_of_which_grid_is_empty():
-    """상태 — 지금 격자에는 규칙이 없다. 판단 불가(지식)는 '없다' 가 아니라 **어디가 비었는지** 말한다(U-23 문면 규율)."""
+    """**상태 검사 — D-18 이 열리면 고칠 검사는 이 하나뿐이다.** 지금 격자에는 규칙이 없다. 판단 불가(지식)는 '없다' 가 아니라
+    **어디가 비었는지** 말한다(U-23 문면 규율). [D-18 미리 걷기 2026-09-27] 규칙을 넣은 워크트리에서 관문을 돌리니 상태를 박은 검사가
+    다섯이었다 — 넷은 계약(봉투 종류를 따른다)으로 옮기고 이것 하나만 남긴다(d933afe 전례: 답마다 문서 재생성 + 상태 검사 하나)."""
     e = SD.judge_symptom_triage(_subject(), TODAY, observations=[{"id": "obs_x", "text": "잎 끝이 노랗다", "observed_at": TODAY.isoformat()}])
     assert e.kind == "판단 불가(지식)"
     assert "jjokpa" in e.result["why"] and SD.SYMPTOM_RULES_KEY in e.result["why"] and "D-18" in e.result["why"] and ".json" in e.result["why"]
@@ -53,7 +55,8 @@ def test_with_the_real_grid_it_says_which_key_of_which_grid_is_empty():
 def _synthetic_grid(tmp_path, monkeypatch, rules=RULES):
     unit = copy.deepcopy(grid_schema.load(grid_schema.GRID_DIR / "jjokpa_autumn.json"))
     for s in unit["stages"]:
-        if s["order"] == 3:
+        s.pop(SD.SYMPTOM_RULES_KEY, None)          # 실제 격자에 규칙이 생겨도 합성 격자는 여기서 정한 대로만(rules=None 이면 규칙 없음)
+        if s["order"] == 3 and rules is not None:
             s[SD.SYMPTOM_RULES_KEY] = rules
     (tmp_path / "jjokpa_autumn.json").write_text(json.dumps(unit, ensure_ascii=False), encoding="utf-8")
     monkeypatch.setattr(grid_schema, "GRID_DIR", tmp_path)
@@ -80,16 +83,21 @@ def test_with_rules_but_no_symptom_observation_it_asks_for_one(tmp_path, monkeyp
 
 
 def test_the_chat_answer_comes_from_the_envelope_not_a_fixed_sentence(srv):
-    """배선 — 채팅의 증상 답은 3층 봉투를 읽는다. 지금(실제 격자)은 판단 불가(지식) 문면이 봉투의 summary 다."""
+    """배선 — 채팅의 증상 답은 3층 봉투를 읽는다(종류가 무엇이든 — 지금 실제 격자는 판단 불가(지식), D-18 이 열리면 판단함).
+    [D-18 미리 걷기] 종류를 박지 않는다 — 기대는 같은 입력으로 만든 봉투에서 가져온다."""
     s = _subject()
-    a = chat.answer(s, "잎 끝이 노란 형상을 어떻게 대처해야 하는가?", TODAY)
-    e = SD.judge_symptom_triage(s, TODAY)
-    assert a.startswith(f"[{words.said('판단 불가(지식)')}]") and words.plain(e.result["summary"]) in a and "다음 예정" not in a
-    # /judge 에 그 카드가 선다 — 결정 이름은 등록부에서 · 왜 비었는지가 화면에
+    q = "잎 끝이 노란 형상을 어떻게 대처해야 하는가?"
+    a = chat.answer(s, q, TODAY)
+    e = next(x for x in judge_run.judgments_for(s["id"], today=TODAY, said=[ev.said_observation(s["id"], q, TODAY.isoformat())])
+             if x.decision_id == "symptom_triage")
+    assert a.startswith(f"[{words.said(e.kind)}]") and words.plain(e.result["summary"]) in a and "다음 예정" not in a, a
+    # /judge 에 그 카드가 선다 — 결정 이름은 등록부에서 · 비었으면 왜 비었는지(키 · D-18)가 화면에
     c = http.client.HTTPConnection("127.0.0.1", srv, timeout=10)
     c.request("GET", "/judge")
     body = c.getresponse().read().decode("utf-8", "replace")
-    assert "증상 → 원인 좁히기" in body and SD.SYMPTOM_RULES_KEY in body and "D-18" in body
+    assert "증상 → 원인 좁히기" in body
+    if SD.symptom_words_for(s) == ():
+        assert SD.SYMPTOM_RULES_KEY in body and "D-18" in body
 
 
 # ── [D-18 직렬 게이트 2026-09-27] 규칙(게이트 1) 뒤에 관찰(게이트 2)이 줄지어 있었다 ──────────────────────────────────────
@@ -149,7 +157,8 @@ Q_SYNTH = "잎 끝이 하얗게 되는데 왜 이런가"
 def test_a_rule_word_outside_the_routing_list_still_opens_the_door(tmp_path, monkeypatch):
     assert not any(w in Q_SYNTH for w in chat.SYMPTOM_WORDS)                    # 전제 — 라우팅 목록은 이 말을 모른다(알게 되면 이 검사가 무의미해진다)
     s = _subject()
-    assert SD.symptom_words_for(s) == () and chat.grid_symptom_words(s) == () and chat.grid_symptom_words(None) == ()   # 실제 격자: 규칙 없음
+    _synthetic_grid(tmp_path, monkeypatch, rules=None)                           # 규칙 없는 격자(실제 격자의 상태를 박지 않는다 — D-18 미리 걷기)
+    assert SD.symptom_words_for(s) == () and chat.grid_symptom_words(s) == () and chat.grid_symptom_words(None) == ()
     assert [d["kind"] for d in chat.classify(Q_SYNTH, TODAY, subject=s)] == ["question"]                  # 규칙 없으면 정본 목록만 — 관찰 초안 없음
     _synthetic_grid(tmp_path, monkeypatch, RULES_SYNTH)
     assert SD.symptom_words_for(s) == ("하얗", "하얘") and chat.grid_symptom_words(s) == ("하얗", "하얘")
@@ -184,3 +193,16 @@ def test_the_symptom_judgement_has_one_vocabulary_canon():
     ans = ans[:ans.index("\ndef ", 10)]
     assert "symptom_in(text, grid_symptom_words(subject))" in ans                # 라우팅이 격자 말을 덧붙여 쓴다
     assert "classify(text, today, subject=s)" in csrc                            # send 도 재배 단위를 넘긴다
+
+
+def test_a_rule_whose_symptoms_is_a_bare_string_does_not_match_by_character(tmp_path, monkeypatch):
+    """[D-18 미리 걷기] 발행자가 `symptoms: "노랗"` 로 적으면 문자열이 글자 단위로 돌아 '노' 하나로도 맞는다 — 판정기는 목록만 읽고,
+    검증기가 그 형태를 먼저 거부한다(두 겹 · 각각 따로 본다)."""
+    bad = [{"symptoms": "노랗", "causes": [{"name": "합성 원인 B", "check": "x", "recoverable": True}], "first_check": "y"}]
+    _synthetic_grid(tmp_path, monkeypatch, bad)
+    s = _subject()
+    assert SD.symptom_words_for(s) == ()
+    e = SD.judge_symptom_triage(s, TODAY, observations=[{"id": "o", "text": "노지에 물 줬다", "observed_at": TODAY.isoformat()}])
+    assert e.kind != "판단함", e.kind                                            # '노' 한 글자로 후보를 내지 않는다
+    unit = grid_schema.load(tmp_path / "jjokpa_autumn.json")
+    assert any("symptoms" in x and "목록" in x for x in grid_schema.validate(unit).errors)
