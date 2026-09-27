@@ -221,6 +221,16 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
             out.append("<table><tr><th>수준</th><th>위험</th><th>칸</th><th>회복</th><th>근거</th></tr>" + "".join(
                 f'<tr><td><span class="st st-{LEVEL_CLASS.get(a["level"], "대기")}">{_e(a["level"])}</span></td><td><b>{_e(a["risk"])}</b></td>'
                 f'<td>{_e(a["stage"])}</td><td>{"가능" if a.get("recoverable") else "불가"}</td><td>{_e(a["basis"])}</td></tr>' for a in r["alerts"]) + "</table>")
+        if r.get("candidates"):
+            # [D-18 직렬 게이트 2026-09-27] 증상 → 원인 좁히기의 판단함 — 한 줄 요약만 내면 후보마다 붙은 **확인**이 떨어진다(조건 탈락 형태).
+            # 후보 · 그 후보를 가르는 확인 · 회복 가능 여부를 표로. 이름은 격자(발행자 정본)의 말이고, 판단은 여기 없다
+            out.append("<table><tr><th>원인 후보</th><th>가르는 확인</th><th>회복</th></tr>" + "".join(
+                f'<tr><td><b>{_e(c.get("name", ""))}</b></td><td>{_e(c.get("check") or "")}</td><td>{"가능" if c.get("recoverable") else "불가"}</td></tr>'
+                for c in r["candidates"]) + "</table>")
+            if r.get("first_check"):
+                out.append(f"<p><b>먼저 할 확인</b> — {_e(r['first_check'])}</p>")
+            if r.get("observations"):
+                out.append(f"<p class=\"meta\">읽은 관찰: {_e(' · '.join(str(x) for x in r['observations']))}</p>")
     else:
         out.append(f"<p>{_e(r.get('why', ''))} {_e(r.get('who', ''))}</p>")
     if e["inputs"]:

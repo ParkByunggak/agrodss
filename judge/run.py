@@ -49,15 +49,19 @@ def gather_forecast(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | Non
 # 전부 우회하는 경로였다. 3층 진입점은 all_judgments 하나다(게이트 위치 래칫이 그것만 보는 이유).
 
 
-def judgments_for(subject_id: str, today: date | None = None) -> list[Envelope]:
-    """한 재배 단위의 봉투들(채팅 답변용). 없으면 []."""
-    for s, envs, _ in all_judgments(today=today, only=subject_id):
+def judgments_for(subject_id: str, today: date | None = None, said: list[dict[str, Any]] | None = None) -> list[Envelope]:
+    """한 재배 단위의 봉투들(채팅 답변용). 없으면 [].
+
+    `said` — 방금 물으신 말을 관찰 레코드로 만든 것(원장에 없다 · `events.said_observation`). 증상 결정만 읽는다.
+    """
+    for s, envs, _ in all_judgments(today=today, only=subject_id, said=said):
         if s["id"] == subject_id:
             return envs
     return []
 
 
-def all_judgments(today: date | None = None, only: str | None = None) -> list[tuple[dict[str, Any], list[Envelope], dict[str, str]]]:
+def all_judgments(today: date | None = None, only: str | None = None,
+                  said: list[dict[str, Any]] | None = None) -> list[tuple[dict[str, Any], list[Envelope], dict[str, str]]]:
     """재배 단위마다 [수확 시기, 위험 경보, 자재 인용, 계획 대 실제] 봉투 — 원천은 한 번만 모은다."""
     today = today or date.today()   # [A11] 이 회차의 '오늘'은 여기서 한 번 정하고 아래로만 내려간다 — 판정기·원천이 따로 묻지 않는다
     out = []
@@ -79,8 +83,9 @@ def all_judgments(today: date | None = None, only: str | None = None) -> list[tu
         videos = media.list_records(s0.get("id"))
         caps = fb.active_caps(s0.get("id"))
         # [M-3 · I-5 §3-4] 경계 게이트 — 모든 입력을 모은 뒤, 판정 직전, 한 번
+        # [D-18 직렬 게이트 2026-09-27] 물으신 말(said)도 같은 문으로 — 원장에 없는 입력이라고 게이트를 비켜 가면 관문의 입력이 새는 형태
         s, recs = boundary.gate(s0, forecast=forecast, pest=pest, events=evts, ledger=ledger, reasons=reasons, videos=videos, caps=caps,
-                                prescriptions=prescriptions)
+                                prescriptions=prescriptions, said=said)
         envs = [harvest_timing.judge(s, forecast=recs["forecast"], today=today),
                 risk_alert.judge(s, forecast=recs["forecast"], today=today, pest=recs["pest"], evts=recs["events"]),   # [B1] 수확 사건
                 material_citation.judge(s, today=today),
@@ -90,7 +95,7 @@ def all_judgments(today: date | None = None, only: str | None = None) -> list[tu
                                      notes=[r for r in (recs["ledger"] or []) if r.get("kind") == "observation.note"])]
         # [M-10 결정 등록] 격자 칸이 선언한 나머지 8 결정 — 같은 입력, 같은 게이트 뒤
         envs += stage_decisions.judge_all(s, today, evts=recs["ledger"], forecast=recs["forecast"], pest=recs["pest"], harvest=envs[0],
-                                          prescriptions=recs["prescriptions"], unreadable=unreadable)
+                                          prescriptions=recs["prescriptions"], unreadable=unreadable, said=recs["said"])
         # [M-6 · D-14] 자율진화 보수 상한 — 판정기 뒤, 돌려주기 전, 한 번. 규칙은 안 바꾸고 등급만 낮춘다
         envs = evolve.apply_caps(s["id"], envs, caps=recs["caps"])
         out.append((s, envs, {"forecast": why or "예보 사용", "pest": pwhy or "예찰 사용"}))

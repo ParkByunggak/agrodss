@@ -13,10 +13,13 @@ import json
 from datetime import date
 from urllib.parse import quote
 
+import pytest
+
 from frontend import words
 from grid import schema as grid_schema
-from ingest import chat, media
-from judge import registry, stage_decisions as SD
+from ingest import chat, events as ev, media
+from judge import boundary, registry, run as judge_run, stage_decisions as SD
+from schema import records as sch
 from tests.test_brand_home import srv  # noqa: F401
 
 TODAY = date(2026, 9, 24)
@@ -87,3 +90,50 @@ def test_the_chat_answer_comes_from_the_envelope_not_a_fixed_sentence(srv):
     c.request("GET", "/judge")
     body = c.getresponse().read().decode("utf-8", "replace")
     assert "증상 → 원인 좁히기" in body and SD.SYMPTOM_RULES_KEY in body and "D-18" in body
+
+
+# ── [D-18 직렬 게이트 2026-09-27] 규칙(게이트 1) 뒤에 관찰(게이트 2)이 줄지어 있었다 ──────────────────────────────────────
+# 자리를 세운 회차의 배선은 저장된 관찰만 읽었다. 발행자가 규칙을 채우는 순간 "잎 끝이 노랗다" 는 물음에 **"관찰이 없다"** 가 나갈
+# 형태 — 증상을 말한 그 물음에. 한쪽(규칙)을 열어도 뒤(관찰)가 막으면 증상이 그대로다(CLAUDE.md 직렬 게이트 축). 물으신 말을
+# 관찰 레코드로 만들어 같은 경계 게이트를 지나 증상 결정에만 넘긴다. 거부·통과 둘 다: 저장 경로(/judge)는 그대로 저장된 관찰만 본다.
+Q = "잎 끝이 노란 형상을 어떻게 대처해야 하는가?"
+
+
+def test_the_question_itself_opens_the_answer_when_the_rules_exist(tmp_path, monkeypatch):
+    """규칙이 있고 **저장된 관찰은 없다** — 채팅의 답은 물으신 말 자체를 관찰로 읽어 후보를 낸다. 저장 경로는 여전히 관찰을 기다린다."""
+    _synthetic_grid(tmp_path, monkeypatch)
+    s = _subject()
+    stored = next(x for x in judge_run.judgments_for(s["id"], today=TODAY) if x.decision_id == "symptom_triage")
+    assert stored.kind == "판단 불가(데이터)" and stored.missing[0]["axis"] == "observation"      # 원장에 관찰이 없다 — 저장 경로는 그대로
+    a = chat.answer(s, Q, TODAY)
+    assert a.startswith(f"[{words.said('판단함')}]") and "과습" in a and "먼저" in a and "진단이 아니" in a, a
+    assert "관찰이 없다" not in a and "다음 예정" not in a
+    e = next(x for x in judge_run.judgments_for(s["id"], today=TODAY, said=[ev.said_observation(s["id"], Q, TODAY.isoformat())])
+             if x.decision_id == "symptom_triage")
+    assert e.kind == "판단함" and e.result["observations"] == [ev.SAID_ID]                          # 인용된 관찰은 '물으신 말' 하나
+    assert not ev.list_records(s["id"], "observation.note")                                        # 답하느라 원장에 쓰지 않았다
+
+
+def test_the_said_record_goes_through_the_same_boundary_gate():
+    """관문의 입력 — 원장에 없는 입력이라고 게이트를 비켜 가지 않는다. 스키마 밖 레코드를 said 로 넣으면 경계가 거부한다."""
+    s = _subject()
+    with pytest.raises(boundary.BoundaryError):
+        judge_run.judgments_for(s["id"], today=TODAY, said=[{"kind": "settlement", "amount": 1}])
+    rec = ev.said_observation(s["id"], Q, TODAY.isoformat())
+    assert rec["kind"] == "observation.note" and rec["id"] == ev.SAID_ID and sch.validate(rec)     # 정상 형태는 스키마를 그대로 통과
+
+
+def test_judge_page_shows_each_candidate_with_its_check(tmp_path, monkeypatch, srv):
+    """표현 층 — 판단함 봉투의 후보에는 **가르는 확인**이 붙어 있다. 한 줄 요약만 내면 그 조건이 떨어진다(G1 반대형). /judge 는 표로 낸다."""
+    _synthetic_grid(tmp_path, monkeypatch)
+    monkeypatch.setenv("AGRODSS_TODAY", TODAY.isoformat())
+    s = _subject()
+    ev.add_observation(s["id"], "잎 끝이 노랗게 변했어요", TODAY.isoformat())
+    c = http.client.HTTPConnection("127.0.0.1", srv, timeout=10)
+    c.request("GET", "/judge")
+    body = c.getresponse().read().decode("utf-8", "replace")
+    assert "가르는 확인" in body and "먼저 할 확인" in body
+    for cause in RULES[0]["causes"]:      # 화면은 사람 말 층을 지난다(미이행 → 아직 안 함) — 정본 함수로 옮겨 비교(안 재고 박으면 맞는 고침이 관문을 붉힌다)
+        assert words.plain(cause["name"]) in body and words.plain(cause["check"]) in body, cause
+    assert body.index("과습 · 뿌리 상함") < body.index("양분 부족")                                    # 회복 불가가 앞
+    assert "{'name'" not in body and "candidates" not in body                                       # 안쪽 이름·dict 표기가 새지 않는다

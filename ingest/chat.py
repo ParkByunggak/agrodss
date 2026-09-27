@@ -580,7 +580,10 @@ def answer(subject: dict[str, Any], text: str, today: date) -> str:
         # 가진 것(계획표)을 꺼내면 답한 것처럼 보인다(들깨 응답과 같은 형태). 주제 어휘(웃거름 · 약)가 함께 있어도 같은 규칙.
         # [D-18 자리 2026-09-27] 답은 이제 3층 봉투(`symptom_triage`)에서 온다 — 지식(격자 symptom_rules)이 비어 있으면 봉투가
         # **어느 격자의 어느 키가 비었는지** 말하는 판단 불가(지식)이고, 채워지면 원인 후보 + 확인 하나다. 채팅은 문장을 지어내지 않는다.
-        e = next((x for x in judge_run.judgments_for(subject["id"], today=today) if x.decision_id == "symptom_triage"), None)
+        # [D-18 직렬 게이트 2026-09-27] 규칙(게이트 1)이 서도 **물으신 말은 아직 초안**이라 저장된 관찰(게이트 2)만 읽으면
+        # "관찰이 없다" 가 나간다 — 증상을 말한 그 물음에. 물으신 말을 관찰 레코드로 만들어 같은 경계 게이트를 지나 증상 결정에만 넘긴다.
+        said = [ev.said_observation(subject["id"], text, today.isoformat())]
+        e = next((x for x in judge_run.judgments_for(subject["id"], today=today, said=said) if x.decision_id == "symptom_triage"), None)
         if e is None:
             return f"{dont_know}. 이 목록은 아직 판정을 낼 재료(기준점·격자)가 없습니다. {can}."
         return f"{summarize_envelope(e)} 지어내지 않습니다. {can}."

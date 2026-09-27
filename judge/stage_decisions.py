@@ -469,11 +469,14 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
 
 
 def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pest=None, harvest: Envelope | None = None,
-              prescriptions: list[dict[str, Any]] | None = None, unreadable: list[str] | None = None) -> list[Envelope]:
+              prescriptions: list[dict[str, Any]] | None = None, unreadable: list[str] | None = None,
+              said: list[dict[str, Any]] | None = None) -> list[Envelope]:
     evts = evts or []
     obs = [e for e in evts if e.get("kind") == "observation.note"]
     targets = [e for e in evts if e.get("kind") == "plan.target_date"]
+    # [D-18 직렬 게이트 2026-09-27] 방금 물으신 말(said · 원장에 없다)은 **증상 결정만** 읽는다 — 재파종 판단은 저장된 관찰만
+    said_obs = [e for e in (said or []) if e.get("kind") == "observation.note"]
     return [judge_sowing_window(subject, today), judge_base_fertilization(subject, today, prescriptions, unreadable), judge_replant(subject, today, obs),
             judge_pest_alert(subject, today, forecast, pest), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions, unreadable),
             judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions, unreadable), judge_drainage_alert(subject, today, forecast, pest),
-            judge_ship_or_store(subject, today, targets, harvest), judge_symptom_triage(subject, today, obs)]
+            judge_ship_or_store(subject, today, targets, harvest), judge_symptom_triage(subject, today, obs + said_obs)]

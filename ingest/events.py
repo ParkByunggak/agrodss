@@ -104,17 +104,35 @@ def add_event(subject: str, event_type: str, observed_at: str, note: str = "", a
 def add_observation(subject: str, text: str, observed_at: str, tags: list[str] | None = None,
                     chat_ref: str | None = None, now: datetime | None = None) -> dict[str, Any]:
     """[I-3 §3] 직접 관찰값 — 농가가 본 것. 최종 심급. 판단은 여기 없다."""
+    return _append(observation_record(subject, text, observed_at, tags=tags, chat_ref=chat_ref, now=now))
+
+
+SAID_ID = "물으신 말"     # 원장에 없는 관찰 — 방금 물으신 말 그 자체. 봉투가 인용하면 이 이름으로 보인다
+
+
+def observation_record(subject: str, text: str, observed_at: str, tags: list[str] | None = None, chat_ref: str | None = None,
+                       now: datetime | None = None, rec_id: str | None = None) -> dict[str, Any]:
+    """관찰 레코드 **한 건을 만들기만** 한다(원장에 안 쓴다). 저장은 `add_observation`, 한 번 쓰고 버리는 것은 `said_observation`.
+
+    [D-18 직렬 게이트 2026-09-27] 증상 물음의 답이 저장된 관찰만 읽었다 — 규칙(게이트 1)이 서도 물으신 말은 아직 초안이라
+    관찰(게이트 2)이 닫혀 "관찰이 없다" 가 나갈 형태. 물으신 말을 같은 스키마의 레코드로 만들어 경계 게이트를 지나게 한다.
+    """
     text = (text or "").strip()
     if not text:
         raise EventError("관찰 내용이 비어 있다")
     observed_at = _need_day(observed_at, "관찰")
     now = now or datetime.now(timezone.utc)
-    rec: dict[str, Any] = {"id": f"obs_{uuid.uuid4().hex[:12]}", "kind": "observation.note", "subject": subject, "text": text[:1000],
+    rec: dict[str, Any] = {"id": rec_id or f"obs_{uuid.uuid4().hex[:12]}", "kind": "observation.note", "subject": subject, "text": text[:1000],
                            "observed_at": observed_at, "recorded_at": now.isoformat(timespec="seconds"),
                            "source": SOURCE, "resolution": "cultivation_unit", "tags": tags or []}
     if chat_ref:
         rec["chat_ref"] = chat_ref
-    return _append(rec)
+    return rec
+
+
+def said_observation(subject: str, text: str, today: str) -> dict[str, Any]:
+    """방금 물으신 말을 **저장하지 않는** 관찰 레코드로 — 판정 한 번에만 쓰고 버린다(일지에는 '넣기' 를 누르셔야 들어간다)."""
+    return observation_record(subject, text, today, rec_id=SAID_ID)
 
 
 def add_farmer_plan(subject: str, task: str, planned_day: str, note: str = "", chat_ref: str | None = None,
