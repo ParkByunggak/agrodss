@@ -576,11 +576,14 @@ def answer(subject: dict[str, Any], text: str, today: date) -> str:
     dont_know = _w.said("판단 불가(지식)")
     can = "지금 답할 수 있는 것: 수확 시기 · 위험 경보 · 약제와 자재 · 할 일"
     if symptom_in(text):
-        # [발행자 2026-09-26 "잎 끝이 노란 형상을 어떻게 대처해야 하는가?" → 계획표가 나갔다] 증상에서 원인을 좁히는 판단이
-        # 등록부에 없다. **없는 것은 없다고 말한다** — 가진 것(계획표)을 꺼내면 답한 것처럼 보인다(들깨 응답과 같은 형태).
-        # 주제 어휘(웃거름 · 약)가 함께 있어도 그 판단은 증상에 답하지 않는다 — 같은 규칙. 결정을 만들지는 발행자 몫(D-18).
-        return (f"{dont_know}. 증상(잎 색 · 시듦 · 무름 같은 것)에서 원인을 좁히는 판단은 아직 만들어지지 않았습니다. "
-                f"지어내지 않습니다. {can}.")
+        # [발행자 2026-09-26 "잎 끝이 노란 형상을 어떻게 대처해야 하는가?" → 계획표가 나갔다] 증상 물음은 증상 결정으로 간다 —
+        # 가진 것(계획표)을 꺼내면 답한 것처럼 보인다(들깨 응답과 같은 형태). 주제 어휘(웃거름 · 약)가 함께 있어도 같은 규칙.
+        # [D-18 자리 2026-09-27] 답은 이제 3층 봉투(`symptom_triage`)에서 온다 — 지식(격자 symptom_rules)이 비어 있으면 봉투가
+        # **어느 격자의 어느 키가 비었는지** 말하는 판단 불가(지식)이고, 채워지면 원인 후보 + 확인 하나다. 채팅은 문장을 지어내지 않는다.
+        e = next((x for x in judge_run.judgments_for(subject["id"], today=today) if x.decision_id == "symptom_triage"), None)
+        if e is None:
+            return f"{dont_know}. 이 목록은 아직 판정을 낼 재료(기준점·격자)가 없습니다. {can}."
+        return f"{summarize_envelope(e)} 지어내지 않습니다. {can}."
     did = topic_of(text)
     if not did:
         return f"{dont_know}. 이 물음에 답하는 판단이 아직 등록되지 않았습니다. 지어내지 않습니다. {can}."

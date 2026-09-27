@@ -53,6 +53,11 @@ def unit_path(unit_id: str) -> Path:
     return GRID_DIR / f"{unit_id.replace('-', '_')}.json"
 
 
+def unit_file_name(unit_id: str) -> str:
+    """판단 불가(지식) 문면이 **고칠 파일**을 말할 때 쓴다(U-23 문면 규율) — 여는 것이 아니라 이름만. 여는 자리는 load_unit 하나다."""
+    return unit_path(unit_id).name
+
+
 # ── [U-23 2026-09-21] 격자 단위를 읽는 정본 하나 — **왜 못 읽었는지를 잃지 않는다** ─────────────────
 #
 # 전에는 `_load_unit` 이 서로 다른 세 상태를 같은 `None` 으로 돌려줬고, 소비자 일곱이 그것을 **해당 없음**

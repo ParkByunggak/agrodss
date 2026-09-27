@@ -28,7 +28,9 @@ def _by(envs):
 def test_every_grid_decision_is_registered_and_consistent():
     unit = grid_schema.load_unit(SUBJ)[0]
     declared = {d for s in unit["stages"] for d in (s.get("decisions") or [])}
-    assert declared == set(SD.IDS) | {"harvest_timing"}
+    # [D-18 자리] symptom_triage 는 칸 decisions 목록에 안 적는다 — 선언은 symptom_rules 키 자체(SD.UNDECLARED 가 그 예외를 문면으로 고정)
+    assert declared == (set(SD.IDS) - set(SD.UNDECLARED)) | {"harvest_timing"}
+    assert set(SD.UNDECLARED) <= set(SD.IDS) and all(registry.get(u) for u in SD.UNDECLARED)
     for s in unit["stages"]:
         for did in s.get("decisions") or []:
             d = registry.get(did)
@@ -119,7 +121,7 @@ def test_ship_or_store_with_target_date_for_supplying_subject():
 # ── 배선 · 채팅 ────────────────────────────────────────────────────────────────────
 def test_run_emits_twelve_envelopes_and_chat_routes_specific_questions():
     envs = judge_run.judgments_for(SID, today=T25)
-    assert len(envs) == 12 and {e.decision_id for e in envs} >= set(SD.IDS)
+    assert len(envs) == 4 + len(SD.IDS) == 13 and {e.decision_id for e in envs} >= set(SD.IDS)     # [D-18 자리] 12 → 13
     assert chat.topic_of("웃거름 줘야 하나?") == "top_dressing_1"
     assert chat.topic_of("보식해야 하나?") == "replant"
     assert chat.topic_of("출하할까 저장할까?") == "ship_or_store"

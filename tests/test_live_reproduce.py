@@ -58,7 +58,8 @@ def test_record_writes_schema_valid_ledger_line():
 def test_one_run_in_this_repo_has_twelve_decisions_and_reports_external_honestly():
     r = LR.one_run(today=date(2026, 9, 19))
     decs = r["subjects"][SID]["decisions"]
-    assert len(decs) == 12 and decs["harvest_timing"]["kind"] == "판단함" and decs["harvest_timing"]["payload_hash"]
+    from judge import stage_decisions as SD
+    assert len(decs) == 4 + len(SD.IDS) == 13 and decs["harvest_timing"]["kind"] == "판단함" and decs["harvest_timing"]["payload_hash"]   # [D-18 자리] 12 → 13
     assert r["external"] is False                                            # 키 없는 환경 — 외부 원천 0 을 정직하게
 
 

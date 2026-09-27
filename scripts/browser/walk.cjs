@@ -67,7 +67,7 @@ const say = (k, v) => console.log(`${k}: ${typeof v === "string" ? v : JSON.stri
   const symptomDraftText = await symptomDraft.textContent();
   say("symptom_reply", symptomReply.slice(0, 80));
   say("symptom_draft", (symptomDraftText || "").slice(0, 60));
-  if (!symptomReply.startsWith("아직 모릅니다") || symptomReply.includes("다음 예정") || !(symptomDraftText || "").includes("본 것")) bad++;
+  if (!symptomReply.startsWith("[아직 모릅니다") || symptomReply.includes("다음 예정") || !(symptomDraftText || "").includes("본 것")) bad++;
   await Promise.all([page.waitForNavigation(), symptomDraft.locator('button[type="submit"]').first().click()]);
   say("symptom_saved", (await page.locator("p.ok").allTextContents()).join(" | "));
 

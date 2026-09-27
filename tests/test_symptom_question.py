@@ -46,13 +46,13 @@ def test_how_to_deal_with_is_not_routed_to_the_plan():
 def test_the_answer_to_a_symptom_question_says_we_do_not_know_yet_not_a_plan():
     s = media.load_subjects()[0]
     a = chat.answer(s, Q, TODAY)
-    assert a.startswith(words.said("판단 불가(지식)")), a
+    assert a.startswith(f"[{words.said('판단 불가(지식)')}]"), a
     for bad in ("다음 예정", "놓침", "판단 불가", "계획 대 실제"):
         assert bad not in a, (bad, a)
     # 주제 어휘(웃거름)가 함께 있어도 증상 물음이다 — 그 판단은 증상에 답하지 않으니 가진 것을 꺼내지 않는다
-    assert chat.answer(s, "잎 끝이 노란데 웃거름 줘야 하나?", TODAY).startswith(words.said("판단 불가(지식)"))
+    assert chat.answer(s, "잎 끝이 노란데 웃거름 줘야 하나?", TODAY).startswith(f"[{words.said('판단 불가(지식)')}]")
     # 반대편 — 증상이 없는 주제 물음은 그 판단으로 답한다
-    assert not chat.answer(s, "지금 뭘 해야 하죠", TODAY).startswith(words.said("판단 불가(지식)"))
+    assert not chat.answer(s, "지금 뭘 해야 하죠", TODAY).startswith(f"[{words.said('판단 불가(지식)')}]")
 
 
 def test_a_symptom_inside_a_plan_or_a_request_or_an_end_is_also_kept_as_an_observation():
@@ -103,7 +103,7 @@ def test_walk_the_publisher_question_to_the_diary(srv, monkeypatch):
     msgs = chat.list_messages(sid)
     mine = [m for m in msgs if m.get("role") == "farmer"][-1]
     reply = [m for m in msgs if m.get("role") == "system"][-1]["text"]
-    assert reply.startswith(words.said("판단 불가(지식)")) and "다음 예정" not in reply and chat.CONFIRM_LABEL in reply
+    assert reply.startswith(f"[{words.said('판단 불가(지식)')}]") and "다음 예정" not in reply and chat.CONFIRM_LABEL in reply
     assert [d["kind"] for d in mine["drafts"]] == ["question", "observation.note"]
     st, body = _post(srv, f"/c/{quote(sid)}/confirm", {"msg": mine["id"], "i": "1"})
     assert st in (200, 302, 303)

@@ -121,7 +121,26 @@ SHIP_OR_STORE = _R(registry.Decision(
          "있으면 수확 창 끝과 계획일의 간격을 저장 일수로 내고, 칸 5 '출하 또는 단기 저장' 마감(63일)을 넘기면 상한 제약.", revisit_days=7,
     params={"source": "격자 칸 5 tasks[출하 또는 단기 저장] retry.deadline_day"}))
 
-IDS = ("sowing_window", "base_fertilization", "replant", "pest_alert", "top_dressing_1", "top_dressing_2", "drainage_alert", "ship_or_store")
+# [D-18 자리 2026-09-27] 발행자 2026-09-26: *"농가가 실제로 묻는 것의 상당수가 '이거 왜 이런가'인데, 지금 결정 목록은 전부 '언제 무엇을
+# 하는가'입니다."* 그리고 2026-09-27: *"어느 단계에 이르러야 질문에 답을 제대로 할 수 있는가?"* — 결정 하나(여기)와 그 결정이 읽을
+# 지식 정본(격자 `symptom_rules` — 발행자 몫)이다. 결정은 지식 없이 등록한다: 지식이 비어 있으면 **어느 격자의 어느 키가 비었는지**를
+# 말하는 판단 불가(지식)가 3층에서 나오고(채팅의 고정 문장이 아니라), 발행자가 결정하면 격자 한 수정으로 답이 열린다(B6 전례).
+# 이 결정은 격자 칸의 decisions 목록에 **선언되지 않는다** — 칸 하나의 결정이 아니라 칸 3·4 에 걸친 '왜 이런가' 결정이고, 그 선언은
+# symptom_rules 키 자체다(키가 있는 칸이 이 결정을 연 칸이다).
+SYMPTOM_RULES_KEY = "symptom_rules"
+SYMPTOM_TRIAGE = _R(registry.Decision(
+    id="symptom_triage", name="증상 → 원인 좁히기", required_axes=("anchor",),      # 관찰은 축이 아니라 **기록**이다(원장) — replant 와 같다
+    optional_axes=("pest_regional", "temp", "precip", "soil_water"), forbidden_axes=FORB,
+    rule="[D-18 발행자 결정 대기] 격자 칸 3·4 의 symptom_rules — [{symptoms:[증상 어휘], causes:[{name, check, recoverable}], first_check}] — 가 채워지면, "
+         "최근 관찰(observation.note) 중 증상 어휘가 든 것에 대해 원인 **후보**와 먼저 할 확인 하나를 낸다(단정 없음 · 회복 불가 후보 먼저 · 등급 추정). "
+         "규칙이 비어 있으면 판단 불가(지식) — 어느 격자의 어느 키가 비었는지 말한다. 증상 관찰이 없으면 판단 불가(데이터).",
+    revisit_days=1,
+    params={"rules_key": SYMPTOM_RULES_KEY, "stage_orders": (3, 4), "lookback_days": 14,
+            "source": "D-18 — 발행자가 쓴 감별(양분 부족 · 과습/뿌리 부패 · 고자리파리 유충 · 노균병/잎마름 · 확인 하나 = 인경 밑)이 정본 후보"}))
+
+IDS = ("sowing_window", "base_fertilization", "replant", "pest_alert", "top_dressing_1", "top_dressing_2", "drainage_alert", "ship_or_store",
+       "symptom_triage")
+UNDECLARED = ("symptom_triage",)        # 격자 칸 decisions 목록에 안 적는 결정 — 선언은 symptom_rules 키 자체(위 주석)
 
 
 # ── 판정 ─────────────────────────────────────────────────────────────────────────
@@ -408,6 +427,47 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
                             "summary": f"{verdict} — 계획일 {target}"}, notes=notes)
 
 
+def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]] | None = None) -> Envelope:
+    """[D-18 자리] 증상 → 원인 후보. 지식(격자 symptom_rules)이 없으면 어디가 비었는지 말하고, 있으면 후보 + 확인 하나(단정 없음)."""
+    did, sid, as_of = "symptom_triage", subject.get("id", "?"), _now()
+    unit, miss = grid_schema.load_unit(subject)
+    if miss is not None:
+        return units.envelope_for(miss, did, sid, as_of)
+    d = registry.get(did)
+    key, orders, lookback = d.params["rules_key"], tuple(d.params["stage_orders"]), int(d.params["lookback_days"])
+    rules = [r for s in unit.get("stages", []) if s.get("order") in orders and isinstance(s.get(key), list) for r in s[key] if isinstance(r, dict)]
+    if not rules:
+        orders_txt = "·".join(str(o) for o in orders)
+        uid = str(subject.get("grid_unit") or (unit.get("unit") or {}).get("id") or "")     # 격자 id 는 unit.unit.id — 문면에 이름과 파일을 함께
+        return Envelope("판단 불가(지식)", did, sid, as_of,
+                        result={"why": f"격자 {uid} 칸 {orders_txt} 에 {key}(증상 → 원인 후보 · 확인) 미채움 — D-18 발행자 결정 대기 · "
+                                       f"고칠 파일 {grid_schema.unit_file_name(uid)}",
+                                "summary": "증상에서 원인을 좁히는 기준이 아직 없습니다 — 기준이 서면 원인 후보와 먼저 할 확인 하나를 냅니다"})
+    anchor = subject.get("anchor")
+    if not anchor:
+        return Envelope("판단 불가(데이터)", did, sid, as_of, missing=[{"axis": "anchor", "who_can_fill": "농가 — 파종일"}], result={"why": "기준점이 없다"})
+    since = (today - timedelta(days=lookback)).isoformat()
+    obs = [o for o in (observations or []) if (o.get("observed_at") or "")[:10] >= since]
+    hits = [(r, [o for o in obs if any(w in (o.get("text") or "") for w in (r.get("symptoms") or []))]) for r in rules]
+    hits = [(r, m) for r, m in hits if m]
+    if not hits:
+        return Envelope("판단 불가(데이터)", did, sid, as_of,
+                        missing=[{"axis": "observation", "who_can_fill": "농가 — 밭에서 본 것 한 줄(잎 색 · 시듦 · 무름 · 반점 …)"}],
+                        result={"why": f"최근 {lookback}일 관찰에 증상 어휘가 없다 — 최종 심급은 농가 관찰", "summary": "증상 관찰 대기"})
+    causes: list[dict[str, Any]] = []
+    for r, _ in hits:
+        for c in r.get("causes") or []:
+            if isinstance(c, dict) and c.get("name") and c["name"] not in {x["name"] for x in causes}:
+                causes.append({"name": c["name"], "check": c.get("check", ""), "recoverable": bool(c.get("recoverable", True))})
+    causes.sort(key=lambda c: c["recoverable"])                      # 회복 불가 후보가 앞 — 확인이 급한 순
+    first = next((r.get("first_check") for r, _ in hits if r.get("first_check")), None)
+    seen_ids = [o.get("id") for _, m in hits for o in m]
+    summary = "원인 후보: " + " · ".join(c["name"] for c in causes) + (f" — 먼저 {first}" if first else "") + " (좁히기이지 진단이 아니다)"
+    return Envelope("판단함", did, sid, as_of, inputs=_anchor_inputs(subject, anchor), grade="추정", revisit_at=(today + timedelta(days=1)).isoformat(),
+                    result={"candidates": causes, "first_check": first, "observations": seen_ids, "summary": summary},
+                    notes=["원인 후보는 좁히기이지 진단이 아니다 — 확인 하나로 갈린다(격자 symptom_rules · D-18)"])
+
+
 def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pest=None, harvest: Envelope | None = None,
               prescriptions: list[dict[str, Any]] | None = None, unreadable: list[str] | None = None) -> list[Envelope]:
     evts = evts or []
@@ -416,4 +476,4 @@ def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pe
     return [judge_sowing_window(subject, today), judge_base_fertilization(subject, today, prescriptions, unreadable), judge_replant(subject, today, obs),
             judge_pest_alert(subject, today, forecast, pest), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions, unreadable),
             judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions, unreadable), judge_drainage_alert(subject, today, forecast, pest),
-            judge_ship_or_store(subject, today, targets, harvest)]
+            judge_ship_or_store(subject, today, targets, harvest), judge_symptom_triage(subject, today, obs)]
