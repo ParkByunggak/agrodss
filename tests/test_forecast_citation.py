@@ -98,6 +98,8 @@ def test_mid_term_days_follow_the_short_window_verbatim_and_the_short_window_win
     assert [i.source for i in e.inputs] == ["external:kma:vilage", "external:kma_midfcst"]                                     # 원천 둘이 입력에 따로
     s = e.result["summary"]
     assert "09-30 10~19℃(시간대 값) 비 20%" in s and "중기(괴산) 10-01 7~17℃ 비 70% · 10-02 6~18℃ 비 20% · 10-05 5~16℃ 비 40% (기상청 중기예보 · 발표 2026-09-27T18:00)" in s
+    lines = s.split("\n")                                                                  # 지평마다 한 줄 — 한 줄로 이으면 휴대폰에서 못 읽는다
+    assert len(lines) == 3 and lines[0].startswith("09-28 ") and lines[1].startswith("중기(괴산) ") and lines[2].startswith("장기: 없음")
     for bad in ("권고", "해야", "주의", "위험"):
         assert bad not in s
     # 반대편 — 단기가 없고 중기만 있어도 사실 인용이다(못 받은 쪽의 이유가 자리에 남는다)
@@ -150,7 +152,12 @@ def test_the_chat_card_and_judge_page_render_a_citation_without_crashing(srv, mo
     s = _subject()
     e = next(x for x in jr.judgments_for(s["id"], today=TODAY) if x.decision_id == "forecast_citation")
     card = chat.summarize_envelope(e)
-    assert card.startswith(f"[{words.said('사실 인용')}]") and "09-29" in card and "중기(괴산) 10-01" in card and "해석·권고 없음" in card
+    assert card.startswith(f"[{words.said('사실 인용')}]") and "09-29" in card and "\n중기(괴산) 10-01" in card and "해석·권고 없음" in card
+    a = chat.answer(s, "내일 날씨 어때", TODAY)
+    assert "\n중기(괴산) 10-01" in a and "\n장기: 없음" in a, a                                # 답변까지 줄이 산다
+    from frontend import chat_pages
+    css = chat_pages.__dict__.get("CSS") or open(chat_pages.__file__, encoding="utf-8").read()
+    assert ".msg.sys .bub" in css and "white-space:pre-wrap" in css[css.index(".msg.sys .bub"):css.index("}", css.index(".msg.sys .bub"))]   # 말풍선이 줄을 보인다
     c = http.client.HTTPConnection("127.0.0.1", srv, timeout=10)
     c.request("GET", "/judge")
     resp = c.getresponse()

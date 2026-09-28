@@ -642,7 +642,8 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
                             "days": days, "short_why": short_reason,
                             "mid": {"citation": mcit, "days": mdays, "why": mid_reason},
                             "long": {"citation": lcit, "periods": periods, "why": long_reason},
-                            "summary": " · ".join(parts)},
+                            # [표현 2026-09-28] 단기 · 중기 · 장기는 줄을 나눈다 — 한 줄로 이으면 380자가 넘어 휴대폰에서 못 읽는다(채팅 말풍선은 pre-wrap · 줄이 산다)
+                            "summary": "\n".join(parts)},
                     notes=notes)
 
 
