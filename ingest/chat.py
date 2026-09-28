@@ -598,7 +598,8 @@ def answer(subject: dict[str, Any], text: str, today: date) -> str:
         e = next((x for x in judge_run.judgments_for(subject["id"], today=today, said=said) if x.decision_id == "symptom_triage"), None)
         if e is None:
             return f"{dont_know}. 이 목록은 아직 판정을 낼 재료(기준점·격자)가 없습니다. {can}."
-        return f"{summarize_envelope(e)} 지어내지 않습니다. {can}."
+        # [D-18 반영 2026-09-28 실측] 봉투 줄 뒤에 마침표 없이 이어 붙어 "근거: 짐작 지어내지 않습니다" 로 읽혔다 — 문장 경계를 둔다
+        return f"{summarize_envelope(e).rstrip('.')}. 지어내지 않습니다. {can}."
     did = topic_of(text)
     if not did:
         return f"{dont_know}. 이 물음에 답하는 판단이 아직 등록되지 않았습니다. 지어내지 않습니다. {can}."

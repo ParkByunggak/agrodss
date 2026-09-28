@@ -186,7 +186,20 @@
       "unit_scope": "parcel",
       "judge_without_variety": "ok",
       "capture": {"shoot": true, "scene": "잎 수·잎 길이가 보이는 근접 + 두둑 전경 (T+24 첫 촬영이 여기)"},
-      "decisions": ["pest_alert", "top_dressing_1"]
+      "decisions": ["pest_alert", "top_dressing_1"],
+      "symptom_rules": [
+        {
+          "symptoms": ["노랗", "노란", "노래", "누렇", "누래", "황화"],
+          "causes": [
+            {"name": "과습 · 뿌리 상함", "check": "뽑아서 인경 밑이 구더기 없이 물렁하고 젖어 있는가(4단계 회복 불가 위험)", "recoverable": false},
+            {"name": "고자리파리 유충", "check": "인경 밑이 물렁하고 구더기 · 냄새가 있는가(예찰 마감을 넘겼으면 더 의심)", "recoverable": false},
+            {"name": "양분 부족(웃거름 1회 미이행)", "check": "뽑아 보아 뿌리가 멀쩡한가 — 잎 끝만 노란 것은 덜 전형", "recoverable": true},
+            {"name": "노균병 · 잎마름", "check": "잎에 반점 · 회색 곰팡이가 있는가", "recoverable": true}
+          ],
+          "first_check": "증상 있는 포기를 몇 개 뽑아 인경 밑을 본다 — 물렁+구더기 → 고자리파리 · 구더기 없이 물렁·젖음 → 뿌리 상함 · 뿌리 멀쩡 → 양분",
+          "source": "D-18 발행자 감별 2026-09-26 · 결정 2026-09-28 (쪽파 잎 끝 황화 · 파종 후 30일 · 3→4단계 경계) — 회복 불가 둘이라 확인이 급하다"
+        }
+      ]
     },
     {
       "order": 4,

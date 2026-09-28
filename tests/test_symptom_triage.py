@@ -42,14 +42,17 @@ def test_the_decision_is_registered_and_judged_with_the_others():
     assert [e.decision_id for e in envs][-1] == "symptom_triage" and len(envs) == len(SD.IDS)
 
 
-def test_with_the_real_grid_it_says_which_key_of_which_grid_is_empty():
-    """**상태 검사 — D-18 이 열리면 고칠 검사는 이 하나뿐이다.** 지금 격자에는 규칙이 없다. 판단 불가(지식)는 '없다' 가 아니라
-    **어디가 비었는지** 말한다(U-23 문면 규율). [D-18 미리 걷기 2026-09-27] 규칙을 넣은 워크트리에서 관문을 돌리니 상태를 박은 검사가
-    다섯이었다 — 넷은 계약(봉투 종류를 따른다)으로 옮기고 이것 하나만 남긴다(d933afe 전례: 답마다 문서 재생성 + 상태 검사 하나)."""
+def test_with_the_real_grid_the_publisher_differential_gives_four_candidates():
+    """**상태 검사 — 실제 격자의 규칙을 보는 유일한 검사.** [D-18 결정 2026-09-28] 발행자 감별 넷이 격자 칸 3 에 들어왔다 — 잎 끝 황화 관찰에
+    후보 넷(회복 불가 둘이 앞) + 먼저 할 확인(인경 밑). 그 전(2026-09-27)엔 판단 불가(지식)가 어느 격자의 어느 키가 비었는지 말했다.
+    [미리 걷기 전례] 상태를 박은 검사가 다섯이었고 넷은 계약으로 옮겨 이 하나만 남겼다 — 격자 지식이 바뀌면 고칠 검사는 이것뿐이어야 한다."""
     e = SD.judge_symptom_triage(_subject(), TODAY, observations=[{"id": "obs_x", "text": "잎 끝이 노랗다", "observed_at": TODAY.isoformat()}])
-    assert e.kind == "판단 불가(지식)"
-    assert "jjokpa" in e.result["why"] and SD.SYMPTOM_RULES_KEY in e.result["why"] and "D-18" in e.result["why"] and ".json" in e.result["why"]
-    assert e.result["summary"] and "기준" in e.result["summary"]
+    assert e.kind == "판단함" and e.grade == "추정", (e.kind, e.result)
+    names = [c["name"] for c in e.result["candidates"]]
+    assert len(names) == 4 and names[:2] == ["과습 · 뿌리 상함", "고자리파리 유충"]           # 회복 불가 둘이 앞(발행자: "확인이 급하다")
+    assert names[2].startswith("양분 부족") and names[3].startswith("노균병")
+    assert "인경 밑" in e.result["first_check"] and "진단이 아니다" in e.result["summary"]
+    assert SD.symptom_words_for(_subject()) == ("노랗", "노란", "노래", "누렇", "누래", "황화")   # 규칙이 아는 말 — 채팅 라우팅에도 덧붙는다
 
 
 def _synthetic_grid(tmp_path, monkeypatch, rules=RULES):
@@ -91,6 +94,7 @@ def test_the_chat_answer_comes_from_the_envelope_not_a_fixed_sentence(srv):
     e = next(x for x in judge_run.judgments_for(s["id"], today=TODAY, said=[ev.said_observation(s["id"], q, TODAY.isoformat())])
              if x.decision_id == "symptom_triage")
     assert a.startswith(f"[{words.said(e.kind)}]") and words.plain(e.result["summary"]) in a and "다음 예정" not in a, a
+    assert ". 지어내지 않습니다. " in a and "짐작 지어내지" not in a and "냅니다 지어내지" not in a, a   # 문장 경계(D-18 반영 실측 — 마침표 없이 이어졌다)
     # /judge 에 그 카드가 선다 — 결정 이름은 등록부에서 · 비었으면 왜 비었는지(키 · D-18)가 화면에
     c = http.client.HTTPConnection("127.0.0.1", srv, timeout=10)
     c.request("GET", "/judge")
