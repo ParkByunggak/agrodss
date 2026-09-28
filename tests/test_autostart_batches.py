@@ -147,6 +147,15 @@ def test_the_updater_discards_nothing_but_the_one_known_file():
         assert danger not in text, danger
 
 
+def test_the_preserve_message_says_the_edit_is_gone_from_the_screen_and_where_edits_belong():
+    """[순서 함정 전수 2026-09-28] 옛 문면 "kept your local X ... restoring it" 은 **되돌린다**는 뜻이 안 읽힌다 — 발행자는 값이 살아 있다고 믿는다.
+    격자를 손으로 고친 발행자(대장 ②·②b 가 그렇게 안내했었다)가 다음 갱신에 "넣었는데 안 나온다" 를 겪는 경로. 문면이 셋을 말한다:
+    ① 화면에 없다 ② 추적 파일은 세션 커밋으로만 ③ 덮개(*_local)가 있는 것은 거기에."""
+    kept = _body(UPDATE)[_body(UPDATE).index(":preserve"):]
+    assert "NOT on screen" in kept and "session commits" in kept and "*_local" in kept
+    assert "restoring it" not in kept                                                  # 살아 있다고 읽히는 옛 말
+
+
 def test_the_install_says_it_was_not_tested_on_windows():
     """[R-5] 세션은 이것을 Windows 에서 못 돌려 봤다 — **못 걸었으면 못 걸었다고 적는다**.
     이 문장이 사라지면 다음 사람이 검증된 절차로 읽는다(안내가 틀리는 형태는 이 트랙에서 세 번 났다)."""

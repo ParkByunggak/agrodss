@@ -41,6 +41,17 @@ def test_the_two_todo_lists_are_rewritten_each_round_and_not_empty():
     assert "update.bat" in joined and "D-18" in joined                              # 발행자 몫의 첫 줄은 언제나 라이브 반영 · 열린 결정
 
 
+def test_the_publisher_list_never_tells_them_to_hand_edit_a_tracked_data_file():
+    """[순서 함정 전수 2026-09-28] ②·②b 가 "직접 하시면 data/grid/… 에 넣으라" 고 안내했다 — 추적 파일의 손 수정은 다음 update.bat 이 되돌린다
+    (장기 전망에서 같은 함정을 잡은 날 같은 형태를 세니 둘 더). 발행자 몫 목록은 추적 파일을 손으로 고치라고 말하지 않는다 — 덮개(*_local)는 된다."""
+    joined = " ".join(a + b for a, b in blp.NEXT_PUBLISHER)
+    assert "직접 하시면" not in joined and "직접 넣" not in joined
+    for tracked in ("data/grid/", "climate_outlook.json</code> 을 열어", "crop_names.csv 에"):
+        for verb in ("에 넣", "을 열어", "더하고"):
+            assert f"{tracked}{verb}" not in joined, (tracked, verb)
+    assert "climate_outlook_local.json" in joined                                   # 손 수정의 자리는 덮개
+
+
 def test_the_todo_lists_render_their_own_html_and_are_not_numbered_twice():
     """[발행자 붙임 2026-09-28] 머리(k)만 escape 해 <span style=…>·<code> 가 글자 그대로 나갔고, <ol> 번호 위에 ⓪①② 표지가 또 있어 "1. ⓪" 로 두 번 셌다.
     두 목록 구역 안에 escape 된 태그가 없고, 목록은 번호 없는 <ul> 이다."""

@@ -155,7 +155,9 @@ if /i "%P%"=="data\parcels.json" goto :eof
 if not exist "data\_local_backup" mkdir "data\_local_backup"
 copy /y "%P%" "data\_local_backup\" >nul
 if errorlevel 1 goto preservefailed
-echo [agrodss] kept your local %P% in data\_local_backup\ - restoring it so the update can land
+echo [agrodss] your local edit of %P% was moved to data\_local_backup\ and the file was reset so the update can land.
+echo [agrodss] that edit is NOT on screen now. Tracked files change only through session commits - give the value to the session.
+echo [agrodss] (parcels, subjects, crop names and the climate outlook have *_local files for your own edits - those are never touched.)
 git checkout -- "%P%"
 goto :eof
 
