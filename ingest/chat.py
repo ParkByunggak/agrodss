@@ -662,7 +662,9 @@ def summarize_envelope(e: Any, plain: bool = True) -> str:
     head = f"[{words.said(e.kind) if plain else e.kind}]"
     if e.kind != "판단함" and e.kind != "사실 인용":
         body = r.get("summary") or r.get("why") or ""       # 농가가 읽는 줄이 있으면 그것이 먼저
-        miss = " · ".join(f"{m.get('axis')}: {m.get('who_can_fill')}" for m in (e.missing or []))
+        # [D-18 반영 직후 전수 2026-09-28] 규칙이 서자 실제 격자의 증상 카드가 처음으로 판단 불가(데이터)가 됐고, 채팅 카드가 "채울 사람: observation: 농가 —"
+        # 로 **축 안쪽 이름**을 냈다(/judge 는 words.axis 로 옮기고 있었다 — 두 화면이 어긋난 형태). 축 이름도 여기서 사람 말로(정확한 이름은 /judge 의 title 에 남는다)
+        miss = " · ".join(f"{words.axis(m.get('axis')) if plain else m.get('axis')}: {m.get('who_can_fill')}" for m in (e.missing or []))
         out = f"{head} {body}" + (f" — 채울 사람: {miss}" if miss else "")
         return words.plain(out) if plain else out
     out = _judged_line(e, r, head)

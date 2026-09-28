@@ -210,3 +210,20 @@ def test_a_rule_whose_symptoms_is_a_bare_string_does_not_match_by_character(tmp_
     assert e.kind != "판단함", e.kind                                            # '노' 한 글자로 후보를 내지 않는다
     unit = grid_schema.load(tmp_path / "jjokpa_autumn.json")
     assert any("symptoms" in x and "목록" in x for x in grid_schema.validate(unit).errors)
+
+
+def test_the_chat_card_says_the_missing_axis_in_plain_words():
+    """[D-18 반영 직후 전수 2026-09-28] 규칙이 서자 실제 격자의 증상 카드가 처음으로 판단 불가(데이터)가 됐고, 채팅 카드가
+    "채울 사람: observation: 농가 —" 로 축 안쪽 이름을 냈다(/judge 는 사람 말이었다 — 두 화면이 어긋남). 축마다가 아니라 한 자리(summarize_envelope)에서."""
+    from judge.envelope import Envelope
+    s = _subject()
+    e = next(x for x in judge_run.judgments_for(s["id"], today=TODAY) if x.decision_id == "symptom_triage")   # 저장 관찰 0 → 데이터 미비
+    assert e.kind == "판단 불가(데이터)" and e.missing[0]["axis"] == "observation"
+    card = chat.summarize_envelope(e)
+    assert words.axis("observation") in card and "observation" not in card and "채울 사람" in card, card
+    raw = chat.summarize_envelope(e, plain=False)
+    assert "observation:" in raw                                                     # 정확한 이름은 plain=False 로 남는다
+    e2 = Envelope("판단 불가(데이터)", "top_dressing_1", s["id"], "2026-09-28T00:00:00", missing=[{"axis": "anchor", "who_can_fill": "농가 — 파종일"}],
+                  result={"why": "기준점이 없다"})
+    c2 = chat.summarize_envelope(e2)
+    assert words.axis("anchor") in c2 and "anchor" not in c2                          # 어느 결정의 어느 축이든 같은 자리에서 옮긴다
