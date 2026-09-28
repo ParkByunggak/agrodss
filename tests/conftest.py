@@ -40,6 +40,7 @@ def _isolate_media_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("AGRODSS_NAMES_LOCAL_CSV", str(tmp_path / "crop_names_local.csv"))     # [U-38] 승인 덮개(쓰기 대상) — 없는 경로로 시작
     monkeypatch.setenv("AGRODSS_NAMES_BACKUP_CSV", str(tmp_path / "crop_names_backup.csv"))   # [U-38] update.bat 사본(읽기)
     monkeypatch.setenv("AGRODSS_OUTLOOK_PATH", str(tmp_path / "climate_outlook.json"))       # [D-21 장기] 발행자 등재 정본(읽기) — 계약 검사가 운영 등재분을 읽지 않게(없는 경로 = 등재 없음)
+    monkeypatch.setenv("AGRODSS_OUTLOOK_LOCAL_PATH", str(tmp_path / "climate_outlook_local.json"))   # [D-21 장기] 덮개(발행자 손 · git 밖) — 같은 이유
     from names import resolve as _names
     _names.reload()
     yield

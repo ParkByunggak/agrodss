@@ -15,7 +15,8 @@ from typing import Any
 from ingest import dropped
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_PATH = ROOT / "data" / "kma" / "climate_outlook.json"
+DEFAULT_PATH = ROOT / "data" / "kma" / "climate_outlook.json"                 # 씨앗 — 커밋으로만(세션이 발행자 값을 받아 적을 때)
+LOCAL_PATH = ROOT / "data" / "kma" / "climate_outlook_local.json"           # 덮개 — 발행자가 손으로 넣는 곳(git 밖 · update.bat 이 안 건드린다)
 SRC = "publisher:kma_outlook"
 PERIOD_TYPES = ("1개월", "3개월")
 ENTRY_KEYS = frozenset({"period_type", "issued_on", "target_from", "target_to", "region", "temp", "precip", "source_title", "source_url", "note"})
@@ -25,6 +26,12 @@ SUM_TOLERANCE = 5
 
 def path() -> Path:
     return Path(os.environ.get("AGRODSS_OUTLOOK_PATH") or DEFAULT_PATH)
+
+
+def local_path() -> Path:
+    """[순서 함정 2026-09-28] 추적 파일(씨앗)에 값을 넣으면 `update.bat` 이 그 수정을 `data/_local_backup/` 으로 치우고 `git checkout` 으로 되돌린다 —
+    값이 화면에서 **사라진다**(parcels 가 겪은 그 형태). 그래서 발행자가 넣는 곳은 gitignore 된 덮개다. 씨앗은 세션이 커밋으로만 고친다."""
+    return Path(os.environ.get("AGRODSS_OUTLOOK_LOCAL_PATH") or LOCAL_PATH)
 
 
 def _day(s: Any, what: str) -> str:
@@ -88,31 +95,38 @@ def entry_to_record(e: dict[str, Any], fetched_at: str | None = None) -> dict[st
     }
 
 
-def load(p: Path | None = None) -> tuple[list[dict[str, Any]], list[str]]:
-    """(읽힌 레코드, 못 읽은 항목의 이유). 파일이 없거나 entries 가 비면 ([], []) — 그것은 결함이 아니라 '아직 등재 없음' 이다."""
-    p = p or path()
+def _load_one(p: Path, out: list[dict[str, Any]], bad: list[str]) -> None:
     if not p.exists():
-        return [], []
+        return
     try:
         doc = json.loads(p.read_text(encoding="utf-8"))
     except ValueError as e:
-        why = f"JSON 아님: {e}"
+        why = f"{p.name}: JSON 아님: {e}"
         dropped.note("장기 전망 정본", p.name, why)
-        return [], [why]
+        bad.append(why)
+        return
     entries = doc.get("entries") if isinstance(doc, dict) else None
     if not isinstance(entries, list):
-        why = "entries 목록이 없다"
+        why = f"{p.name}: entries 목록이 없다"
         dropped.note("장기 전망 정본", p.name, why)
-        return [], [why]
-    out: list[dict[str, Any]] = []
-    bad: list[str] = []
+        bad.append(why)
+        return
     for i, e in enumerate(entries):
         try:
             out.append(entry_to_record(e))
         except ValueError as err:
-            why = f"entries[{i}]: {err}"
+            why = f"{p.name} entries[{i}]: {err}"
             dropped.note("장기 전망 정본", f"{p.name}#{i}", why)
             bad.append(why)
+
+
+def load(p: Path | None = None, lp: Path | None = None) -> tuple[list[dict[str, Any]], list[str]]:
+    """(읽힌 레코드, 못 읽은 항목의 이유) — 씨앗(추적 · 세션 커밋)과 덮개(git 밖 · 발행자 손) 둘 다에서. 파일이 없거나 entries 가 비면 ([], [])
+    — 그것은 결함이 아니라 '아직 등재 없음' 이다. 못 읽은 이유는 어느 파일의 몇째 항목인지를 말한다."""
+    out: list[dict[str, Any]] = []
+    bad: list[str] = []
+    _load_one(p or path(), out, bad)
+    _load_one(lp or local_path(), out, bad)
     out.sort(key=lambda r: (r["period_from"], r["period_to"], r["region"]))
     return out, bad
 

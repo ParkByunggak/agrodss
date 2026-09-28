@@ -67,12 +67,34 @@ def test_load_keeps_good_entries_and_reports_bad_ones_by_index(tmp_path):
     p = _write(tmp_path, [dict(GOOD, temp={"above": 90, "normal": 30, "below": 20}), GOOD, "문자열", LATER])
     recs, bad = outlook.load(p)
     assert [r["period_from"] for r in recs] == ["2026-10-05", "2026-10-12"] and len(bad) == 2
-    assert bad[0].startswith("entries[0]: temp 확률 합 140") and bad[1].startswith("entries[2]: 항목이 객체가 아니다")
+    assert bad[0].startswith(f"{p.name} entries[0]: temp 확률 합 140") and bad[1].startswith(f"{p.name} entries[2]: 항목이 객체가 아니다")
     assert [d["path"] for d in dropped.all_drops() if d["where"] == "장기 전망 정본"] == [f"{p.name}#0", f"{p.name}#2"]   # /changes 에도 남는다
     assert recs[1]["values"]["precip"] is None and recs[1]["note"] == "둘째 주"
     assert outlook.load(tmp_path / "없음.json") == ([], []) and outlook.load(_write(tmp_path, [])) == ([], [])
     (tmp_path / "bad.json").write_text("{", encoding="utf-8")
-    assert outlook.load(tmp_path / "bad.json")[1][0].startswith("JSON 아님")
+    assert outlook.load(tmp_path / "bad.json")[1][0].startswith("bad.json: JSON 아님")
+
+
+def test_the_publishers_entries_live_in_a_gitignored_overlay_that_update_bat_leaves_alone(tmp_path):
+    """[순서 함정 2026-09-28] update.bat 은 추적된 data/ 파일의 로컬 수정을 _local_backup 으로 치우고 `git checkout` 으로 되돌린다(:preserve) —
+    씨앗에 값을 넣으면 다음 갱신에 화면에서 사라진다. 그래서 발행자가 넣는 곳은 git 밖 덮개이고, 씨앗은 세션 커밋으로만."""
+    import subprocess
+    from pathlib import Path as _P
+    root = _P(__file__).resolve().parent.parent
+    ign = subprocess.run(["git", "check-ignore", "-q", "data/kma/climate_outlook_local.json"], cwd=root).returncode
+    assert ign == 0, "덮개가 gitignore 밖이다 — update.bat 이 치운다"
+    assert subprocess.run(["git", "check-ignore", "-q", "data/kma/climate_outlook.json"], cwd=root).returncode != 0   # 씨앗은 추적
+    bat = (root / "scripts" / "update.bat").read_text(encoding="utf-8", errors="replace")
+    assert ":preserve" in bat and "git checkout -- " in bat                                                   # 전제가 사라지면 이 검사가 말한다
+    assert outlook.local_path().name == "climate_outlook_local.json" and outlook.path().name == "climate_outlook.json"
+    seed, local = _write(tmp_path, [GOOD]), tmp_path / "climate_outlook_local.json"
+    local.write_text(json.dumps({"entries": [LATER, dict(GOOD, temp={"above": 90, "normal": 30, "below": 20})]}, ensure_ascii=False), encoding="utf-8")
+    recs, bad = outlook.load(seed, local)
+    assert [r["period_from"] for r in recs] == ["2026-10-05", "2026-10-12"]                                    # 둘 다 읽는다 · 기간순
+    assert len(bad) == 1 and bad[0].startswith("climate_outlook_local.json entries[1]: temp 확률 합 140")     # 어느 파일의 몇째인지
+    assert outlook.load(seed, tmp_path / "없음.json")[0][0]["period_from"] == "2026-10-05"                     # 덮개가 없어도 씨앗은 읽힌다
+    doc = json.loads(outlook.DEFAULT_PATH.read_text(encoding="utf-8"))
+    assert any("climate_outlook_local.json" in ln for ln in doc["_how_to"])                                    # 넣는 법이 덮개를 가리킨다
 
 
 def test_only_periods_covering_today_or_later_are_cited():
@@ -85,13 +107,13 @@ def test_only_periods_covering_today_or_later_are_cited():
 def test_gather_outlook_says_why_when_there_is_nothing_to_cite(tmp_path, monkeypatch):
     monkeypatch.setenv("AGRODSS_OUTLOOK_PATH", str(tmp_path / "없음.json"))
     recs, why = judge_run.gather_outlook(TODAY)
-    assert recs is None and "등재된 장기 전망 없음" in why and "없음.json" in why and "발행자 몫" in why
+    assert recs is None and "등재된 장기 전망 없음" in why and "climate_outlook_local.json" in why and "발행자 몫" in why   # 넣을 곳(덮개)을 말한다
     monkeypatch.setenv("AGRODSS_OUTLOOK_PATH", str(_write(tmp_path, [PAST])))
     recs, why = judge_run.gather_outlook(TODAY)
     assert recs is None and "모두 지난 기간(마지막 2026-09-20)" in why
     monkeypatch.setenv("AGRODSS_OUTLOOK_PATH", str(_write(tmp_path, [PAST, GOOD, dict(GOOD, source_url="x")])))
     recs, why = judge_run.gather_outlook(TODAY)
-    assert recs and [r["period_from"] for r in recs] == ["2026-10-05"] and why.startswith("못 읽은 항목 1 — entries[2]")   # 산 항목 + 못 읽은 것 둘 다 말한다
+    assert recs and [r["period_from"] for r in recs] == ["2026-10-05"] and why.startswith("못 읽은 항목 1 — climate_outlook.json entries[2]")   # 산 항목 + 못 읽은 것 둘 다 말한다
 
 
 def test_the_citation_carries_the_outlook_after_short_and_mid_and_its_reason_when_absent():
@@ -147,7 +169,7 @@ def test_the_judge_page_renders_the_outlook_table_with_its_source_link(srv, tmp_
 def test_state_the_repository_file_is_readable_and_its_example_is_not_an_entry():
     p = outlook.DEFAULT_PATH
     doc = json.loads(p.read_text(encoding="utf-8"))
-    recs, bad = outlook.load(p)
+    recs, bad = outlook.load(p, outlook.LOCAL_PATH)                                   # 이 PC 의 덮개(있으면)까지 실제로 읽는다 — 발행자가 넣은 뒤 도는 검사
     assert bad == [], f"발행자 등재분에 못 읽는 항목이 있다 — {bad}"
     assert isinstance(doc.get("entries"), list) and "_example" in doc and "_how_to" in doc and doc["_example"] not in doc["entries"]
     outlook.entry_to_record(doc["_example"])                                           # 예시 자체가 형식을 지킨다(따라 적으면 읽힌다)

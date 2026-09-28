@@ -112,6 +112,12 @@ def test_the_chat_routes_weather_questions_here_and_keeps_risk_words_for_the_ale
         assert chat.topic_of(q) == "forecast_citation", q
     for q, did in (("비 오면 어떻게 하죠", "risk_alert"), ("서리 오면 어떻게 하죠", "risk_alert"), ("폭우 온다는데", "risk_alert"), ("가뭄이 심한데 물 줘야 하나", "drought_alert")):
         assert chat.topic_of(q) == did, q
+    # [중기·장기 처방 직후 전수] 기간·요소가 붙은 전망 물음은 날씨 인용으로 — '전망' 홀로는 안 된다(수확 · 출하 전망은 그쪽 판단이 맞다)
+    for q in ("장기 전망 알려줘", "한 달 전망 어때", "10월 강수량 전망", "이번 달 강수 전망", "가을 전망이 어떤가요", "중기 전망 좀", "다음 주 강수 확률"):
+        assert chat.topic_of(q) == "forecast_citation", q
+    for q, did in (("수확 전망은 어때", "harvest_timing"), ("출하 전망", "ship_or_store"), ("중기 계획", "plan_vs_actual")):
+        assert chat.topic_of(q) == did, q
+    assert chat.topic_of("장기적으로 어떻게 해야 하나") != "forecast_citation"                         # '장기' 홀로도 안 된다
     s = _subject()
     a = chat.answer(s, "내일 날씨 어때", TODAY)                                             # 격리 환경 — 좌표·키 없음 → 데이터 미비의 이유가 답에
     e = next(x for x in judge_run.judgments_for(s["id"], today=TODAY) if x.decision_id == "forecast_citation")

@@ -18,3 +18,5 @@ data/crop_names_local.csv
 # `git status` 에 `??` 로 떠 있었다 — `git add -A` 한 번이면 발행자 이름이 저장소로 들어간다(U-18 과 같은 축).
 data/profile.json
 data/_local_backup/
+# [D-21 장기 2026-09-28] 발행자가 손으로 넣는 1·3개월 전망은 덮개에만 — 추적 파일에 넣으면 update.bat 이 _local_backup 으로 치우고 되돌린다(값이 화면에서 사라진다)
+data/kma/climate_outlook_local.json
