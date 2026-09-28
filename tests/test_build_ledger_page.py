@@ -41,6 +41,19 @@ def test_the_two_todo_lists_are_rewritten_each_round_and_not_empty():
     assert "update.bat" in joined and "D-18" in joined                              # 발행자 몫의 첫 줄은 언제나 라이브 반영 · 열린 결정
 
 
+def test_the_todo_lists_render_their_own_html_and_are_not_numbered_twice():
+    """[발행자 붙임 2026-09-28] 머리(k)만 escape 해 <span style=…>·<code> 가 글자 그대로 나갔고, <ol> 번호 위에 ⓪①② 표지가 또 있어 "1. ⓪" 로 두 번 셌다.
+    두 목록 구역 안에 escape 된 태그가 없고, 목록은 번호 없는 <ul> 이다."""
+    for head in ("발행자 몫 — 지금", "세션 몫 — 지시하면 이 순서로"):
+        i = blp.page.index(f"<h2>{head}</h2>")
+        block = blp.page[i:blp.page.index("</section>", i)]
+        assert block.startswith(f"<h2>{head}</h2><ul>") and "&lt;span" not in block and "&lt;code" not in block and "&lt;b&gt;" not in block, head
+        assert "<ol>" not in block
+    src = (ROOT / "scripts" / "build_ledger_page.py").read_text(encoding="utf-8")
+    li_src = src[src.index("def li("):src.index("\n\n", src.index("def li("))]
+    assert "html.escape" not in li_src                                              # 머리도 본문도 저자 HTML — 어느 쪽도 escape 하지 않는다
+
+
 def test_the_cli_writes_only_the_given_file(tmp_path):
     watched = sorted(p for p in (ROOT / "docs").glob("*.md")) + [ROOT / "scripts" / "build_ledger_page.py"]
     before = hashlib.sha1(b"".join(p.read_bytes() for p in watched)).hexdigest()
