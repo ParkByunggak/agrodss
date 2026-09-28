@@ -41,6 +41,9 @@ def _isolate_media_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("AGRODSS_NAMES_BACKUP_CSV", str(tmp_path / "crop_names_backup.csv"))   # [U-38] update.bat 사본(읽기)
     monkeypatch.setenv("AGRODSS_OUTLOOK_PATH", str(tmp_path / "climate_outlook.json"))       # [D-21 장기] 발행자 등재 정본(읽기) — 계약 검사가 운영 등재분을 읽지 않게(없는 경로 = 등재 없음)
     monkeypatch.setenv("AGRODSS_OUTLOOK_LOCAL_PATH", str(tmp_path / "climate_outlook_local.json"))   # [D-21 장기] 덮개(발행자 손 · git 밖) — 같은 이유
+    monkeypatch.setenv("AGRODSS_AUTO_PULL_SEC", "0")       # [U-39] 검사가 띄우는 화면(자식 프로세스)이 원격을 부르지 않게 — 아래 setattr 는 이 프로세스 몫
+    from frontend import config as _cfg
+    monkeypatch.setattr(_cfg, "AUTO_PULL_SEC", 0.0)
     from names import resolve as _names
     _names.reload()
     yield

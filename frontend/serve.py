@@ -24,7 +24,7 @@ if __package__ in (None, ""):
     # `python frontend/serve.py` 로 직접 실행될 때 저장소 루트를 경로에 넣는다
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from frontend import chat_pages, config, render, words  # noqa: E402
+from frontend import autopull, chat_pages, config, render, words  # noqa: E402
 from ingest import chat, feedback as fb, profile, subjects  # noqa: E402  — [M-13] 채팅 원장 · 되먹임 · 재배 단위·사용자 등록부도 ingest 를 통해서만
 from ingest import events as ev  # noqa: E402  — 사건 원장도 ingest 를 통해서만
 from ingest import media  # noqa: E402  — 입력 화면은 ingest 를 통해서만 1층에 쓴다(원장 파일을 직접 열지 않는다)
@@ -81,7 +81,8 @@ def footer_text() -> str:
     head = git_head_short()
     state = (f"실행 중 {RUNNING_HEAD}" if head == RUNNING_HEAD
              else f"실행 중 {RUNNING_HEAD} · 저장소 {head} — 뒤처짐(/changes)")
-    return f"{AI_NOTICE}  ·  {state} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
+    # [U-39] 자동 갱신의 마지막 시도 결과도 꼬리에 — 실패·보류가 조용히 지나가면 사람은 최신인 줄 안다
+    return f"{AI_NOTICE}  ·  {state} · {autopull.status_line(config.AUTO_PULL_SEC)} · {config.HOST}:{config.PORT} · 외부 배포 없음(D-6)"
 
 
 def changes_page() -> tuple[int, str]:
@@ -95,6 +96,7 @@ def changes_page() -> tuple[int, str]:
         state = f'<span class="st st-대기">뒤처짐</span> 실행 중 {html.escape(RUNNING_HEAD)} · 저장소 {html.escape(head)} — AGRODSS_RELOAD=0 이라 수동 재시작'
     if config.today_frozen():
         state += f' · <span class="st st-대기">오늘 고정 {html.escape(config.today_frozen())}</span> ({config.TODAY_ENV} — 검사·재현용, 운영이면 지운다)'
+    state += f' · {html.escape(autopull.status_line(config.AUTO_PULL_SEC))}'     # [U-39] 마지막 자동 갱신 시도 — 보류·실패의 이유까지
     rows = "".join(f"<tr><td><code>{html.escape(h)}</code></td><td>{html.escape(d)}</td><td>{html.escape(s)}</td></tr>" for h, d, s in git_log_lines(20))
     # [조용한 실패 전수 2026-09-21 · R-6 후속] 시스템이 **제 손으로 쓴 파일을 읽다 버린 것**을 여기서 말한다.
     # 전에는 아무 데도 안 남아, 처방 정본이 있는데 판정은 "정본 미도착" 이라고 했다(원인이 뒤바뀐다).
@@ -581,7 +583,7 @@ class Handler(BaseHTTPRequestHandler):
             # [발행자 2026-09-23] `update.bat` 이 *"화면이 ed45339 를 돌고 있을 것"* 이라고 **주장**만 했다 — 재지 않았다.
             # 이 트랙이 며칠을 잃은 형태가 바로 그것이다(커밋 완료 ≠ 반영 완료). 배치가 **읽을 수 있는** 줄을 낸다:
             # 한글은 못 쓴다(cmd 가 cp949 로 읽는다) — ASCII 키=값이라 `findstr` 로 그대로 비교된다.
-            self._send_text(200, f"head={RUNNING_HEAD}\nrepo={git_head_short()}\nport={config.PORT}\n")
+            self._send_text(200, f"head={RUNNING_HEAD}\nrepo={git_head_short()}\nport={config.PORT}\n" + autopull.running_lines(config.AUTO_PULL_SEC))
             return
         if p == "/":
             status, body, loc = chat_home()
@@ -810,6 +812,11 @@ def main(open_browser: bool = True) -> int:
         def _w() -> None:
             watch_head(srv, head, config.RELOAD_POLL_SEC, stop, on_change=restarted.set)
         threading.Thread(target=_w, daemon=True, name="agrodss-head-watch").start()
+    if config.AUTO_PULL_SEC > 0:
+        # [U-39 자동 갱신] pull 은 여기서, 재기동은 위 watch_head 가 — 두 스레드가 같은 stop 으로 끝난다. 첫 시도는 기동 30초 뒤
+        def _p() -> None:
+            autopull.loop(stop, config.AUTO_PULL_SEC, config.ROOT, config.AUTO_PULL_REMOTE, config.AUTO_PULL_BRANCH)
+        threading.Thread(target=_p, daemon=True, name="agrodss-auto-pull").start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
