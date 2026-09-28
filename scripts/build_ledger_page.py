@@ -28,23 +28,50 @@ body = re.sub(r"^<h1>.*?</h1>\s*", "", body, count=1, flags=re.S)
 NEXT_PUBLISHER = [
     # [시점 축 2026-09-27] 이 목록은 회차마다 **다시 쓴다** — 스크래치패드 판은 9/20~21 항목(9/8 예찰 · D-12 촬영 · 검토지)을 일주일 넘게 싣고 있었다.
     # 낡은 지시는 없는 지시보다 나쁘다(발행자가 이미 한 일을 다시 하거나, 안 해도 되는 일을 한다).
-    ("⓪ <span style=\"color:#8C2B2B\">화면이 아직 00f7987</span> — <code>scripts\\update.bat</code> 더블클릭 (2분)", "2026-09-27 저녁 묶음 일곱(D-18 자리·뒷문·앞문·미리 걷기·도구 둘·WO-LLM-01 측정기)이 발행자 PC 에 아직 안 섰다. 이번 실행은 <b>TEMP 사본</b>으로 도는 첫 번째라 <code>'/f'</code>·<code>'he'</code> 줄이 없어야 한다. 끝 두 줄(<code>measured: the screen is running …</code>)을 세션에 붙인다. 받은 뒤 watch 창을 닫고 <code>install_autostart.bat</code> 한 번 더"),
-    ("① 확인 셋 (3분)", "㉠ 입력칸에 한 줄 적고 <b>엔터</b> → 보내진다 · 줄바꿈은 Shift+Enter ㉡ 증상 물음(다른 문장으로 두 번 더 — 3/3 독립 재현) → 「아직 모릅니다 — 기준이 없습니다 …」 + '본 것' 초안, 계획표 없음 ㉢ <code>/judge</code> 배지가 「이렇게 보입니다」 · 「증상 → 원인 좁히기」 카드에 격자 id · 키 · 고칠 파일"),
-    ("② <b>D-18 반영됨</b>(2026-09-28) — 받으신 뒤 증상 물음 한 번", "쓰신 감별 넷이 격자 칸 3 에 그대로 들어갔다. 증상 물음(예: 잎 끝이 노랗다) → 「이렇게 보입니다 · 원인 후보: 과습 · 뿌리 상함 · 고자리파리 유충 · 양분 부족 · 노균병 · 잎마름 — 먼저 증상 있는 포기를 몇 개 뽑아 인경 밑을 본다」 · <code>/judge</code> 「증상 → 원인 좁히기」 카드에 후보마다 가르는 확인. 규칙을 넓히실 때는 같은 파일(<code>data/grid/jjokpa_autumn.json</code> 칸 3 <code>symptom_rules</code>) → <code>python scripts/build_grid_doc.py</code> → 상태 검사 하나. 형식이 틀리면 검증기가 어느 규칙의 무엇이 틀렸는지 말한다"),
-    ("②b <b>D-20 임계</b> — 무강수 며칠이면 관수를 검토할지(칸 3·4)", "<code>data/grid/jjokpa_autumn.json</code> 칸 3·4 에 <code>\"drought_rules\": {\"dry_days\": N, \"source\": \"…\"}</code>. N 은 발행자·농진청 정본(세션이 정하지 않는다). 순서는 D-18 과 같다: <code>python -m scripts.prewalk_grid jjokpa_autumn --stage 3 --key drought_rules --value-file rules.json</code> → 격자 → 문서 재생성 → 상태 검사 하나. 임계가 서도 마지막 비 온 날이 원장에 없으면 \"비 온 날을 알면 판단합니다\" 로 묻는다 — 채팅에 \"어제 비가 왔다\" 한 줄이면 된다"),
-    ("③ WO-LLM-01 첫 숫자 — <code>python -m scripts.measure_misclassified</code> (1분)", "발행자 PC 의 채팅 원장에서 오분류 재료(종류 고침 + 편집 쌍)를 센다 — 마지막 두 줄을 붙인다. 30 미만이면 그 자체가 결과(§5-2). 30 이상이면 트리거('결과 없음' 은 빈 집합 → '기본값으로 떨어진 발화')를 D 항목으로 정한 뒤 하네스. <b>.env 는 건드리지 않는다</b>(발행자 2026-09-27 · LLM 키 제외는 D-9 결정)"),
-    ("④ 결정 둘 — D-17 · D-19", "D-17 찍은 때 사다리의 '파일 이름' 칸을 둘 것인가(카카오톡 파일명은 받은 시각) · D-19 검색엔진 노출 — 어느 화면 · 언제 · 호스팅(지금 화면은 D-6 루프백 · 밭 자료라 노출 대상 아님)"),
+    # [발행자 2026-09-28 "각 단계별로 발행자가 할 일을 구체적으로 사례를 들어"] 항목마다 **손으로 할 것 → 화면에 보일 것(예) → 세션에 보낼 것** 순으로.
+    ("⓪ <span style=\"color:#8C2B2B\">화면이 아직 00f7987</span> — 받기 (2분)",
+     "<b>할 것</b>: 탐색기에서 <code>D:\\agrodss\\scripts\\update.bat</code> 더블클릭 → 검은 창이 <i>pulling</i> → <i>waiting for the old screen to stop</i> → "
+     "<b><code>measured: the screen is running 55c36ed</code></b>(또는 그 뒤 해시)로 끝난다. 이번은 TEMP 사본으로 도는 첫 실행이라 지난번의 <code>'/f'은(는) …</code> · <code>'he' …</code> 줄이 "
+     "<b>없어야</b> 한다. 그 다음 열려 있던 <i>watch</i> 검은 창을 닫고 <code>scripts\\install_autostart.bat</code> 한 번 더 더블클릭. "
+     "<b>확인</b>: 브라우저 <code>http://127.0.0.1:8765</code> 맨 아래 꼬리가 「실행 중 55c36ed」(00f7987 이 아니면 됐다). "
+     "<b>보낼 것</b>: 창의 마지막 두 줄. 오류 줄이 보이면 그 줄 그대로"),
+    ("① 확인 셋 (3분)",
+     "㉠ <b>엔터</b>: 채팅 입력칸에 <i>오늘 물 줬다</i> 치고 Enter → 보내지고 답이 온다(예: 「한 일로 적었습니다 … '일지에 넣기'」). Shift+Enter 는 줄만 바뀐다. "
+     "㉡ <b>증상 물음</b> 두 문장(다른 말로): <i>잎 끝이 누렇게 되는데 왜 그런가요</i> · <i>잎이 노래지는데 어떻게 해야 하나</i> → 둘 다 "
+     "「이렇게 보입니다 · 원인 후보: 과습 · 뿌리 상함 · 고자리파리 유충 · 양분 부족 · 노균병 · 잎마름 — 먼저 … 인경 밑을 본다」 + 아래에 '본 것' 초안 카드(계획표는 안 나온다). "
+     "㉢ <b>/judge</b>: 배지가 「이렇게 보입니다」 · 「증상 → 원인 좁히기」 카드가 있다 — ㉡의 초안을 '일지에 넣기' 하면 그 카드에 후보 표(가르는 확인 · 회복)가 선다. "
+     "<b>보낼 것</b>: 셋 중 다르게 나온 것만(같으면 「셋 다 맞다」 한 줄)"),
+    ("② <b>D-18 반영됨</b> — ㉡이 그 확인이다",
+     "쓰신 감별 넷이 격자 칸 3 에 그대로 들어갔다. <b>규칙을 넓히실 때(예: '잎이 비틀린다' 를 더하고 싶다)</b>: 값과 출처를 세션에 한 줄로 주시면 세션이 세 줄"
+     "(미리 걷기 → 격자 → 문서 재생성 → 상태 검사)을 한다. 직접 하시면: <code>data/grid/jjokpa_autumn.json</code> 칸 3 의 <code>symptom_rules</code> 목록에 "
+     "<code>{\"symptoms\": [\"비틀\"], \"causes\": [{\"name\": \"…\", \"check\": \"…\", \"recoverable\": false}], \"first_check\": \"…\"}</code> 를 더하고 → "
+     "<code>python scripts\\build_grid_doc.py</code> → 형식이 틀리면 <code>python -m pytest tests\\test_grid.py -q</code> 가 어느 규칙의 무엇이 틀렸는지 말한다"),
+    ("②b <b>D-20 임계</b> — 무강수 며칠이면 관수를 검토할지 (값 하나)",
+     "<b>정할 것</b>: 예를 들어 <i>\"가을 쪽파는 비 안 온 지 7일이면 관수를 검토한다 — 출처: 농진청 쪽파 재배 지침(또는 내 경험 2026)\"</i>. "
+     "<b>보낼 것</b>: 그 문장 한 줄(N 과 출처) — 세션이 <code>prewalk_grid --stage 3 4</code> → 격자 칸 3·4 <code>\"drought_rules\": {\"dry_days\": 7, \"source\": \"…\"}</code> → 문서 재생성 → "
+     "상태 검사 하나를 한다. <b>직접 하시면</b> 같은 파일 칸 3 과 칸 4 의 <code>\"decisions\": […]</code> 줄 아래에 그 한 줄을 넣는다(앞 줄 끝 쉼표 주의). "
+     "<b>그 뒤 화면</b>: 채팅에 <i>어제 비가 왔다</i> 한 줄(비 온 날 기록) → <i>가뭄이 심한데 물 줘야 하나</i> → 「마지막 비·관수 2026-09-27 뒤 무강수 1일 — 임계 7일 미만: 아직 관수 판단 아님 · "
+     "수분 요구 중간 · 결핍 민감 중간」. 비 기록이 없으면 「마지막으로 비 온 날이나 관수한 날을 알면 판단합니다」 로 묻는다"),
+    ("③ WO-LLM-01 첫 숫자 (1분)",
+     "<b>할 것</b>: 시작 → <i>cmd</i> → <code>cd /d D:\\agrodss</code> → <code>python -m scripts.measure_misclassified</code>. 표가 나오고 마지막 두 줄이 "
+     "<i>재료 N건 (고침 a · 편집 b) — 문턱 30: 충족/미달</i> · <i>기대 종류는 발행자가 붙인다 …</i> 다. <b>보낼 것</b>: 그 두 줄만(위의 발화 원문 줄들은 붙이지 않아도 된다 — PII). "
+     "30 미만 = 그 자체가 결과(지시서 §5-2). 30 이상 = 트리거를 정한 뒤 하네스. <b>.env 는 건드리지 않는다</b>"),
+    ("④ 결정 둘 — 한 줄씩",
+     "<b>D-17</b> 예: <i>\"파일명 시각은 쓴다 — 단 라벨에 '저장·전송 시각일 수 있음' 을 유지\"</i> 또는 <i>\"안 쓴다 — 찍은 때가 없으면 날짜를 묻는다\"</i>. "
+     "<b>D-19</b> 예: <i>\"공개는 몰 상세페이지만 · 첫 수확 뒤 · 호스팅은 그때 정한다\"</i> — 셋(어느 화면 · 언제 · 호스팅)이 한 줄에 있으면 된다. 지금 화면(밭 자료)은 계속 루프백"),
 ]
 NEXT_SESSION = [
     ("세션 시작 시 훅 활성 확인(가드 창)", "스크래치패드에 heredoc 파일 쓰기 1회 시도 — 차단되면 훅 활성, 통과하면 그 세션은 규율로만 지킨다(U-22: 세션 루트가 다른 저장소면 가드가 잠든다)"),
-    ("D-18 이 오면 — 세 줄", "격자 칸 3 규칙 → 문서 재생성 → 상태 검사 하나. 먼저 <code>scripts/prewalk_grid.py</code> 로 잔여를 잰다(잔여가 상태 검사 하나뿐이어야 한다 · 아니면 처방이 먼저)"),
+    ("D-20 임계가 오면 — 세 줄", "<code>prewalk_grid --stage 3 4 --key drought_rules</code> 로 잔여를 잰다(상태 검사 하나뿐이어야 한다) → 격자 칸 3·4 → 문서 재생성 → 상태 검사 하나. D-18 규칙을 넓히실 때도 같은 세 줄"),
     ("WO-LLM-01 — 숫자가 오면", "30 미만: 표만 대장에 남기고 닫는다. 30 이상: 트리거 D 결정 뒤 하네스(플래그 · 호출부 · 검사 6 · 측정 스크립트 · 표) — 측정 실행은 발행자 PC(Ollama · GPU). 지시서의 전제 셋(트리거 빈 집합 · 말뭉치 104 · 오분류 이력은 원장 줄 순서) 정정본으로"),
     ("U-20 — NCPMS 임계 정본이 오면", "필지 축(배수 · 토성 · 미기상) 소비자 0 인 자리에 첫 소비자(과습 · 예찰 보정). 정본 없이는 대리값이 경보로 나가므로 지금은 안 한다"),
     ("낡음 대조", "대장 상태 열 · 이 페이지의 두 목록 · 핸드오버 §5 — 회차마다 다시 쓴다(시점 축). 실사용 관찰은 관찰 시점과 함께"),
 ]
 
 def li(items):
-    return "".join(f"<li><b>{html.escape(k)}</b><span>{v}</span></li>" for k, v in items)
+    # [발행자 붙임 2026-09-28] 머리(k)를 escape 해서 <span style=…>·<code> 가 글자 그대로 화면에 나갔다 — 머리도 본문도 여기서 쓴 HTML 이지 사용자 글이 아니다.
+    # 그리고 <ol> 번호 위에 ⓪①② 표지를 또 달아 "1. ⓪" 로 두 번 셌다 → 표지만 남기고 목록 번호는 뗀다(<ul>)
+    return "".join(f"<li><b>{k}</b><span>{v}</span></li>" for k, v in items)
 
 pills = "".join(f'<span class="st st-{s}">{s} <strong>{n}</strong></span>' for s, n in counts.items() if n or s != "폐기")
 
@@ -103,7 +130,8 @@ header .sub {{ color:var(--muted); font-size:12px; margin-top:2px; font-family:"
 .next {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:18px 0 8px; }}
 .next section {{ background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }}
 .next h2 {{ font-size:13px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); border:0; padding:0; }}
-.next ol {{ margin:0; padding-left:20px; display:grid; gap:6px; }}
+.next ul {{ margin:0; padding-left:0; list-style:none; display:grid; gap:8px; }}
+.next li {{ padding:6px 8px; border-left:3px solid var(--line, #ddd); }}
 .next li b {{ display:block; font-weight:600; }}
 .next li span {{ color:var(--fg); }}
 h2 {{ font-size:16px; margin:28px 0 8px; padding-top:12px; border-top:1px solid var(--line); text-wrap:balance; }}
@@ -130,8 +158,8 @@ td:first-child {{ white-space:nowrap; font-family:"IBM Plex Mono",ui-monospace,m
   <p class="why">이유: {BEST[1]}</p>
 </div>
 <div class="next">
-  <section><h2>발행자 몫 — 지금</h2><ol>{li(NEXT_PUBLISHER)}</ol></section>
-  <section><h2>세션 몫 — 지시하면 이 순서로</h2><ol>{li(NEXT_SESSION)}</ol></section>
+  <section><h2>발행자 몫 — 지금</h2><ul>{li(NEXT_PUBLISHER)}</ul></section>
+  <section><h2>세션 몫 — 지시하면 이 순서로</h2><ul>{li(NEXT_SESSION)}</ul></section>
 </div>
 <div class="tbl">
 {body}

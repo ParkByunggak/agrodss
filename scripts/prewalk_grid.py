@@ -9,7 +9,8 @@
 #   하는 일   ① git worktree(HEAD) 를 tmp 에 만들고 ② 작업 트리의 미커밋 수정을 얹고(없으면 그대로) ③ 격자 칸에 값을 넣고 ④ 검사를 돌리고
 #            ⑤ 격자 문서를 재생성한 뒤 다시 돌려 **잔여**를 센다 ⑥ 워크트리를 지운다. 저장소 본체에는 아무것도 쓰지 않는다.
 #   쓰는 법   python -m scripts.prewalk_grid jjokpa_autumn --stage 3 --key symptom_rules --value-file rules.json
-#            python -m scripts.prewalk_grid jjokpa_autumn --stage 3 --key symptom_rules --value-file rules.json --tests tests/test_grid.py tests/test_symptom_triage.py
+#            python -m scripts.prewalk_grid jjokpa_autumn --stage 3 4 --key drought_rules --value-file rules.json --tests tests/test_grid.py tests/test_drought_slot.py
+#            (--stage 는 여럿 가능 — 오늘 칸만 읽는 결정(가뭄)은 다른 칸에 넣으면 잔여 0 이라, 발행자가 두 칸에 넣는 커밋은 두 칸을 한 번에 건다)
 #            (--tests 를 안 주면 전체 관문 — 약 10분. TZ 는 관문 규율대로 Asia/Seoul 로 고정한다)
 #   규율     읽기 전용 측정 도구 — 격자 파일명은 data/grid 안의 것만 받고, 값은 JSON 파일에서만 받는다(셸에 긴 문면을 통과시키지 않는다 · HEREDOC-1).
 from __future__ import annotations
@@ -55,15 +56,20 @@ def _sh(cmd: list[str], cwd: Path) -> tuple[int, str]:
     return r.returncode, r.stdout + r.stderr
 
 
-def walk(grid_stem: str, stage_order: int, key: str, value: Any, tests: list[str] | None = None,
+def walk(grid_stem: str, stage_order: int | list[int], key: str, value: Any, tests: list[str] | None = None,
          root: Path = ROOT) -> dict[str, Any]:
-    """격리 워크트리에서 미리 걷는다. 돌려주는 것: 넣기 전/문서 재생성 뒤 실패 목록 · 문서에 값이 실렸는지 · 워크트리 제거 여부."""
+    """격리 워크트리에서 미리 걷는다. 돌려주는 것: 넣기 전/문서 재생성 뒤 실패 목록 · 문서에 값이 실렸는지 · 워크트리 제거 여부.
+
+    `stage_order` 는 칸 하나 또는 여럿 — [D-20 미리 걷기 2026-09-28] 오늘 칸만 읽는 결정은 다른 칸의 값을 넣어도 잔여 0 이라, 발행자가 칸 3·4 에
+    같은 값을 넣는 커밋은 두 칸을 **한 번에** 걸어야 그 커밋의 잔여가 나온다.
+    """
+    orders = [stage_order] if isinstance(stage_order, int) else list(stage_order)
     target = (root / "data" / "grid" / f"{grid_stem}.json")
     if not target.exists() or target.parent != root / "data" / "grid":
         raise ValueError(f"data/grid 안의 격자만 받는다: {grid_stem}")
     wt = Path(tempfile.mkdtemp(prefix="agrodss_prewalk_"))
     wt.rmdir()                                   # git 이 만들게 한다(비어 있어야 한다)
-    out: dict[str, Any] = {"worktree": str(wt), "grid": target.relative_to(root).as_posix(), "stage": stage_order, "key": key}
+    out: dict[str, Any] = {"worktree": str(wt), "grid": target.relative_to(root).as_posix(), "stage": "·".join(str(o) for o in orders), "key": key}
     rc, log = _sh(["git", "worktree", "add", "--detach", str(wt), "HEAD"], root)
     if rc != 0:
         raise RuntimeError(f"워크트리를 못 만들었다: {log}")
@@ -78,7 +84,8 @@ def walk(grid_stem: str, stage_order: int, key: str, value: Any, tests: list[str
                 raise RuntimeError(f"미커밋 수정을 못 얹었다: {log}")
         g = wt / target.relative_to(root)
         unit = json.loads(g.read_text(encoding="utf-8"))
-        set_in_unit(unit, stage_order, key, value)
+        for o in orders:
+            set_in_unit(unit, o, key, value)
         g.write_text(json.dumps(unit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         py = [sys.executable, "-B", "-m", "pytest", "-p", "no:cacheprovider", "-q", "--no-header", *(tests or [])]
         rc, log = _sh(py, wt)
@@ -131,7 +138,7 @@ def report(r: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="격자 한 칸 수정을 격리 워크트리에서 미리 걷는다(읽기 전용)")
     ap.add_argument("grid", help="격자 파일 이름(확장자 없이 · data/grid 안)")
-    ap.add_argument("--stage", type=int, required=True)
+    ap.add_argument("--stage", type=int, nargs="+", required=True, help="칸 번호 하나 또는 여럿(예: --stage 3 4 — 오늘 칸만 읽는 결정은 여럿을 한 번에)")
     ap.add_argument("--key", required=True)
     ap.add_argument("--value-file", required=True, help="넣을 값(JSON 파일) — 셸에 긴 문면을 통과시키지 않는다")
     ap.add_argument("--tests", nargs="*", default=None, help="돌릴 검사 파일들(없으면 전체 관문)")

@@ -21,6 +21,23 @@ def test_set_in_unit_sets_only_an_existing_stage():
         pw.set_in_unit(unit, 2, "k", [1])                                          # 없는 칸을 조용히 만들지 않는다
 
 
+def test_the_cli_takes_several_stages_at_once_for_decisions_that_read_only_todays_cell():
+    """[D-20 미리 걷기 2026-09-28] 칸 3 에만 임계를 넣은 걷기가 잔여 0 이었다 — 그 결정은 오늘 칸(4)을 읽는다. 발행자가 칸 3·4 에 넣는 커밋은
+    두 칸을 한 번에 걸어야 그 커밋의 잔여가 나온다. 걷기 자체는 위 e2e 검사가 보고, 여기서는 인자와 표기만."""
+    import argparse
+    src = (ROOT / "scripts" / "prewalk_grid.py").read_text(encoding="utf-8")
+    assert 'nargs="+"' in src.split('add_argument("--stage"')[1].split("\n")[0]       # --stage 3 4
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--stage", type=int, nargs="+", required=True)
+    assert ap.parse_args(["--stage", "3", "4"]).stage == [3, 4]
+    rep = pw.report({"grid": "data/grid/x.json", "stage": "3·4", "key": "drought_rules", "failures_before_doc": [], "doc_rebuilt": True,
+                     "doc_mentions_value": True, "failures_after_doc": [], "worktree_removed": True, "worktree": "-"})
+    assert "칸 3·4" in rep
+    body = src[src.index("def walk("):]
+    body = body[:body.index("\ndef ", 10)]
+    assert "for o in orders:" in body and "set_in_unit(unit, o, key, value)" in body   # 칸마다 넣는다 · int 하나도 그대로 받는다
+
+
 def test_parse_failures_reads_ids_without_a_summary_line():
     out = "....F..\nFAILED tests/a.py::test_x - AssertionError: assert 1\nERROR tests/b.py::test_y\nFAILED tests/a.py::test_x - again\n"
     assert pw.parse_failures(out) == ["tests/a.py::test_x", "tests/b.py::test_y"]
