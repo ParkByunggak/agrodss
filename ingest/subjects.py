@@ -133,7 +133,12 @@ def add(crop: str, season: str, status: str = "계획", parcel: str | None = Non
     parcel = (parcel or "").strip() or default_parcel()
     if not parcel:
         raise SubjectError("필지를 지정한다 — 등록된 필지가 하나가 아니라 기본값을 두지 않는다(fallback 대표값 금지)")
-    crop_c = resolve_crop(crop)
+    # [발행자 실사용 2026-09-28] 새 채팅 폼의 기준점 '2026-09-30 '(끝 공백 — 휴대폰 자판·자동완성이 흔히 붙인다)이 "YYYY-MM-DD 여야 한다" 로 거부됐다.
+    # 사람이 친 값의 양끝 공백은 여기 입구 한 곳에서 걷는다(폼·검사·다른 호출자 전부) — 값의 뜻은 안 바꾼다(빈 문자열은 None 그대로)
+    anchor = (anchor or "").strip() or None
+    cert = (cert or "").strip() or None
+    status = (status or "").strip()
+    crop_c = resolve_crop((crop or "").strip())
     season = (season or "").strip()
     if not season:
         raise SubjectError("작기(예: 2026 가을)가 없다 — 재배 단위는 작목 × 작기다")
