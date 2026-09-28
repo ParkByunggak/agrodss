@@ -107,7 +107,7 @@ def changes_page() -> tuple[int, str]:
         drop_html = ('<h2 style="font-size:14px">읽다 버린 것</h2>'
                      f'<table><thead><tr><th>어디</th><th>파일</th><th>왜</th><th>횟수</th></tr></thead><tbody>{dr}</tbody></table>'
                      "<p style='color:var(--muted)'>시스템이 제 손으로 쓴 파일을 읽지 못해 **없는 것처럼** 지나간 자리다 — "
-                     "판정이 '정본 미도착'이라고 말하면 실제로는 이쪽일 수 있다. 기동하면 비고, 읽을 때마다 다시 쌓인다.</p>")
+                     "판정이 '아직 안 왔다'고 말하면 실제로는 이쪽일 수 있다. 기동하면 비고, 읽을 때마다 다시 쌓인다.</p>")   # [⑤b 2026-09-28] 버린 것이 있을 때만 보이는 문단이라 사람 말 래칫이 못 보고 있었다 — '정본' 을 뺐다
     else:
         drop_html = ('<p style="color:var(--muted)">읽다 버린 것 없음 — 저장소의 기록을 전부 읽었다'
                      '(시스템이 제 손으로 쓴 파일을 못 읽으면 여기 뜬다).</p>')
@@ -470,6 +470,11 @@ def me_page(message: str = "", error: str = "", form: dict[str, str] | None = No
     return (400 if error else 200), _shell("/me", chat_pages.me_main(message, error, form), None, "사용자 정보")
 
 
+def outlook_page(message: str = "", error: str = "", form: dict[str, str] | None = None) -> tuple[int, str]:
+    """[⑤b 2026-09-28] 장기 전망 등재 폼 — 쓰기는 덮개(git 밖)에만 · 틀리면 저장하지 않고 이유(400)."""
+    return (400 if error else 200), _shell("/me", chat_pages.outlook_main(message, error, form), None, "장기 전망 등재")
+
+
 def improve_page(message: str = "", error: str = "", cycle=None) -> tuple[int, str]:
     return (400 if error else 200), _shell("/improve", chat_pages.improve_main(config.today(), message, error, cycle), None, "개선 · 자율진화")
 
@@ -597,6 +602,8 @@ class Handler(BaseHTTPRequestHandler):
             status, body = improve_page()
         elif p == "/me":
             status, body = me_page()
+        elif p == "/me/outlook":
+            status, body = outlook_page()
         elif p.startswith("/mall/"):
             status, body = mall_page(unquote(p[len("/mall/"):]))
         elif p == "/media":
@@ -699,6 +706,22 @@ class Handler(BaseHTTPRequestHandler):
                 status, body = me_page(message=chat_pages.handle_parcel_form(form))
             except parcels.ParcelError as e:
                 status, body = me_page(error=str(e))
+        elif p == "/me/outlook":
+            # [⑤b 2026-09-28] 장기 전망 등재 — 검증(ingest.outlook)이 먼저, 틀리면 아무것도 안 쓰고 이유. 같은 항목은 한 번만(멱등)
+            from ingest import outlook as _ol
+            entry = chat_pages.outlook_form_entry(form)
+            try:
+                r = _ol.append_local(entry)
+                status, body = outlook_page(message=f"등재 — {r['period_type']} 전망 {r['period_from']} ~ {r['period_to']} · {r['region']} · 발표 {r['observed_at']}. 날씨 물음의 「장기」 줄에 바로 나온다")
+            except ValueError as e:
+                status, body = outlook_page(error=f"저장하지 않았다 — {e}", form=form)
+        elif p == "/me/outlook/delete":
+            from ingest import outlook as _ol
+            try:
+                gone = _ol.remove_local(int(form.get("index") or "-1"))
+                status, body = outlook_page(message=f"지움 — {gone.get('period_type', '')} {gone.get('target_from', '')} ~ {gone.get('target_to', '')} {gone.get('region', '')}")
+            except ValueError as e:
+                status, body = outlook_page(error=str(e))
         elif p == "/me":
             try:
                 u = profile.save(form.get("name", ""), form.get("role", "farmer"), note=form.get("note", ""))

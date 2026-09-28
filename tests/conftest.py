@@ -44,6 +44,8 @@ def _isolate_media_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("AGRODSS_AUTO_PULL_SEC", "0")       # [U-39] 검사가 띄우는 화면(자식 프로세스)이 원격을 부르지 않게 — 아래 setattr 는 이 프로세스 몫
     from frontend import config as _cfg
     monkeypatch.setattr(_cfg, "AUTO_PULL_SEC", 0.0)
+    from ingest import dropped as _dropped
+    _dropped.clear()                                       # [⑤b 2026-09-28] '읽다 버린 것' 은 프로세스 전역 — 앞 검사의 버림이 뒤 검사의 /changes 에 실려 사람 말 래칫이 붉었다(격리 짝)
     from names import resolve as _names
     _names.reload()
     yield

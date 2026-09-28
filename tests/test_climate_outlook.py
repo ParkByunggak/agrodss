@@ -68,7 +68,8 @@ def test_load_keeps_good_entries_and_reports_bad_ones_by_index(tmp_path):
     recs, bad = outlook.load(p)
     assert [r["period_from"] for r in recs] == ["2026-10-05", "2026-10-12"] and len(bad) == 2
     assert bad[0].startswith(f"{p.name} entries[0]: temp 확률 합 140") and bad[1].startswith(f"{p.name} entries[2]: 항목이 객체가 아니다")
-    assert [d["path"] for d in dropped.all_drops() if d["where"] == "장기 전망 정본"] == [f"{p.name}#0", f"{p.name}#2"]   # /changes 에도 남는다
+    assert [d["path"] for d in dropped.all_drops() if d["where"] == outlook.DROP_WHERE] == [f"{p.name}#0", f"{p.name}#2"]   # /changes 에도 남는다
+    assert "정본" not in outlook.DROP_WHERE                                             # /changes 에 실리는 말 — 안쪽 말 금지(화면 사람 말 래칫이 잡았다)
     assert recs[1]["values"]["precip"] is None and recs[1]["note"] == "둘째 주"
     assert outlook.load(tmp_path / "없음.json") == ([], []) and outlook.load(_write(tmp_path, [])) == ([], [])
     (tmp_path / "bad.json").write_text("{", encoding="utf-8")

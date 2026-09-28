@@ -54,8 +54,10 @@ WRITE_ACCESSORS = {
     "ingest.subjects": ("path",),
     "names.candidates": ("names_dir", "index_path"),
     "names.resolve": ("names_local_csv_path",),          # [U-38] 승인 덮개 CSV — append_local 이 여기 쓴다(완전성 검사가 이 줄을 요구했다)
+    "ingest.outlook": ("local_path",),                   # [⑤b 2026-09-28] 장기 전망 덮개 — /me/outlook 폼의 append_local · remove_local 이 여기 쓴다(git 밖)
 }
 READ_ONLY = {
+    "ingest.outlook": ("path",),                         # 씨앗 climate_outlook.json — 세션 커밋으로만(읽기 전용)
     "ingest.media": ("subjects_path", "subjects_backup_path"),   # 재배 단위 씨앗 · update.bat 사본 — 둘 다 읽기만(U-37)
     "ingest.parcels": ("parcels_path", "legacy_path"),   # 씨앗(추적) · 옛 파일 — 둘 다 읽기 전용(U-18)
     "names.resolve": ("names_csv_path", "names_backup_csv_path"),   # 씨앗 CSV · update.bat 사본 — 읽기만(U-38)

@@ -244,6 +244,92 @@ def parcel_form(p: dict[str, Any]) -> str:
     return '<div class="form">' + "".join(rows) + "</div>"
 
 
+OUTLOOK_FIELDS: tuple[tuple[str, str, str], ...] = (
+    # (폼 이름, 라벨, 입력 종류) — 값은 발표문 그대로. 파일 climate_outlook_local.json 의 열과 같다(두 벌 진실이 아니라 같은 열의 두 입구)
+    ("issued_on", "발표일 (YYYY-MM-DD)", "date"),
+    ("target_from", "대상 시작 (YYYY-MM-DD)", "date"),
+    ("target_to", "대상 끝 (YYYY-MM-DD)", "date"),
+    ("region", "지역 (발표문 표기 그대로 · 예: 충북)", "text"),
+    ("source_title", "출처 제목 (예: 기상청 1개월 전망 2026.10.5.~11.1.)", "text"),
+    ("source_url", "출처 주소 (발표문 URL · 필수)", "url"),
+    ("note", "비고 (선택)", "text"),
+)
+TERCILE_LABELS = {"temp": ("기온", ("높음", "비슷", "낮음")), "precip": ("강수", ("많음", "비슷", "적음"))}
+
+
+def outlook_form_entry(form: dict[str, str]) -> dict[str, Any]:
+    """폼 → 등재 항목(검증은 ingest.outlook 이 한다 — 여기서는 모양만 옮긴다 · 3분위 셋이 다 비면 그 축은 없음)."""
+    e: dict[str, Any] = {"period_type": (form.get("period_type") or "").strip()}
+    for k, _, _ in OUTLOOK_FIELDS:
+        v = (form.get(k) or "").strip()
+        if v:
+            e[k] = v
+    for axis in ("temp", "precip"):
+        vals = {k: (form.get(f"{axis}_{k}") or "").strip() for k in ("above", "normal", "below")}
+        if any(vals.values()):
+            e[axis] = {k: (float(v) if v.replace(".", "", 1).isdigit() else v) for k, v in vals.items()}   # 숫자 아닌 것은 그대로 넘겨 검증이 이유를 말하게
+    return e
+
+
+def outlook_main(message: str = "", error: str = "", form: dict[str, str] | None = None) -> str:
+    """[⑤b 2026-09-28 · 발행자 승인 "제안 순서대로"] 1·3개월 전망 입력 폼 — JSON 손 편집의 오류를 없앤다. 덮개(git 밖)에만 쓴다 · 저장 전에 합≈100 · URL 을 말한다."""
+    from ingest import outlook as _ol
+    f = form or {}
+    out = ['<div class="thead"><div><h1>장기 전망 등재</h1><div class="meta">기상청 1·3개월 전망 발표문의 수치를 출처와 함께 — 시스템은 여기 적힌 것만 낸다(값을 지어내지 않는다). '
+           '덮개 파일(git 밖)에 저장되어 update.bat 이 건드리지 않는다.</div></div></div><div class="msgs">']
+    if error:
+        out.append(f'<p class="err">{_e(error)}</p>')
+    if message:
+        out.append(f'<p class="ok">{_e(message)}</p>')
+    pt = f.get("period_type") or "1개월"
+    rows = ['<div class="form" style="margin-top:8px"><form method="post" action="/me/outlook">',
+            '<label>전망 종류</label><select name="period_type">' + "".join(f'<option value="{p}"{" selected" if pt == p else ""}>{p} 전망</option>' for p in _ol.PERIOD_TYPES) + '</select>']
+    for k, label, kind in OUTLOOK_FIELDS:
+        rows.append(f'<label>{_e(label)}</label><input name="{k}" type="{kind}" value="{_e(f.get(k) or "")}"{" required" if k in ("issued_on", "target_from", "target_to", "region", "source_title", "source_url") else ""}>')
+    for axis, (name, words) in TERCILE_LABELS.items():
+        cells = "".join(f'<label style="display:inline-block;width:30%">{w} %<input name="{axis}_{k}" type="number" min="0" max="100" step="1" value="{_e(f.get(f"{axis}_{k}") or "")}"></label> '
+                        for w, k in zip(words, ("above", "normal", "below")))
+        rows.append(f'<div style="margin-top:6px"><b>{name}</b> 확률 3분위 — 합 100(±5)<br>{cells}</div>')
+    rows.append('<div style="margin-top:12px"><button class="btn pri" type="submit">등재</button>'
+                '<span style="color:var(--muted)"> — 틀린 것(합 100 아님 · URL 없음 · 날짜 꼴)은 저장하지 않고 이유를 말한다. 같은 항목을 두 번 눌러도 한 번만 남는다</span></div></form></div>')
+    out.extend(rows)
+    out.append('<h2 style="font-size:14px">등재된 것</h2>')
+    recs, bad = _ol.load()
+    today = config.today().isoformat()                                                  # 화면의 오늘은 정본 하나(AGRODSS_TODAY 고정을 따른다 — today 래칫)
+    if not recs and not bad:
+        out.append('<p class="meta">아직 없다 — 지금 날씨 물음은 「장기: 없음 — 등재된 장기 전망 없음」 이라고 답한다.</p>')
+    for i, e in enumerate(_ol.local_entries()):
+        try:
+            r = _ol.entry_to_record(e)
+            t, p = r["values"].get("temp"), r["values"].get("precip")
+            fmt = lambda d, ws: "" if not d else " / ".join(f"{w} {d[k]:g}%" for w, k in zip(ws, ("above", "normal", "below")))
+            live = "" if r["period_to"] >= today else ' <span class="st st-보류">지난 기간</span>'
+            out.append(f'<div class="card"><b>{_e(r["period_type"])} 전망 · {_e(r["period_from"])} ~ {_e(r["period_to"])} · {_e(r["region"])}</b>{live}'
+                       f'<div>기온 {_e(fmt(t, ("높음", "비슷", "낮음")))} · 강수 {_e(fmt(p, ("많음", "비슷", "적음")))}</div>'
+                       f'<div class="meta">발표 {_e(r["observed_at"])} · <a href="{_e(r["citation"]["url"])}">{_e(r["citation"]["title"])}</a></div>'
+                       f'<form method="post" action="/me/outlook/delete" style="margin-top:4px"><input type="hidden" name="index" value="{i}"><button class="btn" type="submit">이 항목 지우기</button></form></div>')
+        except ValueError as err:
+            out.append(f'<div class="card kind-판단불가"><b>못 읽음 — 덮개 {i + 1}번째</b><div class="meta">{_e(str(err))}</div>'
+                       f'<form method="post" action="/me/outlook/delete" style="margin-top:4px"><input type="hidden" name="index" value="{i}"><button class="btn" type="submit">이 항목 지우기</button></form></div>')
+    n_seed = len(recs) - sum(1 for e in _ol.local_entries() if _safe_entry(e))          # 읽힌 전체 − 덮개의 읽힌 것 = 씨앗의 것
+    if n_seed > 0:
+        out.append(f'<p class="meta">씨앗(저장소 · 세션 커밋)에도 {n_seed}건 — 화면에서는 못 지운다.</p>')
+    for why in bad:
+        if not why.startswith(_ol.local_path().name):
+            out.append(f'<p class="err">씨앗 못 읽음 — {_e(why)}</p>')
+    out.append('<p class="meta">파일로 넣어도 된다: <code>data/kma/climate_outlook_local.json</code> — 같은 열이다. 지난 기간은 두어도 된다(오늘 뒤만 낸다).</p></div>')
+    return "".join(out)
+
+
+def _safe_entry(e: dict[str, Any]) -> bool:
+    from ingest import outlook as _ol
+    try:
+        _ol.entry_to_record(e)
+        return True
+    except ValueError:
+        return False
+
+
 def me_main(message: str = "", error: str = "", form: dict[str, str] | None = None) -> str:
     u = profile.load()
     f = form or {}
@@ -258,6 +344,7 @@ def me_main(message: str = "", error: str = "", form: dict[str, str] | None = No
                f'<label>역할</label><select name="role">{roles}</select>'
                f'<label>메모(연락처 금지)</label><input name="note" value="{_e(f.get("note") or u.get("note") or "")}">'
                '<div style="margin-top:12px"><button class="btn pri" type="submit">저장</button></div></form></div>')
+    out.append('<h2 style="font-size:14px">장기 전망</h2><p class="meta"><a href="/me/outlook">장기 전망 등재 →</a> 기상청 1·3개월 전망 발표문 수치를 출처와 함께(덮개 · git 밖). 날씨 물음의 「장기」 줄이 이것을 낸다.</p>')
     out.append('<h2 style="font-size:14px">필지</h2>')
     for p in parcels.load():
         v = parcels.public_view(p)
