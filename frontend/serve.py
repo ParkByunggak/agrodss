@@ -192,6 +192,14 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         out.append("<table><tr><th>상태</th><th>칸</th><th>작업</th><th>작업일</th><th>마감</th><th>근거</th></tr>" + "".join(
             f'<tr><td><span class="st st-{st_cls.get(x["status"], "대기")}">{_e(x["status"])}</span></td><td>{_e(x["stage"])}</td><td>{_e(x["task"])}</td>'
             f'<td>{_e(x["work_date"])}</td><td>{_e(x.get("deadline_date") or "")}</td><td>{_e(x.get("evidence") or "")}</td></tr>' for x in r["rows"]) + "</table>")
+    elif e["kind"] == "사실 인용" and e["decision_id"] == "forecast_citation":
+        # [D-21 2026-09-28] 날씨 인용 — 자재 인용과 result 모양이 다르다(citation · days). 이 갈래가 없으면 아래 자재 갈래가 KeyError 로 /judge 전체를 죽인다
+        c = r["citation"]
+        out.append(f"<p>출처 {_e(c.get('source', ''))} · 발표 {_e(str(c.get('observed_at', ''))[:16])} · 재판정 {_e(e['revisit_at'])}</p>")
+        out.append("<table><tr><th>날</th><th>최저~최고</th><th>비 올 확률(최대)</th><th>강수량</th></tr>" + "".join(
+            f"<tr><td>{_e(x['day'])}</td><td>{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃{' (시간대 값)' if x.get('approx') else ''}</td>"
+            f"<td>{'' if x['pop_max'] is None else str(int(x['pop_max'])) + '%'}</td><td>{'' if x['rain_mm'] is None else str(x['rain_mm']) + 'mm'}</td></tr>" for x in r["days"]) + "</table>")
+        out.append(f"<p class=\"meta\">{_e(c.get('note', ''))}</p>")
     elif e["kind"] == "사실 인용":
         c = r["citation"]
         out.append(f"<p>칸 {_e(r['stage'])} · 인용 계열 {r['cited_families']}/{len(r['groups'])} · 출처 {_e(c['source'])} · 목록 시점 {_e(c['observed_at'])} · 재판정 {_e(e['revisit_at'])}</p>")

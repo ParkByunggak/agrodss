@@ -119,6 +119,8 @@ TOPIC: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ship_or_store", ("출하", "저장할까", "납품할까", "저장")),
     # [D-20 자리 2026-09-28] 가뭄 · 관수 물음 — 발행자 실사용 "가을 가뭄이 심하다" 뒤 등재. 지식(격자 drought_rules)이 비면 봉투가 어디가 비었는지 말한다
     ("drought_alert", ("가뭄", "관수", "물 줘", "물을 줘", "물주", "물 대", "말라 가")),
+    # [D-21 자리 2026-09-28] 날씨 물음 — 위험 경보(폭우 · 장마 · 서리 …)보다 앞에 두되 그쪽 어휘와 겹치지 않는 말만("비 오면 어떻게" 는 그대로 위험 경보)
+    ("forecast_citation", ("날씨", "기온", "예보", "기상", "비 올까", "비 오나", "비 오려나", "비 올 확률", "몇 도", "추울까", "더울까")),
     ("top_dressing_1", ("웃거름", "추비")),
     ("base_fertilization", ("밑거름", "기비")),
     ("replant", ("보식", "결주", "안 난", "안 났", "듬성")),
@@ -684,7 +686,7 @@ def summarize_envelope(e: Any, plain: bool = True) -> str:
 def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
     """'판단함 · 사실 인용' 의 본문. 갈래가 많아 따로 뽑았다 — 위에서 **한 자리**에서 사람 말로 옮긴다
     (갈래마다 옮기면 다음 갈래가 빠진다 · §7.5 지점 축)."""
-    if r.get("summary") and e.decision_id not in ("harvest_timing", "risk_alert", "material_citation", "plan_vs_actual"):
+    if r.get("summary") and e.decision_id not in ("harvest_timing", "risk_alert", "material_citation", "plan_vs_actual", "forecast_citation"):
         caps = " · ".join(f"상한: {c.get('name')}({c.get('basis')})" for c in (e.caps or []))
         return f"{head} {r['summary']} · 등급 {e.grade}" + (f" · {caps}" if caps else "")
     if e.decision_id == "harvest_timing":
@@ -694,6 +696,8 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
         al = r.get("alerts") or []
         body = " / ".join(f"{a.get('level')} {a.get('risk')}({a.get('stage')})" for a in al) or "지금 창에 경보 없음"
         return f"{head} {body} · 등급 {e.grade} · 재판정 {e.revisit_at}"
+    if e.decision_id == "forecast_citation":                       # [D-21] 예보 그대로 — summary 가 이미 원천 · 발표 시각을 품는다
+        return f"{head} {r.get('summary', '')} · 해석·권고 없음"
     if e.decision_id == "material_citation":
         fams = r.get("cited_families")
         n = fams if isinstance(fams, int) else len(fams or [])

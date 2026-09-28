@@ -95,7 +95,8 @@ def all_judgments(today: date | None = None, only: str | None = None,
                                      notes=[r for r in (recs["ledger"] or []) if r.get("kind") == "observation.note"])]
         # [M-10 결정 등록] 격자 칸이 선언한 나머지 8 결정 — 같은 입력, 같은 게이트 뒤
         envs += stage_decisions.judge_all(s, today, evts=recs["ledger"], forecast=recs["forecast"], pest=recs["pest"], harvest=envs[0],
-                                          prescriptions=recs["prescriptions"], unreadable=unreadable, said=recs["said"])
+                                          prescriptions=recs["prescriptions"], unreadable=unreadable, said=recs["said"],
+                                          forecast_why=why)     # [D-21] 예보를 못 받은 이유를 날씨 인용이 그대로 싣는다(관문의 입력 — 빈 채 넘기면 이유 없는 미비)
         # [M-6 · D-14] 자율진화 보수 상한 — 판정기 뒤, 돌려주기 전, 한 번. 규칙은 안 바꾸고 등급만 낮춘다
         envs = evolve.apply_caps(s["id"], envs, caps=recs["caps"])
         out.append((s, envs, {"forecast": why or "예보 사용", "pest": pwhy or "예찰 사용"}))
