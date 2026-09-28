@@ -20,7 +20,7 @@ def test_every_future_date_judges_without_exception_and_counts_add_up():
     for d in DATES:
         envs = judge_run.judgments_for(SID, today=d)
         from judge import stage_decisions as SD
-        assert len(envs) == 4 + len(SD.IDS) == 13 and all(e.kind in KINDS for e in envs), d     # [D-18 자리] 12 → 13
+        assert len(envs) == 4 + len(SD.IDS) and all(e.kind in KINDS for e in envs), d     # 봉투 수 = 첫해 4 + 등록부(리터럴 없이)
         pva = next(e for e in envs if e.decision_id == "plan_vs_actual")
         assert pva.kind == "판단함", d
         c, rows = pva.result["counts"], pva.result["rows"]

@@ -64,6 +64,10 @@ def build(unit: dict) -> str:
                 checks = "<br>".join(str(c.get("check") or "—") for c in cs) or "—"
                 rec = "<br>".join("가능" if c.get("recoverable") else "**불가**" for c in cs) or "—"
                 out.append(f"| {sy} | {names} | {checks} | {rec} | {r.get('first_check') or '—'} |")
+        dr = s.get(schema.DROUGHT_RULES_KEY)
+        if isinstance(dr, dict):
+            # [D-20 자리 2026-09-28] 가뭄 임계도 문서에 — 증상 규칙과 같은 형태(정본이 있는데 문서가 안 싣는 G1 을 미리 막는다)
+            out.append(f"- 가뭄 임계: 무강수 {dr.get('dry_days', '—')}일 · {dr.get('source') or '출처 미기재'}")
         risks = s.get("risks")
         if risks == NA:
             out.append("- 위험: 해당없음")

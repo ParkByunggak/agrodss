@@ -88,9 +88,11 @@ def test_no_decision_word_is_a_single_syllable_that_hides_inside_other_words():
     interrogatives = {"뭐", "뭘"}
     short = [(did, w) for did, words in chat.TOPIC for w in words if len(w) < 2 and w not in interrogatives]
     assert short == [], f"한 글자 결정 어휘 — 다른 말 속에 걸린다: {short}"
-    # 탐침(인공 질문 · 그 어휘가 다른 뜻으로 든 물음)은 결정으로 가지 않는다
-    for q in ("병원 다녀와서 밭에 가도 되나", "얼마나 자주 물 줘야 하나", "습관적으로 물을 주는데 괜찮나", "비가림 없이 키워도 되나", "캐릭터 이름은 어떻게 지을까"):
-        assert chat.topic_of(q) is None, (q, chat.topic_of(q))
+    # 탐침(인공 질문 · 그 어휘가 다른 뜻으로 든 물음)은 그 한 글자의 결정으로 가지 않는다. [D-20 2026-09-28] "얼마나 자주 물 줘야 하나" 는 이제
+    # 가뭄 · 관수 결정으로 가는 것이 맞다(물음의 뜻이 그것이다) — 잡으려던 것은 '얼' → 서리(risk_alert)였고 그것은 여전히 안 간다
+    for q, allowed in (("병원 다녀와서 밭에 가도 되나", None), ("얼마나 자주 물 줘야 하나", "drought_alert"), ("습관적으로 물을 주는데 괜찮나", None),
+                       ("비가림 없이 키워도 되나", None), ("캐릭터 이름은 어떻게 지을까", None)):
+        assert chat.topic_of(q) == allowed, (q, chat.topic_of(q))
     # 반대편 — 진짜 그 뜻이면 그대로 간다
     for q, did in (("언제 캐면 되나?", "harvest_timing"), ("병이 온 것 같은데 약 있나", "pest_alert"), ("서리 오면 어떻게 하죠", "risk_alert"),
                    ("지금 쓸 수 있는 약 있나요", "material_citation"), ("비가 많이 오면 위험한가", "risk_alert"), ("고랑이 과습인데", "drainage_alert")):

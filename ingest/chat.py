@@ -50,6 +50,14 @@ SYMPTOM_WORDS = ("노랗", "노란", "노래", "누렇", "누래", "황화", "�
                  "반점", "곰팡이", "구멍", "갉아", "갉혀", "이상하", "안 자라", "안 크", "웃자라", "죽어", "죽었", "죽는", "타들", "탔")
 
 
+# [D-20 자리 2026-09-28] 비 온 것을 말하는 어휘 — 가뭄 판단(3층)이 "마지막 비 온 날" 을 관찰 원장에서 셀 때 쓴다. 어휘 정본은 1층 하나(증상 어휘와 같은 규율)
+RAIN_WORDS = ("비가 왔", "비가 내", "비 왔", "비왔", "비 내렸", "비가 좀", "비가 많이", "강우", "소나기", "장맛비", "장마", "빗물", "비 온")
+
+
+def rain_in(text: str) -> bool:
+    return any(w in text for w in RAIN_WORDS)
+
+
 def symptom_in(text: str, extra: tuple[str, ...] = ()) -> bool:
     """증상 어휘 — 정본 목록 + 이 재배 단위의 격자 규칙이 아는 말(extra · `grid_symptom_words`). 3층도 이 함수로 판정한다(어휘 한 벌)."""
     return any(w in text for w in (*SYMPTOM_WORDS, *extra))
@@ -109,6 +117,8 @@ def _indirect_question(t: str) -> bool:
 TOPIC: tuple[tuple[str, tuple[str, ...]], ...] = (
     # [M-10 결정 등록] 구체 결정이 일반 결정보다 앞 — "웃거름 줘야 하나"가 자재 인용으로 새지 않게
     ("ship_or_store", ("출하", "저장할까", "납품할까", "저장")),
+    # [D-20 자리 2026-09-28] 가뭄 · 관수 물음 — 발행자 실사용 "가을 가뭄이 심하다" 뒤 등재. 지식(격자 drought_rules)이 비면 봉투가 어디가 비었는지 말한다
+    ("drought_alert", ("가뭄", "관수", "물 줘", "물을 줘", "물주", "물 대", "말라 가")),
     ("top_dressing_1", ("웃거름", "추비")),
     ("base_fertilization", ("밑거름", "기비")),
     ("replant", ("보식", "결주", "안 난", "안 났", "듬성")),

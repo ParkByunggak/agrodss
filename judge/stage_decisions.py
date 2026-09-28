@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from grid import capture as grid_capture
 from grid import schema as grid_schema
 from judge import plan_vs_actual, registry, risk_alert, units
 from judge.envelope import AxisUse, Envelope, weakest
@@ -139,9 +140,24 @@ SYMPTOM_TRIAGE = _R(registry.Decision(
     params={"rules_key": SYMPTOM_RULES_KEY, "stage_orders": (3, 4), "lookback_days": 14,
             "source": "D-18 — 발행자가 쓴 감별(양분 부족 · 과습/뿌리 부패 · 고자리파리 유충 · 노균병/잎마름 · 확인 하나 = 인경 밑)이 정본 후보"}))
 
+# [D-20 자리 2026-09-28] 발행자 실사용 2026-09-28 *"가을 가뭄이 심하다. 아침에 포장을 보니 특별한 징후는 없다"* → 규칙은 본 것으로 적었고(맞다) 그런데
+# **가뭄을 읽는 판단이 없었다** — 격자 칸마다 water(요구 · 결핍 민감)가 있는데 소비자 0 · 경보는 과습(배수)만. 발행자 "D-20 등재하자" → D-18 과 같은 형태로
+# 결정을 **지식 없이** 먼저 세운다: 임계(무강수 며칠)는 격자 칸의 drought_rules 에 발행자가 적는다. 비어 있으면 봉투가 어느 칸의 어느 키가 비었는지 · 지금 칸의
+# 수분 값이 무엇인지 말한다. 선언은 키 자체(symptom_triage 와 같은 규율 — 칸 decisions 목록에 안 적는다).
+DROUGHT_RULES_KEY = grid_schema.DROUGHT_RULES_KEY
+DROUGHT_ALERT = _R(registry.Decision(
+    id="drought_alert", name="가뭄 · 관수 판단", required_axes=("anchor",), optional_axes=("forecast", "precip", "soil_water"), forbidden_axes=FORB,
+    rule="[D-20 발행자 등재 2026-09-28] 오늘 칸(기준점 후 날수)의 water(요구 · 결핍 민감)를 읽는다. 칸의 drought_rules — {dry_days: 무강수 임계 일수, source} — 가 "
+         "채워지면, 최근 비 관찰(observation.note 에 비 어휘 · 1층 정본 chat.rain_in) 또는 관수 사건(event type 관수) 뒤 지난 날수를 세어 임계 이상이면 판단함(관수 검토 · "
+         "등급 추정 · 결핍 민감도 함께), 미만이면 판단함(아직 관수 판단 아님). 비·관수 기록이 하나도 없으면 판단 불가(데이터) — 마지막 비 온 날 · 관수한 날. "
+         "임계가 비어 있으면 판단 불가(지식) — 어느 격자의 어느 칸이 비었는지와 지금 칸의 수분 값을 함께. 관수량·방법은 말하지 않는다(그것은 별도 지식).",
+    revisit_days=1,
+    params={"rules_key": DROUGHT_RULES_KEY, "lookback_days": 30, "irrigation_event": "관수",
+            "source": "D-20 — 발행자 실사용 2026-09-28. 임계는 발행자·농진청 정본 몫 — 세션이 정하지 않는다(대리값이 경보로 나간다)"}))
+
 IDS = ("sowing_window", "base_fertilization", "replant", "pest_alert", "top_dressing_1", "top_dressing_2", "drainage_alert", "ship_or_store",
-       "symptom_triage")
-UNDECLARED = ("symptom_triage",)        # 격자 칸 decisions 목록에 안 적는 결정 — 선언은 symptom_rules 키 자체(위 주석)
+       "drought_alert", "symptom_triage")
+UNDECLARED = ("drought_alert", "symptom_triage")        # 격자 칸 decisions 목록에 안 적는 결정 — 선언은 규칙 키 자체(drought_rules · symptom_rules)
 
 
 # ── 판정 ─────────────────────────────────────────────────────────────────────────
@@ -512,6 +528,53 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
                     notes=["원인 후보는 좁히기이지 진단이 아니다 — 확인 하나로 갈린다(격자 symptom_rules · D-18)"])
 
 
+def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None = None, observations: list[dict[str, Any]] | None = None) -> Envelope:
+    """[D-20 자리] 가뭄 · 관수 판단. 임계(격자 칸 drought_rules)가 없으면 어디가 비었는지와 지금 칸의 수분 값을 말하고, 있으면 마지막 비·관수 뒤 날수로 낸다."""
+    did, sid, as_of = "drought_alert", subject.get("id", "?"), _now()
+    unit, miss = grid_schema.load_unit(subject)
+    if miss is not None:
+        return units.envelope_for(miss, did, sid, as_of)
+    anchor = subject.get("anchor")
+    if not anchor:
+        return Envelope("판단 불가(데이터)", did, sid, as_of, missing=[{"axis": "anchor", "who_can_fill": "농가 — 파종일"}], result={"why": "기준점이 없다"})
+    a = date.fromisoformat(anchor)
+    day = (today - a).days
+    stage = grid_capture.stage_for_day(unit, day)
+    if stage is None:
+        return Envelope("해당 없음", did, sid, as_of, result={"why": f"기준점 후 {day}일에 열린 격자 칸이 없다"})
+    d = registry.get(did)
+    key, lookback = d.params["rules_key"], int(d.params["lookback_days"])
+    uid = _unit_id(subject, unit)
+    water = stage.get("water")
+    if not isinstance(water, dict):
+        return Envelope("판단 불가(지식)", did, sid, as_of, result={"why": f"격자 {uid} 칸 {stage.get('order')} 의 water 미채움 · 고칠 파일 {grid_schema.unit_file_name(uid)}",
+                                                                     "summary": "이 칸의 수분 요구가 격자에 없어 가뭄을 판단할 수 없습니다"})
+    water_txt = f"수분 요구 {water.get('demand')} · 결핍 민감 {water.get('deficit_sensitivity')}"
+    rules = stage.get(key)
+    if not (isinstance(rules, dict) and isinstance(rules.get("dry_days"), int)):
+        return Envelope("판단 불가(지식)", did, sid, as_of,
+                        result={"why": f"격자 {uid} 칸 {stage.get('order')} 의 {key}(무강수 임계 일수) 미채움 — D-20 · 고칠 파일 {grid_schema.unit_file_name(uid)} · 지금 칸 {water_txt}",
+                                "summary": f"가뭄을 판단할 기준(무강수 며칠)이 아직 없습니다 — 지금 칸은 {water_txt}. 기준이 서면 관수 검토 여부를 냅니다"})
+    threshold = int(rules["dry_days"])
+    since = (today - timedelta(days=lookback)).isoformat()
+    from ingest.chat import rain_in                                        # 비 어휘 정본은 1층 하나(증상 어휘와 같은 규율)
+    wet_days = [str(o.get("observed_at") or "")[:10] for o in (observations or []) if rain_in(o.get("text") or "")]
+    irr = str(d.params["irrigation_event"])
+    wet_days += [str(e.get("observed_at") or "")[:10] for e in (evts or []) if e.get("kind") == "event" and e.get("type") == irr]
+    wet_days = [w for w in wet_days if w and since <= w <= today.isoformat()]
+    if not wet_days:
+        return Envelope("판단 불가(데이터)", did, sid, as_of,
+                        missing=[{"axis": "precip", "who_can_fill": "농가 — 마지막으로 비 온 날 또는 관수한 날 한 줄"}],
+                        result={"why": f"최근 {lookback}일에 비 관찰도 관수 사건도 없다 — 무강수 일수를 셀 수 없다", "summary": f"마지막으로 비 온 날이나 관수한 날을 알면 판단합니다 — 지금 칸은 {water_txt}"})
+    last_wet = max(wet_days)
+    dry = (today - date.fromisoformat(last_wet)).days
+    due = dry >= threshold
+    summary = (f"마지막 비·관수 {last_wet} 뒤 무강수 {dry}일 — 임계 {threshold}일 {'이상: 관수 검토' if due else '미만: 아직 관수 판단 아님'} · {water_txt}")
+    return Envelope("판단함", did, sid, as_of, inputs=_anchor_inputs(subject, anchor), grade="추정", revisit_at=(today + timedelta(days=1)).isoformat(),
+                    result={"dry_days": dry, "threshold": threshold, "last_wet": last_wet, "due": due, "water": dict(water), "summary": summary},
+                    notes=["관수 검토는 권고이지 양·방법이 아니다 — 임계는 격자 drought_rules(D-20 · 발행자 정본)"])
+
+
 def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pest=None, harvest: Envelope | None = None,
               prescriptions: list[dict[str, Any]] | None = None, unreadable: list[str] | None = None,
               said: list[dict[str, Any]] | None = None) -> list[Envelope]:
@@ -523,4 +586,5 @@ def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pe
     return [judge_sowing_window(subject, today), judge_base_fertilization(subject, today, prescriptions, unreadable), judge_replant(subject, today, obs),
             judge_pest_alert(subject, today, forecast, pest), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions, unreadable),
             judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions, unreadable), judge_drainage_alert(subject, today, forecast, pest),
-            judge_ship_or_store(subject, today, targets, harvest), judge_symptom_triage(subject, today, obs + said_obs)]
+            judge_ship_or_store(subject, today, targets, harvest), judge_drought_alert(subject, today, evts, obs),
+            judge_symptom_triage(subject, today, obs + said_obs)]

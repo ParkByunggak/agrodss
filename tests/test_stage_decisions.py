@@ -121,7 +121,7 @@ def test_ship_or_store_with_target_date_for_supplying_subject():
 # ── 배선 · 채팅 ────────────────────────────────────────────────────────────────────
 def test_run_emits_twelve_envelopes_and_chat_routes_specific_questions():
     envs = judge_run.judgments_for(SID, today=T25)
-    assert len(envs) == 4 + len(SD.IDS) == 13 and {e.decision_id for e in envs} >= set(SD.IDS)     # [D-18 자리] 12 → 13
+    assert len(envs) == 4 + len(SD.IDS) and {e.decision_id for e in envs} >= set(SD.IDS)     # 봉투 수 = 첫해 4 + 등록부(리터럴을 박지 않는다 — D-20 에서 13 이 깨졌다)
     assert chat.topic_of("웃거름 줘야 하나?") == "top_dressing_1"
     assert chat.topic_of("보식해야 하나?") == "replant"
     assert chat.topic_of("출하할까 저장할까?") == "ship_or_store"

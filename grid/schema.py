@@ -123,6 +123,19 @@ def _canonical_names() -> set[str]:
 
 
 SYMPTOM_RULES_KEY = "symptom_rules"     # 칸의 증상 → 원인 좁히기 규칙(D-18) — 판정기 등록부(stage_decisions)가 같은 이름을 쓴다
+DROUGHT_RULES_KEY = "drought_rules"     # 칸의 가뭄 임계(D-20) — {dry_days: 무강수 임계 일수, source}. 값은 발행자 지식 · 여기서는 형태만
+
+
+def _validate_drought_rules(rules: Any, tag: str, err) -> None:
+    """[D-20] 형식 검사 — dry_days 는 1 이상 정수(문자열 "7" 은 비교에서 조용히 틀린다 · A5 형태). source 는 있으면 str."""
+    if not isinstance(rules, dict):
+        err(f"{tag}: drought_rules 는 {{dry_days, source}} dict — 없으면 키를 뺀다")
+        return
+    dd = rules.get("dry_days")
+    if not (isinstance(dd, int) and not isinstance(dd, bool) and dd >= 1):
+        err(f"{tag}: drought_rules.dry_days 는 1 이상 **정수**(무강수 임계 일수)")
+    if "source" in rules and not isinstance(rules["source"], str):
+        err(f"{tag}: drought_rules.source 는 str")
 
 
 def _validate_symptom_rules(rules: Any, tag: str, err) -> None:
@@ -271,6 +284,8 @@ def validate(unit: dict[str, Any], canonical: set[str] | None = None) -> Report:
         # 칸은 정상(지식 미채움 — 판정기가 판단 불가(지식)로 말한다). 형식: [{symptoms:[어휘], causes:[{name, check, recoverable}], first_check}]
         if "symptom_rules" in s:
             _validate_symptom_rules(s["symptom_rules"], tag, err)
+        if DROUGHT_RULES_KEY in s:                                          # [D-20 자리 2026-09-28] 같은 형태 — 값은 발행자 · 형태는 여기
+            _validate_drought_rules(s[DROUGHT_RULES_KEY], tag, err)
     if stages and not any_shoot:
         err("촬영 시점 칸(capture.shoot=true)이 하나도 없다 — 영상이 상세페이지다(몰-C)")
     return rep

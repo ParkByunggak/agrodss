@@ -111,6 +111,6 @@ def test_gate_position_in_all_judgments():
 
 def test_all_judgments_runs_through_gate_on_real_registry():
     out = R.all_judgments()
-    # 첫해 값 4 + [M-10 결정 등록] 격자 선언 결정 8 + [D-18 자리] 증상 결정 1 = 13 — 전부 같은 게이트 뒤에서 나온다
+    # 첫해 값 4 + 등록부(M-10 격자 선언 8 · D-18 증상 · D-20 가뭄) — 전부 같은 게이트 뒤에서 나온다. 수는 등록부에서(리터럴을 박지 않는다)
     from judge import stage_decisions as SD
-    assert out and all(len(envs) == 4 + len(SD.IDS) == 13 for _, envs, _ in out)
+    assert out and all(len(envs) == 4 + len(SD.IDS) for _, envs, _ in out)
