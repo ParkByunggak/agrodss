@@ -163,7 +163,9 @@ FORECAST_CITATION = _R(registry.Decision(
     rule="[D-21 발행자 등재 2026-09-28] 판단이 아니라 사실 인용. 필지 좌표의 기상청 단기예보(forecast.weather_daily)에서 오늘부터 며칠(params.days)의 "
          "날마다 최저·최고 기온 · 강수 확률 최대 · 강수량을 출처·발표 시각과 함께 그대로 낸다. 단기 창 뒤는 권역 중기예보(forecast.weather_mid · D+3~D+10)의 "
          "최저·최고 · 강수 확률(오전·오후 최대)을 이어 붙인다 — 둘은 원천·해상도가 달라 따로 표기한다. 둘 다 없으면(좌표 없음 · 키 없음 · 권역 미해소 · 원천 오류) "
-         "판단 불가(데이터), 한쪽만 없으면 사실 인용에 그쪽의 못 받은 이유를 그대로 싣는다. 해석·권고를 붙이지 않는다. 장기(1개월 전망)는 원천 확인 뒤(발행자 둘째 지시).",
+         "판단 불가(데이터), 한쪽만 없으면 사실 인용에 그쪽의 못 받은 이유를 그대로 싣는다. 해석·권고를 붙이지 않는다. 장기(1·3개월 전망)는 오픈 API 가 없어 "
+         "발행자가 발표문 수치를 출처와 함께 등재한 수동 정본(reference.climate_outlook · data/kma/climate_outlook.json)만 — 오늘 뒤를 덮는 항목을 확률 3분위 그대로, "
+         "없으면 '등재된 장기 전망 없음'. 셋 다 없을 때만 판단 불가(데이터).",
     revisit_days=1,
     params={"days": 3, "source": "D-21 — 발행자 2026-09-28. 값은 기상청 원천 그대로(대리값 없음) · 발표 시각 = 레코드 observed_at. 중기는 VELA 인용(D-9 · mid_regions.json)"}))
 
@@ -547,10 +549,24 @@ def _fmt_forecast_day(x: dict[str, Any]) -> str:
     return f"{x['day'][5:]} {t}{p}{m}".strip()
 
 
+def _fmt_tercile(t: dict[str, Any] | None, words: tuple[str, str, str]) -> str:
+    if not t:
+        return ""
+    return " · ".join(f"{w} {t[k]:g}%" for w, k in zip(words, ("above", "normal", "below")))
+
+
+def _fmt_outlook_period(x: dict[str, Any]) -> str:
+    parts = [p for p in (("기온 " + _fmt_tercile(x.get("temp"), ("높음", "비슷", "낮음"))) if x.get("temp") else "",
+                         ("강수 " + _fmt_tercile(x.get("precip"), ("많음", "비슷", "적음"))) if x.get("precip") else "") if p]
+    return f"{x['from'][5:]}~{x['to'][5:]} {x['region']} " + " / ".join(parts)
+
+
 def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]] | None = None, why: str | None = None,
-                            mid: list[dict[str, Any]] | None = None, mid_why: str | None = None) -> Envelope:
-    """[D-21] 사실 인용 — 가진 단기예보(오늘부터 params.days)를 그대로, 그 뒤는 중기예보(권역 · D+3~D+10)를 이어서. 없는 쪽은 못 받은 이유
-    (why · mid_why — gather_forecast · gather_mid 가 준 문장)를 그대로 싣는다. 둘 다 없으면 판단 불가(데이터)."""
+                            mid: list[dict[str, Any]] | None = None, mid_why: str | None = None,
+                            outlook: list[dict[str, Any]] | None = None, outlook_why: str | None = None) -> Envelope:
+    """[D-21] 사실 인용 — 가진 단기예보(오늘부터 params.days)를 그대로, 그 뒤는 중기예보(권역 · D+3~D+10)를 이어서, 그 뒤는 발행자가 등재한
+    1·3개월 전망(수동 정본 — 확률 3분위)을 그대로. 없는 쪽은 못 받은 이유(why · mid_why · outlook_why — gather_* 가 준 문장)를 그대로 싣는다.
+    셋 다 없으면 판단 불가(데이터)."""
     did, sid, as_of = "forecast_citation", subject.get("id", "?"), _now()
     d = registry.get(did)
     n = int(d.params["days"])
@@ -560,13 +576,17 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
     # [D-21 중기] 단기 창 **뒤**의 날만 — 발표일에 따라 D+3 이 단기 창과 겹치면 단기(격자 5km)가 이긴다. 오늘 이전 줄(어제 저녁 발표)도 버린다
     mrows = sorted((r for r in (mid or []) if r.get("kind") == "forecast.weather_mid" and r.get("for_day")), key=lambda r: r["for_day"])
     mrows = [r for r in mrows if r["for_day"] > last]
+    # [D-21 장기] 발행자 등재분 — 오늘 뒤를 덮는 항목만(끝난 기간은 전망이 아니다). 원천을 부른 적 없는 값이라 source 가 publisher: 다
+    lrows = sorted((r for r in (outlook or []) if r.get("kind") == "reference.climate_outlook" and r.get("period_to")), key=lambda r: (r["period_from"], r["period_to"]))
+    lrows = [r for r in lrows if r["period_to"] >= today.isoformat()]
     short_reason = None if rows else ((why or "").strip() or f"오늘부터 {n}일 안의 예보 줄이 없다")
     mid_reason = None if mrows else ((mid_why or "").strip() or f"{last} 뒤의 중기예보 줄이 없다")
-    if not rows and not mrows:
-        reason = f"단기: {short_reason} · 중기: {mid_reason}"
+    long_reason = None if lrows else ((outlook_why or "").strip() or "오늘 뒤를 덮는 장기 전망 등재 없음")
+    if not rows and not mrows and not lrows:
+        reason = f"단기: {short_reason} · 중기: {mid_reason} · 장기: {long_reason}"
         return Envelope("판단 불가(데이터)", did, sid, as_of,
                         missing=[{"axis": "forecast", "who_can_fill": f"예보를 못 받았다 — {reason}"}],
-                        result={"why": reason, "short_why": short_reason, "mid_why": mid_reason,
+                        result={"why": reason, "short_why": short_reason, "mid_why": mid_reason, "long_why": long_reason,
                                 "summary": f"예보를 받지 못해 날씨를 말할 수 없습니다 — {reason}"})
     days: list[dict[str, Any]] = []
     for r in rows:
@@ -602,10 +622,26 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
     else:
         notes.append(f"중기예보는 못 받았다 — {mid_reason}")
         parts.append(f"중기: 못 받음 — {mid_reason}")
+    periods: list[dict[str, Any]] = []
+    for r in lrows:
+        v, c = r.get("values") or {}, r.get("citation") or {}
+        periods.append({"from": r["period_from"], "to": r["period_to"], "type": r.get("period_type"), "region": r.get("region"),
+                        "temp": v.get("temp"), "precip": v.get("precip"), "title": c.get("title"), "url": c.get("url"), "issued": r.get("observed_at")})
+    lcit = None
+    if lrows:
+        lsrc, lissued = lrows[0].get("source") or "publisher:kma_outlook", lrows[0].get("observed_at") or ""
+        inputs.append(AxisUse("forecast", str(lissued), str(lsrc), "region:" + " · ".join(dict.fromkeys(str(p["region"]) for p in periods)), "관측"))
+        lcit = {"source": lsrc, "observed_at": lissued, "note": "기상청 1·3개월 전망 — 발행자가 발표문 수치를 출처와 함께 등재한 것(확률 3분위) · 시스템이 원천을 부른 적 없다 · 해석·권고 없음"}
+        parts.append("장기(" + " · ".join(dict.fromkeys(str(p["type"]) + " 전망" for p in periods)) + f" · 등재 정본 · 발표 {str(lissued)[:10]}) "
+                     + " · ".join(_fmt_outlook_period(p) for p in periods))
+    else:
+        notes.append(f"장기 전망은 없다 — {long_reason}")
+        parts.append(f"장기: 없음 — {long_reason}")
     return Envelope("사실 인용", did, sid, as_of, inputs=inputs, revisit_at=(today + timedelta(days=1)).isoformat(),
                     result={"citation": cit or {"source": None, "observed_at": None, "resolution": None, "note": f"단기예보 없음 — {short_reason}"},
                             "days": days, "short_why": short_reason,
                             "mid": {"citation": mcit, "days": mdays, "why": mid_reason},
+                            "long": {"citation": lcit, "periods": periods, "why": long_reason},
                             "summary": " · ".join(parts)},
                     notes=notes)
 
@@ -660,7 +696,8 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
 def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pest=None, harvest: Envelope | None = None,
               prescriptions: list[dict[str, Any]] | None = None, unreadable: list[str] | None = None,
               said: list[dict[str, Any]] | None = None, forecast_why: str | None = None,
-              mid: list[dict[str, Any]] | None = None, mid_why: str | None = None) -> list[Envelope]:
+              mid: list[dict[str, Any]] | None = None, mid_why: str | None = None,
+              outlook: list[dict[str, Any]] | None = None, outlook_why: str | None = None) -> list[Envelope]:
     evts = evts or []
     obs = [e for e in evts if e.get("kind") == "observation.note"]
     targets = [e for e in evts if e.get("kind") == "plan.target_date"]
@@ -669,6 +706,6 @@ def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pe
     return [judge_sowing_window(subject, today), judge_base_fertilization(subject, today, prescriptions, unreadable), judge_replant(subject, today, obs),
             judge_pest_alert(subject, today, forecast, pest), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions, unreadable),
             judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions, unreadable), judge_drainage_alert(subject, today, forecast, pest),
-            judge_ship_or_store(subject, today, targets, harvest), judge_forecast_citation(subject, today, forecast, forecast_why, mid, mid_why),
+            judge_ship_or_store(subject, today, targets, harvest), judge_forecast_citation(subject, today, forecast, forecast_why, mid, mid_why, outlook, outlook_why),
             judge_drought_alert(subject, today, evts, obs),
             judge_symptom_triage(subject, today, obs + said_obs)]

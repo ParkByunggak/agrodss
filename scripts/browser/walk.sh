@@ -27,6 +27,7 @@ export AGRODSS_PARCELS_PATH="$W/parcels.json" AGRODSS_PARCELS_LOCAL_PATH="$W/par
 export AGRODSS_PROFILE_PATH="$W/profile.json" AGRODSS_SOIL_DIR="$W/soil" AGRODSS_PSIS_DIR="$W/psis" AGRODSS_NAMES_DIR="$W/names" AGRODSS_NAMES_CSV="$W/crop_names.csv"
 export AGRODSS_ORGANIC_PATH="$W/organic_materials_public.json"
 export AGRODSS_NAMES_LOCAL_CSV="$W/crop_names_local.csv" AGRODSS_NAMES_BACKUP_CSV="$W/crop_names_backup.csv"
+export AGRODSS_OUTLOOK_PATH="$W/climate_outlook.json"
 cd "$ROOT"
 PYTHONDONTWRITEBYTECODE=1 python -B frontend/serve.py --no-browser > "$W/server.log" 2>&1 &
 PID=$!

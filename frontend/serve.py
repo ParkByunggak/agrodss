@@ -214,6 +214,20 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
             out.append(f"<p class=\"meta\">{_e(mc.get('note', ''))}</p>")
         else:
             out.append(f"<p><b>중기</b> · 못 받음 — {_e(m.get('why') or '')}</p>")
+        # [D-21 장기 2026-09-28 · ⓐ] 발행자 등재 1·3개월 전망 — 확률 3분위 표 + 출처 링크(발표문). 없으면 그 이유(등재 없음 · 지난 기간 · 못 읽은 항목)
+        lg = r.get("long") or {}
+        if lg.get("periods"):
+            lc = lg.get("citation") or {}
+            out.append(f"<p><b>장기</b>(등재 정본) · 발표 {_e(str(lc.get('observed_at', ''))[:10])}</p>")
+
+            def _t(t, ws):
+                return "" if not t else " / ".join(f"{w} {t[k]:g}%" for w, k in zip(ws, ("above", "normal", "below")))
+            out.append("<table><tr><th>기간</th><th>지역</th><th>기온(높음/비슷/낮음)</th><th>강수(많음/비슷/적음)</th><th>출처</th></tr>" + "".join(
+                f"<tr><td>{_e(p['from'])} ~ {_e(p['to'])}</td><td>{_e(p.get('region') or '')}</td><td>{_e(_t(p.get('temp'), ('높음', '비슷', '낮음')))}</td>"
+                f"<td>{_e(_t(p.get('precip'), ('많음', '비슷', '적음')))}</td><td><a href=\"{_e(p.get('url') or '')}\">{_e(p.get('title') or '')}</a></td></tr>" for p in lg["periods"]) + "</table>")
+            out.append(f"<p class=\"meta\">{_e(lc.get('note', ''))}</p>")
+        else:
+            out.append(f"<p><b>장기</b> · 없음 — {_e(lg.get('why') or '')}</p>")
     elif e["kind"] == "사실 인용":
         c = r["citation"]
         out.append(f"<p>칸 {_e(r['stage'])} · 인용 계열 {r['cited_families']}/{len(r['groups'])} · 출처 {_e(c['source'])} · 목록 시점 {_e(c['observed_at'])} · 재판정 {_e(e['revisit_at'])}</p>")
@@ -278,7 +292,7 @@ def judge_page() -> tuple[int, str]:
             # 사본이 먼저 걸리니 정본을 고쳐도 이 화면만 안 바뀐다(정본 역전). 그리고 실제로 어긋나 있었다: 사본의
             # "자재 인용(유기 공시)" 는 PSIS(관행 등록약제)가 붙기 전 이름이라, 관행 인용까지 싣는 지금은 틀린 말이다.
             _render_env(out, e, chat_pages.DECISION_LABEL.get(e["decision_id"], e["decision_id"]))
-        out.append(words.plain(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 중기: {_e(info.get('mid', ''))} · 예찰: {_e(info.get('pest', ''))}</p>"))    # 3층 사유 문장 — 사람 말로만 옮긴다
+        out.append(words.plain(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 중기: {_e(info.get('mid', ''))} · 장기: {_e(info.get('outlook', ''))} · 예찰: {_e(info.get('pest', ''))}</p>"))    # 3층 사유 문장 — 사람 말로만 옮긴다
     footer = footer_text()
     return 200, render.page("AGRODSS —판단", nav_html("/judge"), "".join(out), "판단은 여덟 가지 말 중 하나로 답합니다", footer)
 

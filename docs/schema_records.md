@@ -19,6 +19,7 @@
 | `reference.climate_normal` | 1층 사실 | 예 | `external:` | axis, observed_at, fetched_at, source, resolution, values, station, for_day | — | — |
 | `forecast.weather_daily` | 1층 사실 | 예 | `external:` | axis, observed_at, fetched_at, source, resolution, values, for_day | hourly_tmp, sky, pty | — |
 | `forecast.weather_mid` | 1층 사실 | 예 | `external:` | axis, observed_at, fetched_at, source, resolution, values, for_day, region | am, pm, allday | — |
+| `reference.climate_outlook` | 1층 사실 | 예 | `publisher:` | axis, observed_at, fetched_at, source, resolution, values, period_type, period_from, period_to, region, citation | note | — |
 | `observation.pest_forecast` | 1층 사실 | 예 | `external:` | axis, observed_at, fetched_at, source, resolution, values, region, crop_requested, crop_code_crop, raw, schema_confirmed | proxy_reason | — |
 | `reference.organic_material_notice` | 1층 사실 | 예 | `external:` | axis, observed_at, source, resolution, values | — | — |
 | `observation.soil_exam` | 1층 사실 | 예 | `external:` | status, pnu, axis, source, resolution, observed_at, fetched_at | exam_year, address_label, values, units, message | pnu, address_label |

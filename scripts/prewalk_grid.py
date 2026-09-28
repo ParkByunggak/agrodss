@@ -74,14 +74,7 @@ def walk(grid_stem: str, stage_order: int | list[int], key: str, value: Any, tes
     if rc != 0:
         raise RuntimeError(f"워크트리를 못 만들었다: {log}")
     try:
-        rc, patch = _sh(["git", "diff", "HEAD"], root)
-        out["uncommitted_applied"] = bool(patch.strip())
-        if patch.strip():
-            (wt / "_prewalk.patch").write_text(patch, encoding="utf-8")
-            rc, log = _sh(["git", "apply", "_prewalk.patch"], wt)
-            (wt / "_prewalk.patch").unlink()
-            if rc != 0:
-                raise RuntimeError(f"미커밋 수정을 못 얹었다: {log}")
+        out.update(overlay_uncommitted(root, wt))
         g = wt / target.relative_to(root)
         unit = json.loads(g.read_text(encoding="utf-8"))
         for o in orders:
@@ -104,6 +97,38 @@ def walk(grid_stem: str, stage_order: int | list[int], key: str, value: Any, tes
         rc, log = _sh(["git", "worktree", "remove", "--force", str(wt)], root)
         out["worktree_removed"] = rc == 0 and not wt.exists()
     return out
+
+
+def untracked_files(root: Path) -> list[str]:
+    """추적 안 된 파일(gitignore 제외) — 새 모듈 · 새 검사 · 새 데이터."""
+    rc, log = _sh(["git", "ls-files", "--others", "--exclude-standard"], root)
+    return [ln.strip() for ln in log.splitlines() if ln.strip()] if rc == 0 else []
+
+
+def overlay_uncommitted(root: Path, wt: Path) -> dict[str, Any]:
+    """작업 트리의 미커밋 상태를 워크트리에 얹는다 — 추적 파일의 수정(diff) **과 추적 안 된 새 파일**.
+
+    [자기 도구 오류 2026-09-28] 전에는 `git diff HEAD` 만 얹었다 — 새 모듈(ingest/outlook.py)이 추적 안 된 채 있고 추적 파일이 그것을 import 하면
+    워크트리의 검사가 **수집 단계에서 전부 죽어** 실패 목록이 비고, 걷기는 "잔여 0" 이라고 말했다(전부 0 — 한쪽으로 쏠린 결과는 도구 표지).
+    미커밋 수정은 diff 만이 아니다."""
+    rc, patch = _sh(["git", "diff", "HEAD"], root)
+    if rc != 0:
+        raise RuntimeError(f"미커밋 수정을 못 읽었다(git diff HEAD): {patch}")     # 오류 문장을 패치로 오독하지 않는다(커밋 없는 저장소 등)
+    applied = bool(patch.strip())
+    if applied:
+        (wt / "_prewalk.patch").write_text(patch, encoding="utf-8")
+        rc, log = _sh(["git", "apply", "_prewalk.patch"], wt)
+        (wt / "_prewalk.patch").unlink()
+        if rc != 0:
+            raise RuntimeError(f"미커밋 수정을 못 얹었다: {log}")
+    new = untracked_files(root)
+    for rel in new:
+        src, dst = root / rel, wt / rel
+        if not src.is_file():
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(src.read_bytes())
+    return {"uncommitted_applied": applied or bool(new), "untracked_copied": new}
 
 
 def _first_string(value: Any) -> str | None:

@@ -120,6 +120,10 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
     # 날짜별로 읽으므로 같은 kind 에 섞으면 해상도가 다른 값이 그 판단에 들어간다. 오전·오후 원문은 am/pm(8일 뒤는 allday)에 그대로.
     _k("forecast.weather_mid", "1층 사실", _EXT_OBS + ("for_day", "region"), ("am", "pm", "allday"),
        sources=("external:",), layer3_input=True, subject_bound=False),
+    # [D-21 장기 2026-09-28 · 발행자 ⓐ] 1·3개월 전망 수동 정본 — 오픈 API 가 없어(VELA 실측 2026-08-05) 발행자가 발표문 수치를 출처와 함께 등재한 것.
+    # 출처는 publisher: 뿐(external: 이 아니다 — 원천을 부른 적이 없다는 사실을 source 가 말한다). citation{title,url} 필수.
+    _k("reference.climate_outlook", "1층 사실", _EXT_OBS + ("period_type", "period_from", "period_to", "region", "citation"), ("note",),
+       sources=("publisher:",), layer3_input=True, subject_bound=False),
     _k("observation.pest_forecast", "1층 사실",
        _EXT_OBS + ("region", "crop_requested", "crop_code_crop", "raw", "schema_confirmed"), ("proxy_reason",),
        sources=("external:",), layer3_input=True, subject_bound=False),

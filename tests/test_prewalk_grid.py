@@ -87,5 +87,50 @@ def test_the_tool_never_writes_into_the_repo_root():
     body = src[src.index("def walk("):]
     body = body[:body.index("\ndef ", 10)]
     assert "git" in body and "worktree" in body and '"remove"' in body and "finally:" in body   # 워크트리 안에서만 · 반드시 지운다
+    assert "overlay_uncommitted(root, wt)" in body                                           # 미커밋 상태를 얹는 자리는 하나(diff + 새 파일)
     writes = [ln for ln in body.splitlines() if "write_text(" in ln]
     assert writes and all("wt /" in ln or "g.write_text" in ln for ln in writes), writes  # 쓰는 곳은 워크트리 경로뿐
+    ov = src[src.index("def overlay_uncommitted("):]
+    ov = ov[:ov.index("\ndef ", 10)]
+    writes = [ln for ln in ov.splitlines() if "write_text(" in ln or "write_bytes(" in ln]
+    assert writes and all("wt /" in ln or "dst.write_bytes" in ln for ln in writes) and "dst = " in ov and "wt / rel" in ov, writes
+
+
+def test_overlay_copies_untracked_new_files_not_only_tracked_diffs(tmp_path):
+    """[자기 도구 오류 2026-09-28] `git diff HEAD` 만 얹으면 추적 안 된 새 모듈이 빠져, 그것을 import 하는 추적 파일 때문에 워크트리의 검사가
+    수집 단계에서 전부 죽고 걷기가 '잔여 0' 을 말했다. 새 파일도 얹는다 — gitignore 된 것은 빼고."""
+    root = tmp_path / "repo"
+    root.mkdir()
+
+    def git(*a, cwd=root):
+        return subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True, check=True)
+
+    git("init", "-q")
+    git("config", "user.email", "t@example.invalid")
+    git("config", "user.name", "t")
+    (root / "a.py").write_text("x = 1\n", encoding="utf-8")
+    git("add", "a.py")
+    git("commit", "-qm", "init")
+    (root / "a.py").write_text("from b import y\n", encoding="utf-8")            # 추적 파일 수정(diff)
+    (root / "pkg").mkdir()
+    (root / "pkg" / "b.py").write_text("y = 2\n", encoding="utf-8")               # 추적 안 된 새 모듈(하위 디렉터리)
+    (root / ".gitignore").write_text("ignored.txt\n", encoding="utf-8")
+    (root / "ignored.txt").write_text("no\n", encoding="utf-8")                  # gitignore — 얹지 않는다
+    wt = tmp_path / "wt"
+    git("worktree", "add", "--detach", str(wt), "HEAD")
+    try:
+        r = pw.overlay_uncommitted(root, wt)
+        assert (wt / "a.py").read_text(encoding="utf-8") == "from b import y\n"
+        assert (wt / "pkg" / "b.py").read_text(encoding="utf-8") == "y = 2\n" and not (wt / "ignored.txt").exists()
+        assert r["uncommitted_applied"] and set(r["untracked_copied"]) == {".gitignore", "pkg/b.py"}
+        assert (root / "a.py").read_text(encoding="utf-8") == "from b import y\n"   # 본체는 그대로
+        git("add", "-A")
+        git("commit", "-qm", "all")                                                   # 전부 커밋하면 얹을 것이 없다
+        assert pw.overlay_uncommitted(root, wt) == {"uncommitted_applied": False, "untracked_copied": []}   # 없으면 없다
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=empty, check=True)
+        with pytest.raises(RuntimeError, match="git diff HEAD"):                     # 커밋 없는 저장소 — 오류 문장을 패치로 오독하지 않는다
+            pw.overlay_uncommitted(empty, wt)
+    finally:
+        git("worktree", "remove", "--force", str(wt))
