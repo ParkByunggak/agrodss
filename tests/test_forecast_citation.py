@@ -33,6 +33,22 @@ FORECAST = [_rec("2026-09-27", 10, 20, 0, 0), _rec("2026-09-28", 12, 21, 30, 0),
             _rec("2026-09-30", None, None, 20, 0, tmin_tmp=9.5, tmax_tmp=19.0), _rec("2026-10-01", 8, 18, 10, 0)]
 
 
+def _mrec(day, tmin, tmax, pop_am=None, pop_pm=None, sky_am=None, sky_pm=None, allday=None):
+    r = {"kind": "forecast.weather_mid", "axis": ["forecast"], "observed_at": "2026-09-27T18:00:00+09:00", "for_day": day,
+         "fetched_at": "2026-09-28T05:10:00+09:00", "source": "external:kma_midfcst", "resolution": "region:11C10000/11C10401", "region": "괴산",
+         "values": {"tmin": tmin, "tmax": tmax, "pop_max": max(p for p in (pop_am, pop_pm, (allday or {}).get("pop")) if p is not None)}}
+    if allday:
+        r["allday"] = allday
+    else:
+        r["am"], r["pm"] = {"pop": pop_am, "sky": sky_am}, {"pop": pop_pm, "sky": sky_pm}
+    return r
+
+
+# 어제 18시 발표 → D+3 = 09-30 (단기 창 안 · 단기가 이긴다) … D+10 = 10-07
+MID = [_mrec("2026-09-30", 9, 19, 20, 30, "구름많음", "흐림"), _mrec("2026-10-01", 7, 17, 60, 70, "흐리고 비", "흐리고 비"),
+       _mrec("2026-10-02", 6, 18, 20, 20, "맑음", "맑음"), _mrec("2026-10-05", 5, 16, allday={"pop": 40, "sky": "구름많음"})]
+
+
 def test_the_decision_is_registered_as_a_citation_and_judged_with_the_others():
     d = registry.get("forecast_citation")
     assert d and d.required_axes == ("forecast",) and "사실 인용" in d.rule and d.params["days"] == 3
@@ -48,6 +64,10 @@ def test_without_a_forecast_it_carries_the_reason_it_was_not_fetched():
     assert "좌표가 없다" in e.result["summary"]
     e2 = SD.judge_forecast_citation(_subject(), TODAY, forecast=[_rec("2026-10-20", 1, 2, 0, 0)], why=None)   # 있어도 창 밖이면 없는 것
     assert e2.kind == "판단 불가(데이터)" and "3일" in e2.result["why"]
+    # [중기] 이유가 둘 — 단기·중기 각각의 문장이 그대로(한쪽 이유로 다른 쪽을 덮지 않는다)
+    e3 = SD.judge_forecast_citation(_subject(), TODAY, forecast=None, why="단기예보 키 없음", mid=None, mid_why="중기예보 원천 no_region: 권역을 못 찾았다")
+    assert e3.kind == "판단 불가(데이터)" and e3.result["short_why"] == "단기예보 키 없음" and "권역을 못 찾았다" in e3.result["mid_why"]
+    assert "단기: 단기예보 키 없음" in e3.result["summary"] and "중기: 중기예보 원천 no_region" in e3.result["summary"]
 
 
 def test_with_a_forecast_it_cites_three_days_verbatim_and_marks_approximate_extremes():
@@ -62,6 +82,29 @@ def test_with_a_forecast_it_cites_three_days_verbatim_and_marks_approximate_extr
     assert e.result["citation"]["source"] == "external:kma:vilage" and e.inputs[0].axis == "forecast"
     for bad in ("권고", "해야", "주의", "위험"):
         assert bad not in s                                                                # 해석·권고를 붙이지 않는다
+    assert e.result["mid"]["days"] == [] and "3일" not in e.result["mid"]["why"] and "2026-09-30 뒤" in e.result["mid"]["why"]   # 중기 없음 — 이유가 자리에
+    assert "중기: 못 받음" in s and "중기예보는 못 받았다" in " ".join(e.notes)
+
+
+def test_mid_term_days_follow_the_short_window_verbatim_and_the_short_window_wins_on_overlap():
+    e = SD.judge_forecast_citation(_subject(), TODAY, forecast=FORECAST, why=None, mid=MID, mid_why=None)
+    assert e.kind == "사실 인용" and e.grade is None
+    assert [x["day"] for x in e.result["days"]] == ["2026-09-28", "2026-09-29", "2026-09-30"]
+    m = e.result["mid"]
+    assert [x["day"] for x in m["days"]] == ["2026-10-01", "2026-10-02", "2026-10-05"]        # 09-30 은 단기 창 안 — 중기 줄은 버린다(격자가 권역을 이긴다)
+    assert m["days"][0] == {"day": "2026-10-01", "tmin": 7, "tmax": 17, "pop_max": 70, "sky": "흐리고 비", "region": "괴산"}   # 오전·오후 중 큰 값 · 같은 날씨는 한 번
+    assert m["days"][1]["sky"] == "맑음" and m["days"][2]["pop_max"] == 40 and m["days"][2]["sky"] == "구름많음"                # 8일 뒤는 하루 하나
+    assert m["citation"]["source"] == "external:kma_midfcst" and m["citation"]["region"] == "괴산" and m["why"] is None
+    assert [i.source for i in e.inputs] == ["external:kma:vilage", "external:kma_midfcst"]                                     # 원천 둘이 입력에 따로
+    s = e.result["summary"]
+    assert "09-30 10~19℃(시간대 값) 비 20%" in s and "중기(괴산) 10-01 7~17℃ 비 70% · 10-02 6~18℃ 비 20% · 10-05 5~16℃ 비 40% (기상청 중기예보 · 발표 2026-09-27T18:00)" in s
+    for bad in ("권고", "해야", "주의", "위험"):
+        assert bad not in s
+    # 반대편 — 단기가 없고 중기만 있어도 사실 인용이다(못 받은 쪽의 이유가 자리에 남는다)
+    e2 = SD.judge_forecast_citation(_subject(), TODAY, forecast=None, why="예보 원천 error: HTTP 500", mid=MID, mid_why=None)
+    assert e2.kind == "사실 인용" and e2.result["days"] == [] and e2.result["short_why"] == "예보 원천 error: HTTP 500"
+    assert [x["day"] for x in e2.result["mid"]["days"]] == ["2026-10-01", "2026-10-02", "2026-10-05"] and "단기: 못 받음 — 예보 원천 error: HTTP 500" in e2.result["summary"]
+    assert e2.result["citation"]["source"] is None and [i.source for i in e2.inputs] == ["external:kma_midfcst"]
 
 
 def test_the_chat_routes_weather_questions_here_and_keeps_risk_words_for_the_alert():
@@ -75,19 +118,43 @@ def test_the_chat_routes_weather_questions_here_and_keeps_risk_words_for_the_ale
     assert a.startswith(f"[{words.said(e.kind)}]") and words.plain(e.result["summary"]) in a, a
     assert "판단이 아직 등록되지 않았습니다" not in a                                       # 붙여 주신 그 답은 더 안 나온다
     assert e.kind == "판단 불가(데이터)" and "좌표" in e.result["why"] and "좌표" in a, a     # 못 받은 이유(gather_forecast 의 문장)가 관문을 지나 답까지 온다(관문의 입력 — 주입 D 가 이것 없이 통과했다)
+    assert e.result["short_why"] and e.result["mid_why"] and "좌표" in e.result["mid_why"]   # [중기] gather_mid 의 이유도 같은 관문을 지나 도착한다
+
+
+def test_the_mid_term_reason_and_rows_reach_the_decision_through_the_gate(monkeypatch):
+    """[관문의 입력 래칫 · 중기] gather_mid 가 준 이유와 줄이 게이트를 지나 forecast_citation 까지 온다 — 한쪽만 배선하면 관문은 서 있고 아무것도 안 거른다."""
+    from judge import run as jr
+    monkeypatch.setattr(jr, "gather_forecast", lambda s0: (None, "단기 없음(검사)"))
+    monkeypatch.setattr(jr, "gather_mid", lambda s0: (None, "중기 없음(검사 — 이 문장이 도착해야 한다)"))
+    s = _subject()
+    e = next(x for x in jr.judgments_for(s["id"], today=TODAY) if x.decision_id == "forecast_citation")
+    assert e.kind == "판단 불가(데이터)" and e.result["mid_why"] == "중기 없음(검사 — 이 문장이 도착해야 한다)" and e.result["short_why"] == "단기 없음(검사)"
+    monkeypatch.setattr(jr, "gather_mid", lambda s0: (MID, ""))
+    e = next(x for x in jr.judgments_for(s["id"], today=TODAY) if x.decision_id == "forecast_citation")
+    assert e.kind == "사실 인용" and [x["day"] for x in e.result["mid"]["days"]] == ["2026-10-01", "2026-10-02", "2026-10-05"]
+    info = next(i for ss, _, i in jr.all_judgments(today=TODAY, only=s["id"]))
+    assert info["mid"] == "중기예보 사용" and info["forecast"] == "단기 없음(검사)"
 
 
 def test_the_chat_card_and_judge_page_render_a_citation_without_crashing(srv, monkeypatch):
     from judge import run as jr
     monkeypatch.setattr(jr, "gather_forecast", lambda s0: (FORECAST, ""))
+    monkeypatch.setattr(jr, "gather_mid", lambda s0: (MID, ""))
     monkeypatch.setenv("AGRODSS_TODAY", TODAY.isoformat())
     s = _subject()
     e = next(x for x in jr.judgments_for(s["id"], today=TODAY) if x.decision_id == "forecast_citation")
     card = chat.summarize_envelope(e)
-    assert card.startswith(f"[{words.said('사실 인용')}]") and "09-29" in card and "해석·권고 없음" in card
+    assert card.startswith(f"[{words.said('사실 인용')}]") and "09-29" in card and "중기(괴산) 10-01" in card and "해석·권고 없음" in card
     c = http.client.HTTPConnection("127.0.0.1", srv, timeout=10)
     c.request("GET", "/judge")
     resp = c.getresponse()
     body = resp.read().decode("utf-8", "replace")
-    assert resp.status == 200 and "날씨 인용(단기예보)" in body and "비 올 확률(최대)" in body and "2026-09-29" in body and "(시간대 값)" in body
+    assert resp.status == 200 and "날씨 인용(단기·중기 예보)" in body and "비 올 확률(최대)" in body and "2026-09-29" in body and "(시간대 값)" in body
+    assert "비 올 확률(오전·오후 최대)" in body and "2026-10-05" in body and "흐리고 비" in body and "<b>중기</b>(괴산)" in body   # 중기 표 — 단기와 다른 열
     assert "forecast_citation" not in body.replace('title="forecast_citation"', "")
+    # 반대편 — 중기를 못 받으면 그 이유가 화면에(빈 표가 아니라)
+    monkeypatch.setattr(jr, "gather_mid", lambda s0: (None, "중기예보 원천 no_region: 권역을 못 찾았다"))
+    c = http.client.HTTPConnection("127.0.0.1", srv, timeout=10)
+    c.request("GET", "/judge")
+    body = c.getresponse().read().decode("utf-8", "replace")
+    assert "<b>중기</b> · 못 받음 — 중기예보 원천 no_region" in body and "비 올 확률(오전·오후 최대)" not in body

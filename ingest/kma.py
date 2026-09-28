@@ -335,3 +335,136 @@ def nearest_station(lat: float, lon: float, allowed_ids: frozenset[int] | None =
     best = min(cands, key=lambda s: haversine_km(lat, lon, s["lat"], s["lon"]))
     return {"id": best["id"], "name": best["name"], "lat": best["lat"], "lon": best["lon"],
             "dist_km": round(haversine_km(lat, lon, best["lat"], best["lon"]), 1)}
+
+
+# ── ④ 중기예보 MidFcstInfoService (D-21 중기 · VELA 인용: weather_service._get_mid_fcst_tmfc · weather_analyzer.normalize_mid_term ·
+#      resolve_reg_id · nwp_graphic_service._resolve_reg_id 좌표→최근접 지점명→권역) ─────────────────────────────────────────
+# 중기예보는 격자가 아니라 **권역(regId)** 단위다 — 육상(getMidLandFcst · 광역)과 기온(getMidTa · 시군)이 코드가 다르다.
+# 좌표만 있는 재배 단위는 최근접 관측 지점 이름으로 권역표를 찾는다(VELA 의 스냅 처리). 표에 없으면 '권역 미해소' — 수도권 등으로 대체하지 않는다.
+MID_BASE = os.environ.get("AGRODSS_KMA_MID_BASE", "https://apis.data.go.kr/1360000/MidFcstInfoService")
+MID_REGIONS_PATH = ROOT / "data" / "kma" / "mid_regions.json"
+SRC_MID = "external:kma_midfcst"
+MID_DAYS = tuple(range(3, 11))          # D+3 ~ D+10 (발표일 기준)
+_MID_SNAP_STATIONS = 40                 # 권역 이름을 찾기 위해 보는 최근접 지점 수(이름이 권역표에 있는 것을 만날 때까지)
+_ADMIN_SUFFIX = ("특별시", "광역시", "특별자치시", "특별자치도", "도", "시", "군", "구")
+
+
+def mid_tmfc(now: datetime) -> str:
+    """중기예보 발표 시각(06 · 18시) 중 now−30분 이전의 최신 — YYYYMMDDHHMM. 없으면 전날 18시."""
+    cand = now - timedelta(minutes=30)
+    avail = [h for h in (6, 18) if h <= cand.hour]
+    if avail:
+        return cand.strftime("%Y%m%d") + f"{max(avail):02d}00"
+    cand -= timedelta(days=1)
+    return cand.strftime("%Y%m%d") + "1800"
+
+
+@lru_cache(maxsize=1)
+def mid_regions() -> dict[str, dict[str, str]]:
+    if not MID_REGIONS_PATH.exists():
+        return {}
+    return json.loads(MID_REGIONS_PATH.read_text(encoding="utf-8")).get("regions", {})
+
+
+def region_by_name(name: str) -> tuple[str, dict[str, str]] | None:
+    """지점·행정 이름 → (권역 이름, 코드). 괄호 꼬리를 떼고 · 그대로 · 행정 접미사를 뗀 것 · 접미사 앞 토큰 순(VELA resolve_reg_id 인용)."""
+    table = mid_regions()
+    if not name or not table:
+        return None
+    clean = name.split("(")[0].strip()
+    if clean in table:
+        return clean, table[clean]
+    for suf in _ADMIN_SUFFIX:
+        if clean.endswith(suf) and clean[:-len(suf)] in table:
+            return clean[:-len(suf)], table[clean[:-len(suf)]]
+    for tok in clean.split():
+        for suf in _ADMIN_SUFFIX:
+            if tok.endswith(suf) and tok[:-len(suf)] in table:
+                return tok[:-len(suf)], table[tok[:-len(suf)]]
+    return None
+
+
+def resolve_mid_region(lat: float, lon: float) -> dict[str, Any] | None:
+    """좌표 → 최근접 지점들의 이름으로 권역을 찾는다. {name, land, ta, stn_id, via, dist_km} — 못 찾으면 None(대체 없음)."""
+    near = sorted(stations(), key=lambda s: haversine_km(lat, lon, s["lat"], s["lon"]))[:_MID_SNAP_STATIONS]
+    for s in near:
+        hit = region_by_name(s.get("name") or "")
+        if hit:
+            name, codes = hit
+            return {"name": name, "land": codes["land"], "ta": codes["ta"], "stn_id": codes.get("stn_id"),
+                    "via": s["name"], "dist_km": round(haversine_km(lat, lon, s["lat"], s["lon"]), 1)}
+    return None
+
+
+def _mid_item(payload: dict[str, Any] | None) -> dict[str, Any]:
+    try:
+        items = payload["response"]["body"]["items"]["item"]
+    except (KeyError, TypeError):
+        return {}
+    if isinstance(items, list):
+        return items[0] if items else {}
+    return items or {}
+
+
+def _int_or_none(s: Any) -> int | None:
+    f = _float_or_none(s)
+    return None if f is None else int(f)
+
+
+def parse_mid(land: dict[str, Any] | None, ta: dict[str, Any] | None, tmfc: str, region: dict[str, Any],
+              fetched_at: str | None = None) -> list[dict[str, Any]]:
+    """육상(rnSt·wf) + 기온(taMin·taMax) 원문 → 날짜별 레코드. D+3~D+7 은 오전·오후, D+8~ 는 하루 하나. 판단 없음 · 값은 그대로."""
+    fetched_at = fetched_at or _now_iso()
+    if not tmfc or len(tmfc) < 12 or not tmfc[:12].isdigit():
+        return []
+    base = date(int(tmfc[:4]), int(tmfc[4:6]), int(tmfc[6:8]))
+    issued = f"{tmfc[:4]}-{tmfc[4:6]}-{tmfc[6:8]}T{tmfc[8:10]}:{tmfc[10:12]}:00+09:00"
+    land, ta = land or {}, ta or {}
+    out: list[dict[str, Any]] = []
+    for d in MID_DAYS:
+        rec: dict[str, Any] = {
+            "kind": "forecast.weather_mid", "axis": ["forecast"], "observed_at": issued, "fetched_at": fetched_at,
+            "for_day": (base + timedelta(days=d)).isoformat(), "source": SRC_MID,
+            "resolution": f"region:{region.get('land')}/{region.get('ta')}", "region": region.get("name"),
+            "values": {"tmin": _float_or_none(ta.get(f"taMin{d}")), "tmax": _float_or_none(ta.get(f"taMax{d}")), "pop_max": None},
+        }
+        pops: list[int] = []
+        if d <= 7:
+            for half in ("Am", "Pm"):
+                p, w = _int_or_none(land.get(f"rnSt{d}{half}")), (land.get(f"wf{d}{half}") or None)
+                rec[half.lower()] = {"pop": p, "sky": w}
+                if p is not None:
+                    pops.append(p)
+        else:
+            p, w = _int_or_none(land.get(f"rnSt{d}")), (land.get(f"wf{d}") or None)
+            rec["allday"] = {"pop": p, "sky": w}
+            if p is not None:
+                pops.append(p)
+        rec["values"]["pop_max"] = max(pops) if pops else None
+        if rec["values"]["tmin"] is None and rec["values"]["tmax"] is None and not pops:
+            continue                                                    # 그날 값이 하나도 없으면 줄을 만들지 않는다(빈 줄은 '예보 있음'으로 읽힌다)
+        out.append(rec)
+    return out
+
+
+def fetch_mid(lat: float, lon: float, now: datetime | None = None) -> dict[str, Any]:
+    key = fcst_key()
+    if not key:
+        return {"status": "error", "message": "중기예보 키 없음 (KMA_FORECAST_API_KEY 또는 DATA_GO_KR_API_KEY — 단기와 같은 키)", "records": []}
+    region = resolve_mid_region(lat, lon)
+    if not region:
+        return {"status": "no_region", "message": f"좌표의 권역을 못 찾았다 — data/kma/mid_regions.json 에 최근접 {_MID_SNAP_STATIONS}개 지점 이름이 없다", "records": []}
+    tmfc = mid_tmfc(now or datetime.now())
+    common = {"serviceKey": key, "pageNo": 1, "numOfRows": 10, "dataType": "JSON", "tmFc": tmfc}
+    st_l, txt_l = _get_text(f"{MID_BASE}/getMidLandFcst", {**common, "regId": region["land"]}, encoding="utf-8")
+    st_t, txt_t = _get_text(f"{MID_BASE}/getMidTa", {**common, "regId": region["ta"]}, encoding="utf-8")
+    if st_l != 200 and st_t != 200:
+        return {"status": "error", "message": f"HTTP 육상 {st_l} · 기온 {st_t}", "records": []}
+    try:
+        land = _mid_item(json.loads(txt_l)) if st_l == 200 else {}
+        ta = _mid_item(json.loads(txt_t)) if st_t == 200 else {}
+    except ValueError:
+        return {"status": "error", "message": "JSON 아님", "records": []}
+    recs = parse_mid(land, ta, tmfc, region)
+    return {"status": "success" if recs else "no_data", "region": region, "tmfc": tmfc, "records": recs,
+            "partial": None if (st_l == 200 and st_t == 200) else f"육상 {st_l} · 기온 {st_t}"}

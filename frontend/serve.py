@@ -195,11 +195,25 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
     elif e["kind"] == "사실 인용" and e["decision_id"] == "forecast_citation":
         # [D-21 2026-09-28] 날씨 인용 — 자재 인용과 result 모양이 다르다(citation · days). 이 갈래가 없으면 아래 자재 갈래가 KeyError 로 /judge 전체를 죽인다
         c = r["citation"]
-        out.append(f"<p>출처 {_e(c.get('source', ''))} · 발표 {_e(str(c.get('observed_at', ''))[:16])} · 재판정 {_e(e['revisit_at'])}</p>")
-        out.append("<table><tr><th>날</th><th>최저~최고</th><th>비 올 확률(최대)</th><th>강수량</th></tr>" + "".join(
-            f"<tr><td>{_e(x['day'])}</td><td>{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃{' (시간대 값)' if x.get('approx') else ''}</td>"
-            f"<td>{'' if x['pop_max'] is None else str(int(x['pop_max'])) + '%'}</td><td>{'' if x['rain_mm'] is None else str(x['rain_mm']) + 'mm'}</td></tr>" for x in r["days"]) + "</table>")
-        out.append(f"<p class=\"meta\">{_e(c.get('note', ''))}</p>")
+        if r.get("days"):
+            out.append(f"<p><b>단기</b> · 출처 {_e(c.get('source', ''))} · 발표 {_e(str(c.get('observed_at', ''))[:16])} · 재판정 {_e(e['revisit_at'])}</p>")
+            out.append("<table><tr><th>날</th><th>최저~최고</th><th>비 올 확률(최대)</th><th>강수량</th></tr>" + "".join(
+                f"<tr><td>{_e(x['day'])}</td><td>{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃{' (시간대 값)' if x.get('approx') else ''}</td>"
+                f"<td>{'' if x['pop_max'] is None else str(int(x['pop_max'])) + '%'}</td><td>{'' if x['rain_mm'] is None else str(x['rain_mm']) + 'mm'}</td></tr>" for x in r["days"]) + "</table>")
+            out.append(f"<p class=\"meta\">{_e(c.get('note', ''))}</p>")
+        else:
+            out.append(f"<p><b>단기</b> · 못 받음 — {_e(r.get('short_why') or '')}</p>")
+        # [D-21 중기 2026-09-28] 권역 중기예보(D+3~D+10) — 단기와 다른 표(해상도·원천이 다르다 · 강수량 열 없음 · 날씨 원문)
+        m = r.get("mid") or {}
+        if m.get("days"):
+            mc = m.get("citation") or {}
+            out.append(f"<p><b>중기</b>({_e(mc.get('region') or '권역')}) · 출처 {_e(mc.get('source', ''))} · 발표 {_e(str(mc.get('observed_at', ''))[:16])}</p>")
+            out.append("<table><tr><th>날</th><th>최저~최고</th><th>비 올 확률(오전·오후 최대)</th><th>날씨</th></tr>" + "".join(
+                f"<tr><td>{_e(x['day'])}</td><td>{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃</td>"
+                f"<td>{'' if x['pop_max'] is None else str(int(x['pop_max'])) + '%'}</td><td>{_e(x.get('sky') or '')}</td></tr>" for x in m["days"]) + "</table>")
+            out.append(f"<p class=\"meta\">{_e(mc.get('note', ''))}</p>")
+        else:
+            out.append(f"<p><b>중기</b> · 못 받음 — {_e(m.get('why') or '')}</p>")
     elif e["kind"] == "사실 인용":
         c = r["citation"]
         out.append(f"<p>칸 {_e(r['stage'])} · 인용 계열 {r['cited_families']}/{len(r['groups'])} · 출처 {_e(c['source'])} · 목록 시점 {_e(c['observed_at'])} · 재판정 {_e(e['revisit_at'])}</p>")
@@ -264,7 +278,7 @@ def judge_page() -> tuple[int, str]:
             # 사본이 먼저 걸리니 정본을 고쳐도 이 화면만 안 바뀐다(정본 역전). 그리고 실제로 어긋나 있었다: 사본의
             # "자재 인용(유기 공시)" 는 PSIS(관행 등록약제)가 붙기 전 이름이라, 관행 인용까지 싣는 지금은 틀린 말이다.
             _render_env(out, e, chat_pages.DECISION_LABEL.get(e["decision_id"], e["decision_id"]))
-        out.append(words.plain(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 예찰: {_e(info.get('pest', ''))}</p>"))    # 3층 사유 문장 — 사람 말로만 옮긴다
+        out.append(words.plain(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 중기: {_e(info.get('mid', ''))} · 예찰: {_e(info.get('pest', ''))}</p>"))    # 3층 사유 문장 — 사람 말로만 옮긴다
     footer = footer_text()
     return 200, render.page("AGRODSS —판단", nav_html("/judge"), "".join(out), "판단은 여덟 가지 말 중 하나로 답합니다", footer)
 

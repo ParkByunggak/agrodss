@@ -116,6 +116,10 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
     _k("reference.climate_normal", "1층 사실", _EXT_OBS + ("station", "for_day"), sources=("external:",), layer3_input=True, subject_bound=False),
     _k("forecast.weather_daily", "1층 사실", _EXT_OBS + ("for_day",), ("hourly_tmp", "sky", "pty"),
        sources=("external:",), layer3_input=True, subject_bound=False),
+    # [D-21 중기 2026-09-28] 중기예보(D+3~D+10 · 권역 단위 — getMidLandFcst 육상 + getMidTa 기온). 단기와 **다른 kind** 다 — 판단 넷이 단기 줄을
+    # 날짜별로 읽으므로 같은 kind 에 섞으면 해상도가 다른 값이 그 판단에 들어간다. 오전·오후 원문은 am/pm(8일 뒤는 allday)에 그대로.
+    _k("forecast.weather_mid", "1층 사실", _EXT_OBS + ("for_day", "region"), ("am", "pm", "allday"),
+       sources=("external:",), layer3_input=True, subject_bound=False),
     _k("observation.pest_forecast", "1층 사실",
        _EXT_OBS + ("region", "crop_requested", "crop_code_crop", "raw", "schema_confirmed"), ("proxy_reason",),
        sources=("external:",), layer3_input=True, subject_bound=False),

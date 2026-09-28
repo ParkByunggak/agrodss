@@ -45,6 +45,19 @@ def gather_forecast(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | Non
     return r["records"], ""
 
 
+def gather_mid(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:
+    """[D-21 중기] 좌표·키·권역이 있을 때만 중기예보(D+3~D+10)를 가져온다. 없으면 (None, 이유) — 단기와 같은 꼴, 같은 키."""
+    lat, lon = subject.get("lat"), subject.get("lon")
+    if lat is None or lon is None:
+        return None, "재배 단위에 좌표가 없다(I-6 — 주소→좌표는 ingest.soil_exam 지오코딩)"
+    if not kma.fcst_key():
+        return None, "중기예보 키 없음(.env KMA_FORECAST_API_KEY 또는 DATA_GO_KR_API_KEY)"
+    r = kma.fetch_mid(float(lat), float(lon))
+    if r.get("status") != "success":
+        return None, f"중기예보 원천 {r.get('status')}: {r.get('message', '')}"
+    return r["records"], (f"일부만 — {r['partial']}" if r.get("partial") else "")
+
+
 # [코드 평가 §1-1 · 2026-09-19] 옛 진입점 harvest_for_subject / all_harvest 를 지웠다 — 호출자 0 이면서 필지 병합·boundary.gate·apply_caps 를
 # 전부 우회하는 경로였다. 3층 진입점은 all_judgments 하나다(게이트 위치 래칫이 그것만 보는 이유).
 
@@ -76,6 +89,7 @@ def all_judgments(today: date | None = None, only: str | None = None,
             s0["soil_chem"], s0["soil_exam_at"] = dict(soil["values"]), soil.get("observed_at")
         prescriptions, unreadable = soil_store._scan_prescriptions(s_reg.get("parcel", ""))   # [U-21] 읽힌 것과 **못 읽은 것**을 함께
         forecast, why = gather_forecast(s0)
+        mid, mwhy = gather_mid(s0)                              # [D-21 중기] 단기와 별개 원천 · 별개 이유 — 한쪽이 없어도 다른 쪽은 낸다
         pest, pwhy = gather_pest(s0, today)
         evts = ev.list_records(s0.get("id"), "event")
         ledger = ev.list_records(s0.get("id"))                 # 관찰 · 농가 계획 · 납품 계획일까지(M-10 결정 등록이 쓴다)
@@ -84,7 +98,7 @@ def all_judgments(today: date | None = None, only: str | None = None,
         caps = fb.active_caps(s0.get("id"))
         # [M-3 · I-5 §3-4] 경계 게이트 — 모든 입력을 모은 뒤, 판정 직전, 한 번
         # [D-18 직렬 게이트 2026-09-27] 물으신 말(said)도 같은 문으로 — 원장에 없는 입력이라고 게이트를 비켜 가면 관문의 입력이 새는 형태
-        s, recs = boundary.gate(s0, forecast=forecast, pest=pest, events=evts, ledger=ledger, reasons=reasons, videos=videos, caps=caps,
+        s, recs = boundary.gate(s0, forecast=forecast, mid=mid, pest=pest, events=evts, ledger=ledger, reasons=reasons, videos=videos, caps=caps,
                                 prescriptions=prescriptions, said=said)
         envs = [harvest_timing.judge(s, forecast=recs["forecast"], today=today),
                 risk_alert.judge(s, forecast=recs["forecast"], today=today, pest=recs["pest"], evts=recs["events"]),   # [B1] 수확 사건
@@ -96,8 +110,9 @@ def all_judgments(today: date | None = None, only: str | None = None,
         # [M-10 결정 등록] 격자 칸이 선언한 나머지 8 결정 — 같은 입력, 같은 게이트 뒤
         envs += stage_decisions.judge_all(s, today, evts=recs["ledger"], forecast=recs["forecast"], pest=recs["pest"], harvest=envs[0],
                                           prescriptions=recs["prescriptions"], unreadable=unreadable, said=recs["said"],
-                                          forecast_why=why)     # [D-21] 예보를 못 받은 이유를 날씨 인용이 그대로 싣는다(관문의 입력 — 빈 채 넘기면 이유 없는 미비)
+                                          forecast_why=why,     # [D-21] 예보를 못 받은 이유를 날씨 인용이 그대로 싣는다(관문의 입력 — 빈 채 넘기면 이유 없는 미비)
+                                          mid=recs["mid"], mid_why=mwhy)   # [D-21 중기] 게이트를 지난 중기 줄 + 못 받은 이유 — 둘 다 넘긴다(입력 도착 래칫의 대상)
         # [M-6 · D-14] 자율진화 보수 상한 — 판정기 뒤, 돌려주기 전, 한 번. 규칙은 안 바꾸고 등급만 낮춘다
         envs = evolve.apply_caps(s["id"], envs, caps=recs["caps"])
-        out.append((s, envs, {"forecast": why or "예보 사용", "pest": pwhy or "예찰 사용"}))
+        out.append((s, envs, {"forecast": why or "예보 사용", "mid": mwhy or "중기예보 사용", "pest": pwhy or "예찰 사용"}))
     return out
