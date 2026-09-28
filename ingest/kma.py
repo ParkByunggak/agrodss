@@ -113,6 +113,14 @@ def parse_daily_obs(text: str, fetched_at: str | None = None) -> list[dict[str, 
     return out
 
 
+def _http_why(status: int, text: str = "") -> str:
+    """못 받은 이유 문장. [D-21 실측 2026-09-28] 연결이 안 되면 `_get_text` 가 (0, 오류문) 을 돌려주는데 그것을 "HTTP 0" 이라고 적고 있었다 —
+    HTTP 응답이 아니라 연결 실패다(키 문제 · 망 차단 · 원천 다운이 다 여기). 이유는 그대로 화면까지 가므로(사실 인용) 말이 맞아야 한다."""
+    if status == 0:
+        return f"연결 실패: {(text or '').strip()[:120] or '응답 없음'}"
+    return f"HTTP {status}" + (f" {text[:120]}" if text else "")
+
+
 def _get_text(url: str, params: dict[str, Any], encoding: str = "euc-kr") -> tuple[int, str]:
     req = urllib.request.Request(f"{url}?{urllib.parse.urlencode(params)}", headers={"User-Agent": "agrodss/0.1"})
     try:
@@ -132,7 +140,7 @@ def fetch_daily_obs(stn: int, day: date) -> dict[str, Any]:
     if status == 403:
         return {"status": "awaiting_approval", "message": "kma_sfcdd 활용 미승인(403) — apihub 에서 지상관측 일자료 신청", "records": []}
     if status != 200:
-        return {"status": "error", "message": f"HTTP {status} {text[:120]}", "records": []}
+        return {"status": "error", "message": _http_why(status, text), "records": []}
     recs = parse_daily_obs(text)
     return {"status": "success" if recs else "no_data", "records": recs}
 
@@ -184,7 +192,7 @@ def fetch_normals(stn: int, mm1: int, dd1: int, mm2: int, dd2: int, tmst: int = 
     status, text = _get_text(f"{HUB_BASE}/sfc_norm1.php", {
         "norm": "D", "tmst": tmst, "stn": stn, "MM1": mm1, "DD1": dd1, "MM2": mm2, "DD2": dd2, "help": 0, "authKey": key})
     if status != 200:
-        return {"status": "error", "message": f"HTTP {status}", "records": []}
+        return {"status": "error", "message": _http_why(status, text if status == 0 else ""), "records": []}
     recs = parse_normals(text)
     return {"status": "success" if recs else "no_data", "records": recs}
 
@@ -303,7 +311,7 @@ def fetch_vilage(lat: float, lon: float, now: datetime | None = None) -> dict[st
         "serviceKey": key, "pageNo": 1, "numOfRows": 1000, "dataType": "JSON",
         "base_date": base_date, "base_time": base_time, "nx": nx, "ny": ny}, encoding="utf-8")
     if status != 200:
-        return {"status": "error", "message": f"HTTP {status}", "records": []}
+        return {"status": "error", "message": _http_why(status, text if status == 0 else ""), "records": []}
     try:
         payload = json.loads(text)
     except ValueError:
@@ -459,7 +467,7 @@ def fetch_mid(lat: float, lon: float, now: datetime | None = None) -> dict[str, 
     st_l, txt_l = _get_text(f"{MID_BASE}/getMidLandFcst", {**common, "regId": region["land"]}, encoding="utf-8")
     st_t, txt_t = _get_text(f"{MID_BASE}/getMidTa", {**common, "regId": region["ta"]}, encoding="utf-8")
     if st_l != 200 and st_t != 200:
-        return {"status": "error", "message": f"HTTP 육상 {st_l} · 기온 {st_t}", "records": []}
+        return {"status": "error", "message": f"육상 {_http_why(st_l, txt_l if st_l == 0 else '')} · 기온 {_http_why(st_t, txt_t if st_t == 0 else '')}", "records": []}
     try:
         land = _mid_item(json.loads(txt_l)) if st_l == 200 else {}
         ta = _mid_item(json.loads(txt_t)) if st_t == 200 else {}
@@ -467,4 +475,4 @@ def fetch_mid(lat: float, lon: float, now: datetime | None = None) -> dict[str, 
         return {"status": "error", "message": "JSON 아님", "records": []}
     recs = parse_mid(land, ta, tmfc, region)
     return {"status": "success" if recs else "no_data", "region": region, "tmfc": tmfc, "records": recs,
-            "partial": None if (st_l == 200 and st_t == 200) else f"육상 {st_l} · 기온 {st_t}"}
+            "partial": " · ".join(f"{side} {_http_why(st, txt if st == 0 else '')}" for side, st, txt in (("육상", st_l, txt_l), ("기온", st_t, txt_t)) if st != 200) or None}
