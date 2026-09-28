@@ -400,6 +400,7 @@ def resolve_mid_region(lat: float, lon: float) -> dict[str, Any] | None:
         if hit:
             name, codes = hit
             return {"name": name, "land": codes["land"], "ta": codes["ta"], "stn_id": codes.get("stn_id"),
+                    "ta_from": codes.get("ta_from"),                     # [발행자 2026-09-29 "이 날씨는 어느 지점을 말하는가"] 기온 코드를 빌린 곳(괴산 → 충주) — 표기에 싣는다
                     "via": s["name"], "dist_km": round(haversine_km(lat, lon, s["lat"], s["lon"]), 1)}
     return None
 
@@ -436,6 +437,8 @@ def parse_mid(land: dict[str, Any] | None, ta: dict[str, Any] | None, tmfc: str,
             "resolution": f"region:{region.get('land')}/{region.get('ta')}", "region": region.get("name"),
             "values": {"tmin": _float_or_none(ta.get(f"taMin{d}")), "tmax": _float_or_none(ta.get(f"taMax{d}")), "pop_max": None},
         }
+        if region.get("ta_from"):
+            rec["ta_region"] = region["ta_from"]                      # 기온은 이 권역 코드로 받았다 — 사실 인용이 "기온은 충주 기준" 이라 말한다
         pops: list[int] = []
         if d <= 7:
             for half in ("Am", "Pm"):

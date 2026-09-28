@@ -24,7 +24,12 @@ def test_mid_issue_time_is_06_or_18_minus_thirty_minutes():
 
 def test_region_table_is_cited_from_vela_and_resolves_names_without_a_default():
     t = kma.mid_regions()
-    assert t["괴산"] == {"land": "11C10000", "ta": "11C10401", "stn_id": "131"} and t["대전"]["ta"] == "11C20401" and len(t) >= 14
+    assert t["괴산"] == {"land": "11C10000", "ta": "11C10401", "stn_id": "131", "ta_from": "충주"} and t["대전"]["ta"] == "11C20401" and len(t) >= 14
+    assert kma.resolve_mid_region(36.75, 127.98)["ta_from"] == "충주"                                   # [2026-09-29 "어느 지점"] 빌린 기온 코드의 이름
+    recs = kma.parse_mid({"rnSt3Am": "10"}, None, "202609280600", dict(REGION, ta_from="충주"))
+    assert recs[0]["ta_region"] == "충주" and "ta_region" not in kma.parse_mid({"rnSt3Am": "10"}, None, "202609280600", REGION)[0]
+    from judge import boundary
+    boundary.gate_records(recs, "mid")                                                                   # 스키마가 그 필드를 안다
     assert kma.region_by_name("괴산") == ("괴산", t["괴산"]) and kma.region_by_name("괴산군") == ("괴산", t["괴산"])
     assert kma.region_by_name("충주(관)")[0] == "충주" and kma.region_by_name("대구광역시")[0] == "대구"   # 괄호 꼬리 · '구'로 끝나는 이름(VELA 06-13 버그)
     assert kma.region_by_name("연풍") is None and kma.region_by_name("") is None                          # 없으면 없다 — 수도권으로 대체하지 않는다

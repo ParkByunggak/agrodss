@@ -198,7 +198,7 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         # [D-21 2026-09-28] 날씨 인용 — 자재 인용과 result 모양이 다르다(citation · days). 이 갈래가 없으면 아래 자재 갈래가 KeyError 로 /judge 전체를 죽인다
         c = r["citation"]
         if r.get("days"):
-            out.append(f"<p><b>단기</b> · 출처 {_e(c.get('source', ''))} · 발표 {_e(render.local_time(c.get('observed_at')))} · 재판정 {_e(e['revisit_at'])}</p>")   # 시각 표기 정본(C16)
+            out.append(f"<p><b>단기</b>(필지 자리 5km 예보 구역 {_e(str(c.get('resolution') or '').replace('grid5km:', ''))}) · 출처 {_e(c.get('source', ''))} · 발표 {_e(render.local_time(c.get('observed_at')))} · 재판정 {_e(e['revisit_at'])}</p>")   # 시각 표기 정본(C16) · 어느 자리인지
             out.append("<table><tr><th>날</th><th>최저~최고</th><th>비 올 확률(최대)</th><th>강수량</th></tr>" + "".join(
                 f"<tr><td>{_e(x['day'])}</td><td>{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃{' (시간대 값)' if x.get('approx') else ''}</td>"
                 f"<td>{'' if x['pop_max'] is None else str(int(x['pop_max'])) + '%'}</td><td>{'' if x['rain_mm'] is None else str(x['rain_mm']) + 'mm'}</td></tr>" for x in r["days"]) + "</table>")
@@ -209,7 +209,8 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         m = r.get("mid") or {}
         if m.get("days"):
             mc = m.get("citation") or {}
-            out.append(f"<p><b>중기</b>({_e(mc.get('region') or '권역')}) · 출처 {_e(mc.get('source', ''))} · 발표 {_e(render.local_time(mc.get('observed_at')))}</p>")
+            ta_note = f" · 기온은 {_e(mc['ta_region'])} 기준" if mc.get("ta_region") else ""
+            out.append(f"<p><b>중기</b>({_e(mc.get('region') or '권역')} 권역{ta_note}) · 출처 {_e(mc.get('source', ''))} · 발표 {_e(render.local_time(mc.get('observed_at')))}</p>")
             out.append("<table><tr><th>날</th><th>최저~최고</th><th>비 올 확률(오전·오후 최대)</th><th>날씨</th></tr>" + "".join(
                 f"<tr><td>{_e(x['day'])}</td><td>{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃</td>"
                 f"<td>{'' if x['pop_max'] is None else str(int(x['pop_max'])) + '%'}</td><td>{_e(x.get('sky') or '')}</td></tr>" for x in m["days"]) + "</table>")

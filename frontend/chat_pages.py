@@ -369,7 +369,10 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
         return ""
     done = chat.confirmed_ref(m, i)
     if done:
-        return f'<div class="draft"><span class="done">{_e(chat.SAVED_LABEL)}</span> {_e(chat.KIND_PLAIN.get(k, k))} · {_e(done)}</div>'
+        # [발행자 화면 2026-09-29 06:18] 제안(본 것)을 손으로 바꿔(할 일) 넣으면 위 답변은 "본 것으로 적었습니다" 인 채 남아 카드와 어긋나 보였다 —
+        # 카드가 "고르신 종류" 라고 말해 두 줄이 서로를 설명하게 한다(답변은 보낸 때의 기록이라 고쳐 쓰지 않는다)
+        chosen = " · 고르신 종류(처음 제안과 다릅니다)" if d.get("why") == chat.CHOSEN_WHY else ""
+        return f'<div class="draft"><span class="done">{_e(chat.SAVED_LABEL)}</span> {_e(chat.KIND_PLAIN.get(k, k))}{_e(chosen)} · {_e(done)}</div>'
     need = d.get("needs") or []
     # [발행자 2026-09-21] 앞에 서는 것은 **사람 말**이고, 개발자 사유(`why`)는 버리지 않고 `title` 로 내린다 —
     # 정확함을 잃지 않으면서 읽는 사람을 막지 않는다. 옛 판은 `why` 를 그대로 카드 첫 줄에 냈다.

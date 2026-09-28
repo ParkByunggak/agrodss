@@ -136,6 +136,23 @@ CORPUS = [
     ("비료 남았지", "event", None),
     ("그렇지", "observation.note", None),
     ("잎이 노랗지", "observation.note", None),
+    # [발행자 실사용 2026-09-29 06:18] "오전에 스프링쿨러 가동 1시간한다" → 관찰 메모로 제안 → 손으로 할 일로. 장치+돌리는 말 · 문장 끝 현재·앞날 서술
+    ("오전에 스프링쿨러 가동 1시간한다", "plan.farmer", None),
+    ("스프링쿨러가 고장났다", "observation.note", None),               # 장치 이름 홀로는 여전히 관수가 아니다(2026-09-21 규율 그대로)
+    ("오늘 급수 1시간 한다", "plan.farmer", None),                     # '오늘' 이 한 일 표지로 읽혀 사건이 되던 것 — 문장 끝 '한다' 는 앞날
+    ("오전에 스프링쿨러 돌렸다", "event", None),                       # 장치 + 돌리는 말 + 받침 ㅆ = 한 일
+    ("내일 파종", "plan.farmer", None),                                 # 처방 직후 전수 — 내일 날짜의 '한 일' 이 되던 것(날짜 표지 = 한 일 표지의 구멍)
+    ("내일 물 준다", "plan.farmer", None),
+    ("어제 오전에 물 줬다", "event", None),                             # 받침 ㅆ 과거가 있으면 한 일 그대로
+    ("잎이 마른다", "observation.note", None),                          # 작업 어휘 없는 '…ㄴ다' 는 계획이 아니다
+    ("잎이 노랗게 변한다", "observation.note", None),                    # '…한다' 로 끝나도 작업 어휘가 없으면 관찰(주입 C 가 이 문장 없이는 안 잡혔다)
+    # [WO-LLM-01 첫 측정 2026-09-29 08:21 KST · 발행자 PC] 농가 발화 70 · 종류 고침 4 — 기대 종류는 발행자가 붙였다(고친 종류 그대로)
+    ("가을 가뭄이 심하다. 아침에 포장을 보니 특별한 징후는 없다", "event", None),   # 발행자 '한 일' — 포장을 본 것이 예찰
+    ("오늘 물주었다", "event", None),                                    # 발행자 '한 일' — 띄어쓰기 없는 '물주었'
+    # [발행자 실사용 2026-09-29 아침 · 화면 9903974] "오늘 날씨 어떄"(오타) · "오늘 날씨는" 이 본 것으로 — "한 의미로 질문한 것을 서로 다르게 답을 한다"
+    ("오늘 날씨 어떄", "question", "forecast_citation"),
+    ("오늘 날씨는", "question", "forecast_citation"),
+    ("오늘 날씨가 좋다", "observation.note", None),                       # 서술어가 있으면 본 것 그대로
 ]
 
 
@@ -147,7 +164,7 @@ def test_corpus_kind_and_topic(text, kind, topic):
         assert chat.topic_of(text) == topic, (text, chat.topic_of(text))
 
 
-CORPUS_MIN = 104   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
+CORPUS_MIN = 118   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
 
 
 def test_corpus_is_append_only():

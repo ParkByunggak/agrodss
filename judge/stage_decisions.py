@@ -609,14 +609,15 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         v = r.get("values") or {}
         sky = [str(h.get("sky")) for h in (r.get("am"), r.get("pm"), r.get("allday")) if isinstance(h, dict) and h.get("sky")]
         mdays.append({"day": r["for_day"], "tmin": v.get("tmin"), "tmax": v.get("tmax"), "pop_max": v.get("pop_max"),
-                      "sky": " / ".join(dict.fromkeys(sky)) or None, "region": r.get("region")})
+                      "sky": " / ".join(dict.fromkeys(sky)) or None, "region": r.get("region"), "ta_region": r.get("ta_region")})
 
     inputs, parts, notes, cit = [], [], ["값은 원천 그대로다. 최저·최고가 없는 날은 시간대 값으로 표기했다(대리값을 숨기지 않는다)"], {}
     if rows:
         src, issued, res = rows[0].get("source") or "기상청 단기예보", rows[0].get("observed_at") or "", rows[0].get("resolution") or ""
         inputs.append(AxisUse("forecast", str(issued), str(src), str(res), "관측"))
         cit = {"source": src, "observed_at": issued, "resolution": res, "note": "기상청 단기예보 그대로 — 해석·권고 없음(경보는 위험 경보 몫 · D-21)"}
-        parts.append(" · ".join(_fmt_forecast_day(x) for x in days) + f" (기상청 단기예보 · 발표 {_issued(issued)})")
+        # [발행자 2026-09-29 "이 날씨는 어느 지점을 말하는가"] 어느 자리의 예보인지를 줄에 싣는다 — 단기는 필지 좌표가 든 기상청 5km 격자 칸
+        parts.append(" · ".join(_fmt_forecast_day(x) for x in days) + f" (기상청 단기예보 · 필지 자리 5km 예보 구역 · 발표 {_issued(issued)})")   # '격자' 는 화면 낱말 표가 재배 달력으로 바꾼다 — 농가 말로
     else:
         notes.append(f"단기예보는 못 받았다 — {short_reason}")
         parts.append(f"단기: 못 받음 — {short_reason}")
@@ -624,9 +625,11 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
     if mrows:
         msrc, missued, mres = mrows[0].get("source") or "기상청 중기예보", mrows[0].get("observed_at") or "", mrows[0].get("resolution") or ""
         inputs.append(AxisUse("forecast", str(missued), str(msrc), str(mres), "관측"))
-        mcit = {"source": msrc, "observed_at": missued, "resolution": mres, "region": mrows[0].get("region"),
+        ta_from = mrows[0].get("ta_region")
+        mcit = {"source": msrc, "observed_at": missued, "resolution": mres, "region": mrows[0].get("region"), "ta_region": ta_from,
                 "note": "기상청 중기예보(권역) 그대로 — 강수 확률은 오전·오후 중 큰 값 · 강수량은 중기에 없다"}
-        parts.append("중기(" + str(mrows[0].get("region") or "권역") + ") " + " · ".join(_fmt_forecast_day(x) for x in mdays)
+        where = str(mrows[0].get("region") or "권역") + (f" 권역 · 기온은 {ta_from} 기준" if ta_from else " 권역")   # 어느 자리인지(권역 · 빌린 기온 코드)
+        parts.append("중기(" + where + ") " + " · ".join(_fmt_forecast_day(x) for x in mdays)
                      + f" (기상청 중기예보 · 발표 {_issued(missued)})")
     else:
         notes.append(f"중기예보는 못 받았다 — {mid_reason}")
