@@ -39,9 +39,19 @@ def test_bad_or_missing_timestamp_does_not_break_a_screen():
     assert render.local_time("언젠가") == "언젠가"
 
 
+def test_when_keeps_dates_and_renders_timestamps():
+    """판정 입력 표의 '잰 때' — 관측일은 날짜 그대로(00:00 을 붙이지 않는다), 예보 발표는 시각으로."""
+    assert render.when("2026-09-18") == "2026-09-18" and render.when(None) == "" and render.when("normal:1991-2020") == "normal:1991-2020"
+    assert render.when("2026-09-28T05:00:00+09:00") == render.local_time("2026-09-28T05:00:00+09:00") and "T05" not in render.when("2026-09-28T05:00:00+09:00")
+
+
 def test_no_screen_slices_a_timestamp_by_hand():
     # 래칫 — 표기 정본 하나. 자르기가 다시 생기면 같은 결함이 다른 화면에서 난다(§7.5 지점 축)
     for py in sorted((ROOT / "frontend").glob("*.py")) + sorted((ROOT / "mall").glob("*.py")):
         code = "\n".join(ln.split("#", 1)[0] for ln in py.read_text(encoding="utf-8").splitlines())
         hit = re.search(r"(recorded_at|fetched_at|last_seen_at)[^\n]{0,40}\[:\s*1[0-9]\s*\]", code)
         assert not hit, f"{py.name}: 시각을 손으로 자른다 — render.local_time() 으로 ({hit.group(0) if hit else ''})"
+        # [래칫 좁음 2026-09-28] observed_at 이 목록에 없어 두 곳이 통과해 있었다 — 날씨 인용 카드의 발표 시각 · 촬영 클립 줄(둘 다 C16 그 형태 `[:16]`).
+        # observed_at 은 날짜인 곳이 많아 [:10] 은 두고, 시·분까지 자르는 [:11..19] 만 막는다
+        hit = re.search(r"observed_at[^\n]{0,40}\[:\s*1[1-9]\s*\]", code)
+        assert not hit, f"{py.name}: 관측·발표·촬영 시각을 손으로 자른다 — render.local_time() 으로 ({hit.group(0) if hit else ''})"

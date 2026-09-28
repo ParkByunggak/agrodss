@@ -611,7 +611,7 @@ def mall_main(view: dict[str, Any]) -> str:
         for c in t["clips"]:
             dur = f' · {c["duration_sec"]}초' if c.get("duration_sec") else ""
             size = f' · {c["width"]}×{c["height"]}' if c.get("width") else ""
-            out.append(f'<div style="margin:4px 0 0 8px">▶ {_e(c["kind"])} {_e(str(c["observed_at"])[:16])}{_e(dur)}{_e(size)} {_e(c.get("note") or "")}</div>')
+            out.append(f'<div style="margin:4px 0 0 8px">▶ {_e(c["kind"])} {_e(render.local_time(c.get("observed_at")))}{_e(dur)}{_e(size)} {_e(c.get("note") or "")}</div>')   # [C16 전수 2026-09-28] 영상 시각은 UTC 저장 — 자르면 아홉 시간 어긋난다
         out.append("</div>")
     out.append('<h2 style="font-size:14px">판정 노출 (몰-G)</h2>')
     if view["judgments"]:

@@ -33,6 +33,15 @@ def local_time(ts: str | None) -> str:
     return d.strftime("%Y-%m-%d %H:%M")
 
 
+def when(ts: str | None) -> str:
+    """날짜이기도 시각이기도 한 자리(판정 입력 표의 '잰 때' — 관측일은 날짜, 예보 발표는 시각). 날짜는 그대로, 시각이면 local_time.
+
+    [C16 전수 2026-09-28] 입력 표가 `observed_at` 을 원문 그대로 찍어 예보 발표 시각이 `2026-09-28T05:00:00+09:00` 로 나갔다 — 자르지도 않았지만
+    사람 말도 아니다. 날짜(`YYYY-MM-DD`)에 local_time 을 대면 00:00 이 붙어 거짓 정밀도가 생기므로 갈래를 둔다."""
+    s = str(ts or "")
+    return local_time(s) if "T" in s else s
+
+
 STATES: tuple[str, ...] = ("대기", "진행", "완료", "보류", "폐기")
 _STATE_CELL = re.compile(r"<td>(대기|진행|완료|보류|폐기)([^<]*)</td>")
 MISSING_MARKDOWN_NOTE = ("<p class=\"meta\">markdown 모듈이 없어 원문으로 보여 준다 — "

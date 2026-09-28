@@ -196,7 +196,7 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         # [D-21 2026-09-28] 날씨 인용 — 자재 인용과 result 모양이 다르다(citation · days). 이 갈래가 없으면 아래 자재 갈래가 KeyError 로 /judge 전체를 죽인다
         c = r["citation"]
         if r.get("days"):
-            out.append(f"<p><b>단기</b> · 출처 {_e(c.get('source', ''))} · 발표 {_e(str(c.get('observed_at', ''))[:16])} · 재판정 {_e(e['revisit_at'])}</p>")
+            out.append(f"<p><b>단기</b> · 출처 {_e(c.get('source', ''))} · 발표 {_e(render.local_time(c.get('observed_at')))} · 재판정 {_e(e['revisit_at'])}</p>")   # 시각 표기 정본(C16)
             out.append("<table><tr><th>날</th><th>최저~최고</th><th>비 올 확률(최대)</th><th>강수량</th></tr>" + "".join(
                 f"<tr><td>{_e(x['day'])}</td><td>{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃{' (시간대 값)' if x.get('approx') else ''}</td>"
                 f"<td>{'' if x['pop_max'] is None else str(int(x['pop_max'])) + '%'}</td><td>{'' if x['rain_mm'] is None else str(x['rain_mm']) + 'mm'}</td></tr>" for x in r["days"]) + "</table>")
@@ -207,7 +207,7 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         m = r.get("mid") or {}
         if m.get("days"):
             mc = m.get("citation") or {}
-            out.append(f"<p><b>중기</b>({_e(mc.get('region') or '권역')}) · 출처 {_e(mc.get('source', ''))} · 발표 {_e(str(mc.get('observed_at', ''))[:16])}</p>")
+            out.append(f"<p><b>중기</b>({_e(mc.get('region') or '권역')}) · 출처 {_e(mc.get('source', ''))} · 발표 {_e(render.local_time(mc.get('observed_at')))}</p>")
             out.append("<table><tr><th>날</th><th>최저~최고</th><th>비 올 확률(오전·오후 최대)</th><th>날씨</th></tr>" + "".join(
                 f"<tr><td>{_e(x['day'])}</td><td>{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃</td>"
                 f"<td>{'' if x['pop_max'] is None else str(int(x['pop_max'])) + '%'}</td><td>{_e(x.get('sky') or '')}</td></tr>" for x in m["days"]) + "</table>")
@@ -271,7 +271,7 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         out.append(f"<p>{_e(r.get('why', ''))} {_e(r.get('who', ''))}</p>")
     if e["inputs"]:
         out.append("<table><tr><th>본 자료</th><th>잰 때</th><th>출처</th><th>해상도</th><th>근거</th></tr>" +
-                   "".join(f'<tr><td title="{_e(i["axis"])}">{_e(words.axis(i["axis"]))}</td><td>{_e(i["observed_at"])}</td><td>{_e(i["source"])}</td>'
+                   "".join(f'<tr><td title="{_e(i["axis"])}">{_e(words.axis(i["axis"]))}</td><td>{_e(render.when(i["observed_at"]))}</td><td>{_e(i["source"])}</td>'
                            f'<td>{_e(i["resolution"])}</td><td>{_e(words.grade(i["grade"]))}</td></tr>' for i in e["inputs"]) + "</table>")
     if e["notes"]:
         out.append("<ul>" + "".join(f"<li class=\"meta\">{_e(n)}</li>" for n in e["notes"]) + "</ul>")

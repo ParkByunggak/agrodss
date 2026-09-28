@@ -542,6 +542,15 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
                     notes=["원인 후보는 좁히기이지 진단이 아니다 — 확인 하나로 갈린다(격자 symptom_rules · D-18)"])
 
 
+def _issued(iso: Any) -> str:
+    """발표 시각을 농가 말로 — "09-28 05시". 기상청 발표 시각은 KST 로 정의된 사실이라(레코드에 +09:00 이 실려 있다) 변환 없이 글자만 다듬는다.
+    화면의 기록 시각은 4층 `render.local_time` 몫이고 3층은 그 모듈을 부르지 않는다(층 규율)."""
+    s = str(iso or "")
+    if len(s) >= 16 and s[4] == "-" and s[10] == "T":
+        return f"{s[5:10]} {s[11:13]}시"
+    return s[:10]
+
+
 def _fmt_forecast_day(x: dict[str, Any]) -> str:
     t = "" if x["tmin"] is None and x["tmax"] is None else f"{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃{'(시간대 값)' if x.get('approx') else ''}"
     p = "" if x["pop_max"] is None else f" 비 {int(x['pop_max'])}%"
@@ -607,7 +616,7 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         src, issued, res = rows[0].get("source") or "기상청 단기예보", rows[0].get("observed_at") or "", rows[0].get("resolution") or ""
         inputs.append(AxisUse("forecast", str(issued), str(src), str(res), "관측"))
         cit = {"source": src, "observed_at": issued, "resolution": res, "note": "기상청 단기예보 그대로 — 해석·권고 없음(경보는 위험 경보 몫 · D-21)"}
-        parts.append(" · ".join(_fmt_forecast_day(x) for x in days) + f" (기상청 단기예보 · 발표 {str(issued)[:16]})")
+        parts.append(" · ".join(_fmt_forecast_day(x) for x in days) + f" (기상청 단기예보 · 발표 {_issued(issued)})")
     else:
         notes.append(f"단기예보는 못 받았다 — {short_reason}")
         parts.append(f"단기: 못 받음 — {short_reason}")
@@ -618,7 +627,7 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         mcit = {"source": msrc, "observed_at": missued, "resolution": mres, "region": mrows[0].get("region"),
                 "note": "기상청 중기예보(권역) 그대로 — 강수 확률은 오전·오후 중 큰 값 · 강수량은 중기에 없다"}
         parts.append("중기(" + str(mrows[0].get("region") or "권역") + ") " + " · ".join(_fmt_forecast_day(x) for x in mdays)
-                     + f" (기상청 중기예보 · 발표 {str(missued)[:16]})")
+                     + f" (기상청 중기예보 · 발표 {_issued(missued)})")
     else:
         notes.append(f"중기예보는 못 받았다 — {mid_reason}")
         parts.append(f"중기: 못 받음 — {mid_reason}")

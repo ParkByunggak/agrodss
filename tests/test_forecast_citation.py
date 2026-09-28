@@ -78,7 +78,8 @@ def test_with_a_forecast_it_cites_three_days_verbatim_and_marks_approximate_extr
     assert days[1]["pop_max"] == 60 and days[1]["rain_mm"] == 5.0 and days[1]["approx"] is False
     assert days[2]["tmin"] == 9.5 and days[2]["tmax"] == 19.0 and days[2]["approx"] is True   # 최저·최고가 없는 날은 시간대 값 — 표기에 남는다
     s = e.result["summary"]
-    assert "09-29 11~22℃ 비 60% 5.0mm" in s and "09-30 10~19℃(시간대 값) 비 20%" in s and "기상청 단기예보" in s and "발표 2026-09-28T05:00" in s
+    assert "09-29 11~22℃ 비 60% 5.0mm" in s and "09-30 10~19℃(시간대 값) 비 20%" in s and "기상청 단기예보" in s and "발표 09-28 05시" in s
+    assert "T05" not in s and "+09:00" not in s                                            # ISO 시각을 농가 줄에 그대로 내지 않는다
     assert e.result["citation"]["source"] == "external:kma:vilage" and e.inputs[0].axis == "forecast"
     for bad in ("권고", "해야", "주의", "위험"):
         assert bad not in s                                                                # 해석·권고를 붙이지 않는다
@@ -97,7 +98,7 @@ def test_mid_term_days_follow_the_short_window_verbatim_and_the_short_window_win
     assert m["citation"]["source"] == "external:kma_midfcst" and m["citation"]["region"] == "괴산" and m["why"] is None
     assert [i.source for i in e.inputs] == ["external:kma:vilage", "external:kma_midfcst"]                                     # 원천 둘이 입력에 따로
     s = e.result["summary"]
-    assert "09-30 10~19℃(시간대 값) 비 20%" in s and "중기(괴산) 10-01 7~17℃ 비 70% · 10-02 6~18℃ 비 20% · 10-05 5~16℃ 비 40% (기상청 중기예보 · 발표 2026-09-27T18:00)" in s
+    assert "09-30 10~19℃(시간대 값) 비 20%" in s and "중기(괴산) 10-01 7~17℃ 비 70% · 10-02 6~18℃ 비 20% · 10-05 5~16℃ 비 40% (기상청 중기예보 · 발표 09-27 18시)" in s
     lines = s.split("\n")                                                                  # 지평마다 한 줄 — 한 줄로 이으면 휴대폰에서 못 읽는다
     assert len(lines) == 3 and lines[0].startswith("09-28 ") and lines[1].startswith("중기(괴산) ") and lines[2].startswith("장기: 없음")
     for bad in ("권고", "해야", "주의", "위험"):
@@ -164,6 +165,9 @@ def test_the_chat_card_and_judge_page_render_a_citation_without_crashing(srv, mo
     body = resp.read().decode("utf-8", "replace")
     assert resp.status == 200 and "날씨 인용(단기·중기 예보)" in body and "비 올 확률(최대)" in body and "2026-09-29" in body and "(시간대 값)" in body
     assert "비 올 확률(오전·오후 최대)" in body and "2026-10-05" in body and "흐리고 비" in body and "<b>중기</b>(괴산)" in body   # 중기 표 — 단기와 다른 열
+    from frontend import render
+    assert f"발표 {render.local_time('2026-09-28T05:00:00+09:00')}" in body and f"발표 {render.local_time('2026-09-27T18:00:00+09:00')}" in body   # 시각 표기 정본(C16) — 손으로 자르지 않는다
+    assert "2026-09-28T05:00" not in body
     assert "forecast_citation" not in body.replace('title="forecast_citation"', "")
     # 반대편 — 중기를 못 받으면 그 이유가 화면에(빈 표가 아니라)
     monkeypatch.setattr(jr, "gather_mid", lambda s0: (None, "중기예보 원천 no_region: 권역을 못 찾았다"))
