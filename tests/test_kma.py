@@ -39,6 +39,35 @@ def test_parse_daily_obs_discards_inconsistent_average_only():
     assert recs[0]["values"]["ta_avg"] is None and recs[0]["values"]["tmax"] == 27.3
 
 
+def test_fetch_recent_obs_stops_at_the_first_wet_day_and_at_the_first_failure(monkeypatch):
+    """[D-20 2026-09-29] 어제부터 뒤로 하루씩 — 비 온 날을 만나면 멈춘다(무강수 일수엔 그 날만 필요) · 원천이 죽으면 첫 실패에서 멈춘다 · 지난 날은 캐시(사실은 안 바뀐다)."""
+    monkeypatch.setenv("KMA_API_HUB_KEY", "x")
+    kma._OBS_CACHE.clear()
+    calls = []
+
+    def fake(stn, day):
+        calls.append(day.isoformat())
+        rn = 2.0 if day.isoformat() == "2026-09-25" else 0.0
+        return {"status": "success", "records": [{"kind": "observation.weather_daily", "observed_at": day.isoformat(), "station": stn, "values": {"rn_day_mm": rn}}]}
+
+    monkeypatch.setattr(kma, "fetch_daily_obs", fake)
+    r = kma.fetch_recent_obs(131, datetime(2026, 9, 28).date(), 30)
+    assert r["status"] == "success" and r["stopped"] == "wet" and r["days_seen"] == 3 and calls == ["2026-09-27", "2026-09-26", "2026-09-25"]
+    assert [x["observed_at"] for x in r["records"]] == ["2026-09-27", "2026-09-26", "2026-09-25"]
+    calls.clear()
+    r2 = kma.fetch_recent_obs(131, datetime(2026, 9, 28).date(), 30)
+    assert r2["days_seen"] == 3 and calls == []                                              # 지난 날은 캐시 — 다시 안 부른다
+    monkeypatch.setattr(kma, "fetch_daily_obs", lambda stn, day: {"status": "error", "message": "HTTP 503", "records": []})
+    kma._OBS_CACHE.clear()
+    r3 = kma.fetch_recent_obs(131, datetime(2026, 9, 28).date(), 30)
+    assert r3["status"] == "error" and r3["days_seen"] == 0 and r3["records"] == [] and "503" in r3["message"]   # 30번 매달리지 않는다
+    monkeypatch.setattr(kma, "fetch_daily_obs", lambda stn, day: {"status": "success", "records": [{"kind": "observation.weather_daily", "observed_at": day.isoformat(), "station": stn, "values": {"rn_day_mm": 0.0}}]})
+    kma._OBS_CACHE.clear()
+    r4 = kma.fetch_recent_obs(131, datetime(2026, 9, 28).date(), 5)
+    assert r4["stopped"] == "lookback" and r4["days_seen"] == 5 and len(r4["records"]) == 5
+    kma._OBS_CACHE.clear()
+
+
 def test_fetch_daily_obs_without_key(monkeypatch):
     for n in ("AGRODSS_KMA_API_HUB_KEY", "KMA_API_HUB_KEY", "KMA__API_HUB_KEY", "EXTERNAL_API__KMA_API_HUB_KEY"):
         monkeypatch.delenv(n, raising=False)

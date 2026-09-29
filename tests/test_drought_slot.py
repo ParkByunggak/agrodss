@@ -8,7 +8,7 @@ from __future__ import annotations
 import copy
 import http.client
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -84,6 +84,52 @@ def test_with_a_threshold_the_days_since_the_last_rain_or_irrigation_decide(tmp_
     assert not SD.judge_drought_alert(s, TODAY, evts=[], observations=[{"id": "o3", "text": "비료 줬다", "observed_at": TODAY.isoformat()}]).kind == "판단함"   # '비료' 는 비가 아니다
 
 
+def _obs(day: str, rn, stn: int = 131):
+    return {"kind": "observation.weather_daily", "axis": ["temp", "precip"], "observed_at": day, "fetched_at": "2026-09-28T06:00:00+09:00",
+            "source": "external:kma_sfcdd", "resolution": f"station:{stn}", "station": stn, "values": {"tmax": 20.0, "tmin": 10.0, "ta_avg": 15.0, "rn_day_mm": rn, "ss_day_hr": 5.0}}
+
+
+def test_the_last_rain_day_also_comes_from_kma_observed_daily_precipitation(tmp_path, monkeypatch):
+    """[발행자 2026-09-29 "이미 기상청 현시점 이전의 무강수일을 가지고 있다 — 이를 활용해서 관수를 권고해야"] 마지막 비 온 날의 원천 셋 — 농가 관찰 · 관수 사건 ·
+    기상청 관측. 가장 최근 날이 이긴다 · 비 온 날 = 일강수 ≥ 0.1mm(기상청 강수일 정의 · 격자 wet_mm 이 있으면 그것) · 0.0 은 비가 아니다."""
+    _synthetic_grid(tmp_path, monkeypatch)
+    s = _subject()
+    obs = [_obs("2026-09-27", 0.0), _obs("2026-09-26", 0.0), _obs("2026-09-25", 3.5), _obs("2026-09-24", 0.1)]
+    e = SD.judge_drought_alert(s, TODAY, evts=[], observations=[], obs_rain=obs)                # 농가 기록 없이 관측만으로 — 25일 비 → 3일
+    assert e.kind == "판단함" and e.result["last_wet"] == "2026-09-25" and e.result["dry_days"] == 3 and e.result["due"] is False
+    assert "기상청 관측 지점 131" in e.result["summary"] and e.result["wet_source"] == "기상청 관측 지점 131"
+    assert any(i.axis == "precip" and i.source == "external:kma_sfcdd" for i in e.inputs) and any("4일 읽음" in n for n in e.notes)
+    rain = [{"id": "o1", "text": "어제 비가 왔다", "observed_at": "2026-09-27"}]                 # 농가 관찰이 더 최근이면 그쪽
+    e2 = SD.judge_drought_alert(s, TODAY, evts=[], observations=rain, obs_rain=obs)
+    assert e2.result["last_wet"] == "2026-09-27" and e2.result["wet_source"] == "농가 관찰" and e2.result["dry_days"] == 1
+    trace = [_obs("2026-09-27", 0.05)]                                                          # 0.05mm 는 강수일이 아니다(0.1 미만) → 비 온 날 없음
+    e3 = SD.judge_drought_alert(s, TODAY, evts=[], observations=[], obs_rain=trace, obs_rain_why=None)
+    assert e3.kind == "판단 불가(데이터)" and "비 온 날이 없다(1일만 받음)" in e3.result["why"]
+
+
+def test_thirty_dry_observed_days_is_a_judgement_not_a_question(tmp_path, monkeypatch):
+    _synthetic_grid(tmp_path, monkeypatch)
+    dry30 = [_obs((TODAY - timedelta(days=k)).isoformat(), 0.0) for k in range(1, 31)]
+    e = SD.judge_drought_alert(_subject(), TODAY, evts=[], observations=[], obs_rain=dry30)
+    assert e.kind == "판단함" and e.result["dry_days"] == 30 and e.result["due"] is True and e.result["last_wet"] is None
+    assert e.result["summary"].startswith("최근 30일 동안 비도 관수 기록도 없습니다(기상청 관측 지점 131)") and "관수 검토" in e.result["summary"]
+
+
+def test_without_observed_rain_the_reason_travels_and_the_grid_can_override_wet_mm(tmp_path, monkeypatch):
+    _synthetic_grid(tmp_path, monkeypatch, rules=dict(RULES, wet_mm=1.0))
+    s = _subject()
+    e = SD.judge_drought_alert(s, TODAY, evts=[], observations=[], obs_rain=None, obs_rain_why="기상청 관측 키 없음(검사)")
+    assert e.kind == "판단 불가(데이터)" and "기상청 관측도 없다 — 기상청 관측 키 없음(검사)" in e.result["why"] and any("키 없음(검사)" in n for n in e.notes)
+    e2 = SD.judge_drought_alert(s, TODAY, evts=[], observations=[], obs_rain=[_obs("2026-09-27", 0.5), _obs("2026-09-20", 2.0)])
+    assert e2.result["last_wet"] == "2026-09-20" and e2.result["dry_days"] == 8                  # 격자 wet_mm 1.0 — 0.5mm 는 비가 아니다
+    from judge import run as judge_run
+    for n in ("AGRODSS_KMA_API_HUB_KEY", "KMA_API_HUB_KEY", "KMA__API_HUB_KEY", "EXTERNAL_API__KMA_API_HUB_KEY"):
+        monkeypatch.delenv(n, raising=False)
+    recs, why = judge_run.gather_obs_rain(dict(s, lat=36.75, lon=127.98), TODAY)
+    assert recs is None and "키 없음" in why
+    assert judge_run.gather_obs_rain(dict(s, lat=None, lon=None), TODAY)[1].startswith("재배 단위에 좌표가 없다")
+
+
 def test_rain_words_are_one_canon_in_layer_one():
     assert chat.rain_in("어제 비가 왔다") and chat.rain_in("소나기 지나감") and not chat.rain_in("비료 줬다") and not chat.rain_in("비닐 덮었다")
     src = (grid_schema.ROOT / "judge" / "stage_decisions.py").read_text(encoding="utf-8")
@@ -104,7 +150,8 @@ def test_the_chat_routes_a_drought_question_to_the_decision_and_judge_shows_the_
     assert "가뭄 · 관수 판단" in body and "drought_alert" not in body.replace('title="drought_alert"', "")
 
 
-@pytest.mark.parametrize("bad, word", [({"dry_days": "7"}, "정수"), ({"dry_days": 0}, "정수"), ({"dry_days": True}, "정수"), ([7], "dict"), ({"dry_days": 7, "source": 3}, "source")])
+@pytest.mark.parametrize("bad, word", [({"dry_days": "7"}, "정수"), ({"dry_days": 0}, "정수"), ({"dry_days": True}, "정수"), ([7], "dict"), ({"dry_days": 7, "source": 3}, "source"),
+                                       ({"dry_days": 7, "wet_mm": "0.1"}, "wet_mm"), ({"dry_days": 7, "wet_mm": -1}, "wet_mm")])   # [2026-09-29] 선택 키 wet_mm 도 형태를 본다
 def test_validator_rejects_malformed_thresholds(bad, word):
     unit = copy.deepcopy(grid_schema.load(grid_schema.GRID_DIR / "jjokpa_autumn.json"))
     unit["stages"][2][SD.DROUGHT_RULES_KEY] = bad

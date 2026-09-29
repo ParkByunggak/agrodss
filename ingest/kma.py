@@ -145,6 +145,35 @@ def fetch_daily_obs(stn: int, day: date) -> dict[str, Any]:
     return {"status": "success" if recs else "no_data", "records": recs}
 
 
+# [D-20 · 발행자 2026-09-29 "이미 기상청 현시점 이전의 무강수일을 가지고 있다 — 이를 활용해서 관수를 권고해야"] 지난 날의 일자료는 바뀌지 않는다 —
+# 같은 프로세스 안에서 같은 (지점, 날)을 다시 부르지 않는다(오늘은 담지 않는다 — 하루가 끝나야 확정). 예보 메모(§5 ⑦)와 다르다: 관측은 사실이지 대리값이 아니다.
+_OBS_CACHE: dict[tuple[int, str], list[dict[str, Any]]] = {}
+
+
+def fetch_recent_obs(stn: int, today: date, lookback: int, wet_mm: float = 0.1) -> dict[str, Any]:
+    """어제부터 `lookback` 일 뒤로 하루씩(kma_sfcdd 는 tm 단일일 — VELA 정본 양식) — **비 온 날(일강수 ≥ wet_mm)을 만나면 멈춘다**(무강수 일수엔 마지막
+    비 온 날만 필요하다) · 원천이 죽으면 첫 실패에서 멈춘다(30번 매달리지 않는다). 돌려주는 것: 받은 레코드(최근 날부터) · 몇 날을 봤는지 · 멈춘 이유."""
+    key = hub_key()
+    if not key:
+        return {"status": "error", "message": "기상청 apihub 키 없음 (KMA_API_HUB_KEY)", "records": [], "days_seen": 0}
+    out: list[dict[str, Any]] = []
+    for back in range(1, lookback + 1):
+        day = today - timedelta(days=back)
+        ck = (stn, day.isoformat())
+        if ck in _OBS_CACHE:
+            recs = _OBS_CACHE[ck]
+        else:
+            r = fetch_daily_obs(stn, day)
+            if r["status"] in ("error", "awaiting_approval"):
+                return {"status": r["status"], "message": r.get("message", ""), "records": out, "days_seen": back - 1}
+            recs = [x for x in r["records"] if x.get("station") == stn]
+            _OBS_CACHE[ck] = recs
+        out += recs
+        if any((x["values"].get("rn_day_mm") or 0) >= wet_mm for x in recs):
+            return {"status": "success", "records": out, "days_seen": back, "stopped": "wet"}
+    return {"status": "success", "records": out, "days_seen": lookback, "stopped": "lookback"}
+
+
 # ── ② 일별 평년값 sfc_norm1 (VELA 인용: _COLS) ────────────────────────────────────────
 _NORM_COLS = ["tmst", "stn", "mm", "dd", "ta", "ta_max", "ta_min", "rn", "ev", "ws", "hm", "pv", "ss", "ca_tot", "pa", "ps"]
 _NORM_NUM = {"ta", "ta_max", "ta_min", "rn", "ev", "ws", "hm", "pv", "ss", "ca_tot", "pa", "ps"}

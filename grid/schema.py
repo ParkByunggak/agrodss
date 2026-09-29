@@ -136,6 +136,8 @@ def _validate_drought_rules(rules: Any, tag: str, err) -> None:
         err(f"{tag}: drought_rules.dry_days 는 1 이상 **정수**(무강수 임계 일수)")
     if "source" in rules and not isinstance(rules["source"], str):
         err(f"{tag}: drought_rules.source 는 str")
+    if "wet_mm" in rules and not (isinstance(rules["wet_mm"], (int, float)) and not isinstance(rules["wet_mm"], bool) and rules["wet_mm"] >= 0):
+        err(f"{tag}: drought_rules.wet_mm 은 0 이상 수(비 온 날로 세는 일강수 mm — 없으면 기상청 강수일 정의 0.1)")   # [2026-09-29] 선택 — 발행자가 정하면 그것이 이긴다
 
 
 def _validate_symptom_rules(rules: Any, tag: str, err) -> None:

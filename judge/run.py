@@ -10,7 +10,7 @@ from typing import Any
 from ingest import events as ev
 from ingest import feedback as fb
 from ingest import kma, media, ncpms, outlook, parcels, soil_store
-from judge import boundary, evolve, harvest_timing, material_citation, plan_vs_actual, risk_alert, stage_decisions
+from judge import boundary, evolve, harvest_timing, material_citation, plan_vs_actual, registry, risk_alert, stage_decisions
 from judge.envelope import Envelope
 
 
@@ -56,6 +56,24 @@ def gather_mid(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, st
     if r.get("status") != "success":
         return None, f"중기예보 원천 {r.get('status')}: {r.get('message', '')}"
     return r["records"], (f"일부만 — {r['partial']}" if r.get("partial") else "")
+
+
+def gather_obs_rain(subject: dict[str, Any], today: date) -> tuple[list[dict[str, Any]] | None, str]:
+    """[D-20 · 발행자 2026-09-29 "기상청 현시점 이전의 무강수일을 활용해서 관수를 권고해야"] 최근접 관측 지점의 지난 일강수(kma_sfcdd) — 마지막 비 온 날의
+    원천. 좌표·apihub 키가 있을 때만. 없으면 (None, 이유) — 가뭄 판단은 그때 농가의 비·관수 기록으로만 센다."""
+    lat, lon = subject.get("lat"), subject.get("lon")
+    if lat is None or lon is None:
+        return None, "재배 단위에 좌표가 없다(I-6 — 주소→좌표는 ingest.soil_exam 지오코딩)"
+    if not kma.hub_key():
+        return None, "기상청 관측 키 없음(.env KMA_API_HUB_KEY — 지상 일자료)"
+    stn = kma.nearest_station(float(lat), float(lon))
+    if not stn:
+        return None, "가까운 관측 지점을 못 찾았다"
+    d = registry.get("drought_alert")
+    r = kma.fetch_recent_obs(int(stn["id"]), today, int(d.params["lookback_days"]), float(d.params["wet_mm"]))
+    if r["status"] != "success":
+        return (r["records"] or None), f"관측 원천 {r['status']}: {r.get('message', '')}(지점 {stn['name']} · {r.get('days_seen', 0)}일까지 받음)"
+    return r["records"], ""
 
 
 def gather_outlook(today: date) -> tuple[list[dict[str, Any]] | None, str]:
@@ -105,6 +123,7 @@ def all_judgments(today: date | None = None, only: str | None = None,
         mid, mwhy = gather_mid(s0)                              # [D-21 중기] 단기와 별개 원천 · 별개 이유 — 한쪽이 없어도 다른 쪽은 낸다
         lng, lwhy = gather_outlook(today)                       # [D-21 장기] 수동 정본 — 좌표·키 없이도 등재만 있으면 낸다
         pest, pwhy = gather_pest(s0, today)
+        obs_rain, orwhy = gather_obs_rain(s0, today)            # [D-20] 기상청 지난 일강수 — 마지막 비 온 날의 원천(농가 기록과 함께 센다)
         evts = ev.list_records(s0.get("id"), "event")
         ledger = ev.list_records(s0.get("id"))                 # 관찰 · 농가 계획 · 납품 계획일까지(M-10 결정 등록이 쓴다)
         reasons = ev.list_records(s0.get("id"), "decision.noncompliance")
@@ -112,7 +131,7 @@ def all_judgments(today: date | None = None, only: str | None = None,
         caps = fb.active_caps(s0.get("id"))
         # [M-3 · I-5 §3-4] 경계 게이트 — 모든 입력을 모은 뒤, 판정 직전, 한 번
         # [D-18 직렬 게이트 2026-09-27] 물으신 말(said)도 같은 문으로 — 원장에 없는 입력이라고 게이트를 비켜 가면 관문의 입력이 새는 형태
-        s, recs = boundary.gate(s0, forecast=forecast, mid=mid, outlook=lng, pest=pest, events=evts, ledger=ledger, reasons=reasons, videos=videos, caps=caps,
+        s, recs = boundary.gate(s0, forecast=forecast, mid=mid, outlook=lng, pest=pest, obs_rain=obs_rain, events=evts, ledger=ledger, reasons=reasons, videos=videos, caps=caps,
                                 prescriptions=prescriptions, said=said)
         envs = [harvest_timing.judge(s, forecast=recs["forecast"], today=today),
                 risk_alert.judge(s, forecast=recs["forecast"], today=today, pest=recs["pest"], evts=recs["events"]),   # [B1] 수확 사건
@@ -126,8 +145,10 @@ def all_judgments(today: date | None = None, only: str | None = None,
                                           prescriptions=recs["prescriptions"], unreadable=unreadable, said=recs["said"],
                                           forecast_why=why,     # [D-21] 예보를 못 받은 이유를 날씨 인용이 그대로 싣는다(관문의 입력 — 빈 채 넘기면 이유 없는 미비)
                                           mid=recs["mid"], mid_why=mwhy,   # [D-21 중기] 게이트를 지난 중기 줄 + 못 받은 이유 — 둘 다 넘긴다(입력 도착 래칫의 대상)
-                                          outlook=recs["outlook"], outlook_why=lwhy)   # [D-21 장기] 같은 형태 — 셋째 입력 쌍
+                                          outlook=recs["outlook"], outlook_why=lwhy,   # [D-21 장기] 같은 형태 — 셋째 입력 쌍
+                                          obs_rain=recs["obs_rain"], obs_rain_why=orwhy)   # [D-20] 넷째 입력 쌍 — 지난 일강수 + 못 받은 이유
         # [M-6 · D-14] 자율진화 보수 상한 — 판정기 뒤, 돌려주기 전, 한 번. 규칙은 안 바꾸고 등급만 낮춘다
         envs = evolve.apply_caps(s["id"], envs, caps=recs["caps"])
-        out.append((s, envs, {"forecast": why or "예보 사용", "mid": mwhy or "중기예보 사용", "outlook": lwhy or "장기 전망(등재분) 사용", "pest": pwhy or "예찰 사용"}))
+        out.append((s, envs, {"forecast": why or "예보 사용", "mid": mwhy or "중기예보 사용", "outlook": lwhy or "장기 전망(등재분) 사용", "pest": pwhy or "예찰 사용",
+                              "obs_rain": orwhy or "지난 일강수(기상청 관측) 사용"}))
     return out

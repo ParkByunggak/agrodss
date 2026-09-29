@@ -153,6 +153,10 @@ DROUGHT_ALERT = _R(registry.Decision(
          "임계가 비어 있으면 판단 불가(지식) — 어느 격자의 어느 칸이 비었는지와 지금 칸의 수분 값을 함께. 관수량·방법은 말하지 않는다(그것은 별도 지식).",
     revisit_days=1,
     params={"rules_key": DROUGHT_RULES_KEY, "lookback_days": 30, "irrigation_event": "관수",
+            # [발행자 2026-09-29 "이미 기상청 현시점 이전의 무강수일을 가지고 있다 — 이를 활용해서 관수를 권고해야"] 마지막 비 온 날의 원천 하나 더: 최근접 지점의
+            # 지난 일강수(kma_sfcdd). 비 온 날 = 일강수 ≥ wet_mm — 0.1mm 는 기상청 「강수일수」 통계 정의(일강수 0.1mm 이상)이지 세션의 값이 아니다.
+            # 격자 칸 drought_rules.wet_mm 이 있으면 그것이 이긴다(발행자 정본).
+            "wet_mm": 0.1, "wet_mm_source": "기상청 강수일수 정의 — 일강수 0.1mm 이상(기상자료개방포털 용어 해설)",
             "source": "D-20 — 발행자 실사용 2026-09-28. 임계는 발행자·농진청 정본 몫 — 세션이 정하지 않는다(대리값이 경보로 나간다)"}))
 
 # [D-21 자리 2026-09-28] 발행자 *"KMA api 가 있는데 날씨를 안내하지 않고, 예측도 하지 않는 이유는?"* — 예보는 판단 넷의 **입력**이었지 산출이 아니었다(I-1: 등록된
@@ -705,8 +709,10 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
                     notes=notes)
 
 
-def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None = None, observations: list[dict[str, Any]] | None = None) -> Envelope:
-    """[D-20 자리] 가뭄 · 관수 판단. 임계(격자 칸 drought_rules)가 없으면 어디가 비었는지와 지금 칸의 수분 값을 말하고, 있으면 마지막 비·관수 뒤 날수로 낸다."""
+def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None = None, observations: list[dict[str, Any]] | None = None,
+                        obs_rain: list[dict[str, Any]] | None = None, obs_rain_why: str | None = None) -> Envelope:
+    """[D-20 자리] 가뭄 · 관수 판단. 임계(격자 칸 drought_rules)가 없으면 어디가 비었는지와 지금 칸의 수분 값을 말하고, 있으면 마지막 비·관수 뒤 날수로 낸다.
+    마지막 비 온 날의 원천은 셋 — 농가의 비 관찰(chat.rain_in) · 관수 사건 · **기상청 지난 일강수**(obs_rain · 발행자 2026-09-29). 셋 중 가장 최근 날."""
     did, sid, as_of = "drought_alert", subject.get("id", "?"), _now()
     unit, miss = grid_schema.load_unit(subject)
     if miss is not None:
@@ -733,30 +739,51 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
                         result={"why": f"격자 {uid} 칸 {stage.get('order')} 의 {key}(무강수 임계 일수) 미채움 — D-20 · 고칠 파일 {grid_schema.unit_file_name(uid)} · 지금 칸 {water_txt}",
                                 "summary": f"가뭄을 판단할 기준(무강수 며칠)이 아직 없습니다 — 지금 칸은 {water_txt}. 기준이 서면 관수 검토 여부를 냅니다"})
     threshold = int(rules["dry_days"])
+    wet_mm = float(rules.get("wet_mm", d.params["wet_mm"]))                # 비 온 날의 기준 — 격자(발행자)가 있으면 그것, 없으면 기상청 강수일 정의
     since = (today - timedelta(days=lookback)).isoformat()
     from ingest.chat import rain_in                                        # 비 어휘 정본은 1층 하나(증상 어휘와 같은 규율)
-    wet_days = [str(o.get("observed_at") or "")[:10] for o in (observations or []) if rain_in(o.get("text") or "")]
+    wet: list[tuple[str, str]] = [(str(o.get("observed_at") or "")[:10], "농가 관찰") for o in (observations or []) if rain_in(o.get("text") or "")]
     irr = str(d.params["irrigation_event"])
-    wet_days += [str(e.get("observed_at") or "")[:10] for e in (evts or []) if e.get("kind") == "event" and e.get("type") == irr]
-    wet_days = [w for w in wet_days if w and since <= w <= today.isoformat()]
-    if not wet_days:
+    wet += [(str(e.get("observed_at") or "")[:10], "관수") for e in (evts or []) if e.get("kind") == "event" and e.get("type") == irr]
+    obs_rows = [r for r in (obs_rain or []) if r.get("kind") == "observation.weather_daily"]
+    stn = next((r.get("station") for r in obs_rows if r.get("station") is not None), None)
+    wet += [(str(r.get("observed_at") or "")[:10], f"기상청 관측 지점 {stn}") for r in obs_rows
+            if (r.get("values") or {}).get("rn_day_mm") is not None and float(r["values"]["rn_day_mm"]) >= wet_mm]
+    wet = [(w, src) for w, src in wet if w and since <= w <= today.isoformat()]
+    inputs = _anchor_inputs(subject, anchor)
+    notes = ["관수 검토는 권고이지 양·방법이 아니다 — 임계는 격자 drought_rules(D-20 · 발행자 정본)"]
+    if obs_rows:
+        inputs.append(AxisUse("precip", str(obs_rows[0].get("fetched_at") or ""), str(obs_rows[0].get("source") or ""), str(obs_rows[0].get("resolution") or ""), "관측"))
+        notes.append(f"기상청 지난 일강수 {len(obs_rows)}일 읽음(지점 {stn}) · 비 온 날 = 일강수 {wet_mm:g}mm 이상")
+    else:
+        notes.append(f"기상청 지난 일강수 없음 — {obs_rain_why or '이유 없음'}")
+    if not wet:
+        # 기상청 관측이 뒤돌아본 날 전부를 덮었는데 비가 없었다면 그것도 사실이다 — 무강수 lookback 일 이상(원천이 있는데 묻지 않는다)
+        obs_days = {str(r.get("observed_at") or "")[:10] for r in obs_rows}
+        if obs_days and len(obs_days) >= lookback:
+            last_wet, dry, src = None, lookback, f"기상청 관측 지점 {stn}"
+            summary = f"최근 {lookback}일 동안 비도 관수 기록도 없습니다({src}) — 무강수 {lookback}일 이상, 임계 {threshold}일 이상: 관수 검토 · {water_txt}"
+            return Envelope("판단함", did, sid, as_of, inputs=inputs, grade="추정", revisit_at=(today + timedelta(days=1)).isoformat(),
+                            result={"dry_days": dry, "threshold": threshold, "last_wet": None, "wet_source": src, "due": True, "water": dict(water), "summary": summary}, notes=notes)
         return Envelope("판단 불가(데이터)", did, sid, as_of,
                         missing=[{"axis": "precip", "who_can_fill": "농가 — 마지막으로 비 온 날 또는 관수한 날 한 줄"}],
-                        result={"why": f"최근 {lookback}일에 비 관찰도 관수 사건도 없다 — 무강수 일수를 셀 수 없다", "summary": f"마지막으로 비 온 날이나 관수한 날을 알면 판단합니다 — 지금 칸은 {water_txt}"})
-    last_wet = max(wet_days)
+                        result={"why": f"최근 {lookback}일에 비 관찰도 관수 사건도 없고 기상청 관측도 {'비 온 날이 없다(' + str(len(obs_days)) + '일만 받음)' if obs_days else '없다 — ' + (obs_rain_why or '')} — 무강수 일수를 셀 수 없다",
+                                "summary": f"마지막으로 비 온 날이나 관수한 날을 알면 판단합니다 — 지금 칸은 {water_txt}"}, notes=notes)
+    last_wet, src = max(wet)
     dry = (today - date.fromisoformat(last_wet)).days
     due = dry >= threshold
-    summary = (f"마지막 비·관수 {last_wet} 뒤 무강수 {dry}일 — 임계 {threshold}일 {'이상: 관수 검토' if due else '미만: 아직 관수 판단 아님'} · {water_txt}")
-    return Envelope("판단함", did, sid, as_of, inputs=_anchor_inputs(subject, anchor), grade="추정", revisit_at=(today + timedelta(days=1)).isoformat(),
-                    result={"dry_days": dry, "threshold": threshold, "last_wet": last_wet, "due": due, "water": dict(water), "summary": summary},
-                    notes=["관수 검토는 권고이지 양·방법이 아니다 — 임계는 격자 drought_rules(D-20 · 발행자 정본)"])
+    summary = (f"마지막 비·관수 {last_wet}({src}) 뒤 무강수 {dry}일 — 임계 {threshold}일 {'이상: 관수 검토' if due else '미만: 아직 관수 판단 아님'} · {water_txt}")
+    return Envelope("판단함", did, sid, as_of, inputs=inputs, grade="추정", revisit_at=(today + timedelta(days=1)).isoformat(),
+                    result={"dry_days": dry, "threshold": threshold, "last_wet": last_wet, "wet_source": src, "due": due, "water": dict(water), "summary": summary},
+                    notes=notes)
 
 
 def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pest=None, harvest: Envelope | None = None,
               prescriptions: list[dict[str, Any]] | None = None, unreadable: list[str] | None = None,
               said: list[dict[str, Any]] | None = None, forecast_why: str | None = None,
               mid: list[dict[str, Any]] | None = None, mid_why: str | None = None,
-              outlook: list[dict[str, Any]] | None = None, outlook_why: str | None = None) -> list[Envelope]:
+              outlook: list[dict[str, Any]] | None = None, outlook_why: str | None = None,
+              obs_rain: list[dict[str, Any]] | None = None, obs_rain_why: str | None = None) -> list[Envelope]:
     evts = evts or []
     obs = [e for e in evts if e.get("kind") == "observation.note"]
     targets = [e for e in evts if e.get("kind") == "plan.target_date"]
@@ -766,5 +793,5 @@ def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pe
             judge_pest_alert(subject, today, forecast, pest), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions, unreadable),
             judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions, unreadable), judge_drainage_alert(subject, today, forecast, pest),
             judge_ship_or_store(subject, today, targets, harvest), judge_forecast_citation(subject, today, forecast, forecast_why, mid, mid_why, outlook, outlook_why),
-            judge_drought_alert(subject, today, evts, obs),
+            judge_drought_alert(subject, today, evts, obs, obs_rain, obs_rain_why),
             judge_symptom_triage(subject, today, obs + said_obs)]
