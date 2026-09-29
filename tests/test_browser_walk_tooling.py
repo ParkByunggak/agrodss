@@ -42,7 +42,7 @@ def test_the_walk_kills_only_the_pid_it_started():
 
 
 def test_the_scripts_exist_and_take_the_chromium_path_from_env():
-    for name in ("walk.cjs", "overflow.cjs", "composer.cjs", "static_overflow.cjs"):    # static_overflow: 정적 HTML(대장 페이지) 판 · 2026-09-27
+    for name in ("walk.cjs", "overflow.cjs", "composer.cjs", "static_overflow.cjs", "widths.cjs"):    # static_overflow: 정적 HTML(대장 페이지) 판 · 2026-09-27 · widths: 요소별 폭(휴대폰 사이드바 260 결함을 잡은 측정) 2026-09-29
         src = (ROOT / "scripts" / "browser" / name).read_text(encoding="utf-8")
         # 코드 형태로 본다 — 주석에 변수 이름이 적혀 있으면 문자열 포함 검사가 통과한다(주입 미적발 실측 2026-09-27 · §7.1 4번)
         assert "process.env.PLAYWRIGHT_CHROMIUM" in src and 'require("playwright")' in src, name

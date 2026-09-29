@@ -6,6 +6,7 @@
 # 스크립트가 실제로 도는지 못 본다 — 그 빈틈을 이것이 메운다.
 #
 # 쓰는 법   bash scripts/browser/walk.sh [스크립트.cjs]      기본 walk.cjs · overflow.cjs 는 WIDTHS=390,768,1024,1400 로
+#          widths.cjs 는 요소별 폭(사이드바 · 본문 · 문서 — 글이 접혀 넘침 검사가 못 보는 결함) · PAGES=… WIDTH=390 (2026-09-29)
 # 필요     node · playwright(npm -g) · Chromium(/opt/pw-browsers/chromium 또는 PLAYWRIGHT_CHROMIUM 로 지정)
 # 규율     운영 data/ 에는 아무것도 쓰지 않는다 — 모든 AGRODSS_* 경로를 tmp 아래로 돌린다(conftest 와 같은 목록 · 검사가 대조한다)
 #          내리는 것은 이 스크립트가 띄운 PID 하나뿐이다(이름으로 죽이지 않는다)
