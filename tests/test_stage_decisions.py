@@ -128,4 +128,4 @@ def test_run_emits_twelve_envelopes_and_chat_routes_specific_questions():
     assert chat.topic_of("벌레 걱정되는데 괜찮나?") == "risk_alert"          # [2026-09-29] 병·벌레 물음은 칸 비특정 — 오늘 칸 + 다음 칸 위험 전부(pest_alert 는 칸 3 카드일 뿐)
     _, r = chat.send(SID, "웃거름 줘야 하나?", today=T25, now=NOW)
     assert r["text"].startswith(f"[{words.said('판단함')}]")
-    assert "아직 안 함" in r["text"] and "기준이 아직 없음" in r["text"]      # 사람 말로 나온다
+    assert "아직 안 함" in r["text"] and "검정 처방이 오면 냅니다" in r["text"]      # 사람 말로 나온다(양은 처방이 없어 못 낸다 — 2026-09-29 문면)

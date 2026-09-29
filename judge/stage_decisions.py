@@ -56,14 +56,14 @@ def _deadline_day(task: dict[str, Any] | None) -> int | None:
 def _no_deadline(did: str, sid: str, as_of: str, task_name: str) -> Envelope:
     return Envelope("판단 불가(지식)", did, sid, as_of,
                     result={"why": f"격자 작업 '{task_name}' 에 마감(retry.deadline_day)이 없다 — 창 끝으로 지어내지 않는다",
-                            "summary": f"{task_name} 마감 미채움"})
+                            "summary": f"{task_name} 마감이 기준에 없습니다 — 지어내지 않습니다"})
 
 
 def _need_cert(did: str, sid: str, as_of: str) -> Envelope:
     """[코드 평가 B2] cert 는 시비 결정의 필요 축 — 없으면 판단 불가(데이터). 전에는 mats.get(None, []) 로 빈 자재를 들고 '판단함'이 나갔다."""
     return Envelope("판단 불가(데이터)", did, sid, as_of,
                     missing=[{"axis": "cert", "who_can_fill": "농가 — 인증 유형(유기 · 무농약 · 관행) 을 재배 단위에"}],
-                    result={"why": "인증 유형(cert)이 없다 — 자재 갈래를 정할 수 없다", "summary": "인증 유형 대기"})
+                    result={"why": "인증 유형(cert)이 없다 — 자재 갈래를 정할 수 없다", "summary": "인증 유형(유기 · 무농약 · 관행)이 없습니다 — 있어야 자재를 고릅니다"})
 
 
 def _grid_grade(unit: dict[str, Any]) -> str:
@@ -208,14 +208,14 @@ def judge_sowing_window(subject, today: date) -> Envelope:
     if not anchor:
         return Envelope("판단 불가(지식)", "sowing_window", sid, as_of,
                         result={"why": "격자 파종 창은 기준점 상대(anchor -7~0일)라 파종 전 목록에는 달력 기준 적기가 정본에 없다",
-                                "summary": "달력 기준 파종 적기 정본 없음 — 농사로 재배기술 대조(M-15) 뒤"})
+                                "summary": "파종 적기 기준이 아직 없습니다 — 심은 날이 정해지면 그날 기준으로 냅니다"})   # [사유 문면 전수 2026-09-29] 농가 말로 — 정확한 사유는 why
     a = date.fromisoformat(anchor)
     day = (today - a).days
     s, e = _dates(a, stage)
     if day > stage["window"]["to_day"]:
-        return Envelope("해당 없음", "sowing_window", sid, as_of, result={"why": f"이미 파종됨(기준점 {anchor}, {day}일 경과)", "summary": f"이미 파종됨 — 기준점 {anchor}"})
+        return Envelope("해당 없음", "sowing_window", sid, as_of, result={"why": f"이미 파종됨(기준점 {anchor}, {day}일 경과)", "summary": f"이미 심었습니다 — 심은 날 {anchor}, 오늘 {day}일째"})
     return Envelope("판단함", "sowing_window", sid, as_of, inputs=_anchor_inputs(subject, anchor), grade=weakest(["관측", _grid_grade(unit)]),
-                    result={"window_start": s.isoformat(), "window_end": e.isoformat(), "summary": f"파종 창 {s} ~ {e}(격자 칸 1)"})
+                    result={"window_start": s.isoformat(), "window_end": e.isoformat(), "summary": f"파종 때 {s} ~ {e}"})
 
 
 def _prescription(prescriptions: list[dict[str, Any]] | None) -> dict[str, Any] | None:
@@ -265,11 +265,11 @@ def judge_base_fertilization(subject, today: date, prescriptions: list[dict[str,
         return _no_deadline("base_fertilization", sid, as_of, "밑거름")
     if day > deadline:
         return Envelope("해당 없음", "base_fertilization", sid, as_of,
-                        result={"why": f"밑거름 창(파종 마감 {deadline}일)을 지났다 — 이후는 웃거름", "summary": "창 지남 — 웃거름 결정으로"})
+                        result={"why": f"밑거름 창(파종 마감 {deadline}일)을 지났다 — 이후는 웃거름", "summary": f"밑거름 때(파종 뒤 {deadline}일까지)는 지났습니다 — 이제는 웃거름으로 봅니다"})
     if not subject.get("soil_chem"):
         return Envelope("판단 불가(데이터)", "base_fertilization", sid, as_of,
                         missing=[{"axis": "soil_chem", "who_can_fill": "농가 — 토양검정(python -m ingest.fertilizer <주소>, 키 투입) 또는 성적서 값"}],
-                        result={"why": "토양검정 값이 없다", "summary": "토양검정 값 대기"})
+                        result={"why": "토양검정 값이 없다", "summary": "토양검정 값이 없습니다 — 검정 결과가 오면 양을 냅니다"})
     cert = subject.get("cert")
     if not cert:
         return _need_cert("base_fertilization", sid, as_of)
@@ -278,11 +278,11 @@ def judge_base_fertilization(subject, today: date, prescriptions: list[dict[str,
     p = _prescription(prescriptions)
     if p is None and unreadable:
         return _unreadable_envelope("base_fertilization", sid, as_of, list(unreadable),
-                                    {"materials": m, "summary": f"자재 갈래({cert}): {', '.join(m) or '없음'} · 양은 **저장된 처방이 깨져** 대기"})
+                                    {"materials": m, "summary": f"자재({cert}): {', '.join(m) or '없음'} · 양은 저장된 처방을 못 읽어 못 냅니다"})
     if p is None:
         return Envelope("판단 불가(지식)", "base_fertilization", sid, as_of,
                         result={"why": "시비량 처방 정본(흙토람 FrtlzrUse — 검정값 기반)이 아직 이 필지에 없다 — 양을 지어내지 않는다. python -m ingest.fertilizer <주소> 로 받는다",
-                                "materials": m, "summary": f"자재 갈래({cert}): {', '.join(m) or '없음'} · 양은 정본 대기"})
+                                "materials": m, "summary": f"자재({cert}): {', '.join(m) or '없음'} · 양은 검정 처방이 오면 냅니다"})
     # [M-15 ⑥] 처방 정본 도착 — 기비 N·P·K 와 퇴비(kg/10a). 유기 갈래는 화학비료가 아니라 **목표 양분량**으로 읽는다(자재 환산 규칙은 정본 없음)
     v = p.get("values", {})
     compost = {k: v[k] for k in ("compost_cattle", "compost_pig", "compost_chicken", "compost_mixed") if k in v}
@@ -312,19 +312,20 @@ def judge_replant(subject, today: date, observations: list[dict[str, Any]] | Non
         return _no_deadline("replant", sid, as_of, "보식")
     w0 = stage["window"]["from_day"]
     if day < w0 or day > deadline:
-        return Envelope("해당 없음", "replant", sid, as_of, result={"why": f"보식 창({w0}~{deadline}일) 밖 — 오늘 {day}일", "summary": "창 밖"})
+        return Envelope("해당 없음", "replant", sid, as_of, result={"why": f"보식 창({w0}~{deadline}일) 밖 — 오늘 {day}일",
+                                                                       "summary": f"보식할 때가 아닙니다 — 보식은 파종 뒤 {w0}~{deadline}일, 오늘은 {day}일째"})   # "창 밖" 은 낱말 표를 거쳐 "기간이 아닙니다" 가 됐다(SURF-1 전수 2026-09-29)
     obs = observations or []
     words = REPLANT_WORDS
     seen = [o for o in obs if (o.get("observed_at") or "") >= (a + timedelta(days=w0)).isoformat() and any(k in (o.get("text") or "") for k in words)]
     if not seen:
         return Envelope("판단 불가(데이터)", "replant", sid, as_of,
                         missing=[{"axis": "observation", "who_can_fill": "농가 — 출현 상태 한 줄(채팅 관찰: 결주 · 듬성 · 안 났다)"}],
-                        result={"why": "출현 관찰이 없다 — 최종 심급은 농가 관찰", "summary": "출현 관찰 대기"})
+                        result={"why": "출현 관찰이 없다 — 최종 심급은 농가 관찰", "summary": "난 상태를 한 줄 적어 주시면 판단합니다(결주 · 듬성 · 안 났다)"})
     dl = (a + timedelta(days=deadline)).isoformat()
     return Envelope("판단함", "replant", sid, as_of, inputs=_anchor_inputs(subject, anchor), grade=weakest(["관측", _grid_grade(unit)]),
                     revisit_at=(today + timedelta(days=1)).isoformat(),
                     result={"deadline": dl, "observations": [o.get("id") for o in seen],
-                            "summary": f"결주 관찰 {len(seen)}건 — 마감 {dl} 까지 보식(칸 2 retry)"})
+                            "summary": f"결주 관찰 {len(seen)}건 — {dl} 까지 보식(2단계 다시 심기)"})
 
 
 def _delegate_risk(subject, did: str, today: date, forecast, pest) -> Envelope:
@@ -386,11 +387,11 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
     work_date, dl = (a + timedelta(days=wd)).isoformat(), (a + timedelta(days=deadline)).isoformat()
     # [B5] 판별 순서(I-1 §3): 해당하는가 → 지식 → 데이터. 창 지남을 먼저 본다 — 전에는 지식 미비가 먼저라 시즌 내내 그 상태로 남았다
     if day > deadline:
-        return Envelope("해당 없음", did, sid, as_of, result={"why": f"마감({dl})을 지났다", "summary": f"창 지남({dl})"})
+        return Envelope("해당 없음", did, sid, as_of, result={"why": f"마감({dl})을 지났다", "summary": f"웃거름 때가 지났습니다 — 마감 {dl}"})
     if did == "top_dressing_2":
         return Envelope("판단 불가(지식)", did, sid, as_of,
                         result={"why": "'필요 시' 의 필요 여부 판정 규칙이 격자에 미채움(생육 관찰 기준 없음)", "work_date": work_date, "deadline": dl,
-                                "materials": m, "summary": f"필요 여부 규칙 없음 — 창 {work_date}~{dl} · 자재({cert}) {', '.join(m) or '없음'}"})
+                                "materials": m, "summary": f"줄지 말지 가르는 기준이 아직 없습니다 — 때 {work_date}~{dl} · 자재({cert}) {', '.join(m) or '없음'}"})
     # [B3] 이행 판정은 계획 대 실제와 **한 벌** — 같은 매처 · 같은 허용 폭(registry params). 전에는 wd-7 하드코딩 · 예정 경계가 달라
     # 같은 사건이 한쪽은 이행, 다른 쪽은 미이행이었다
     pva = registry.get(plan_vs_actual.DECISION_ID)
@@ -418,7 +419,7 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
                             # [U-21] 요약이 카드에서 읽히는 줄이다 — 여기서도 '없다' 와 '있는데 못 읽었다' 를 가른다.
                             # 안 가르면 판정 종류만 고치고 **사람이 보는 문장은 그대로**인 표현 층 결함이 된다(G1 세 번째 형태).
                             "summary": f"{status} — 작업일 {work_date} · 마감 {dl} · 자재({cert}) {', '.join(m) or '없음'} · "
-                                       + ("양 " + amount_note if p else ("양은 **저장된 처방이 깨져** 대기(다시 받으면 된다)" if unreadable else "양은 정본 대기"))
+                                       + ("양 " + amount_note if p else ("양은 저장된 처방을 못 읽어 못 냅니다(다시 받으면 됩니다)" if unreadable else "양은 검정 처방이 오면 냅니다"))   # 농가 말(2026-09-29 전수)
                                        + (f" · 사유: {reason['reason'][:120]}" if reason else "")},
                     notes=["양(kg/10a)은 지어내지 않는다 — 처방 정본이 없으면 비운다"])
 
@@ -430,12 +431,12 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
     unit, stage, sid, as_of = ctx
     use = str(subject.get("use") or "")
     if subject.get("mall_supply") is False or any(w in use for w in SELF_USE_WORDS):
-        return Envelope("해당 없음", "ship_or_store", sid, as_of, result={"why": f"이번 작기 용도 '{use or '자가'}'(D-8) — 출하 결정 대상 아님", "summary": "자가 작기(D-8)"})
+        return Envelope("해당 없음", "ship_or_store", sid, as_of, result={"why": f"이번 작기 용도 '{use or '자가'}'(D-8) — 출하 결정 대상 아님", "summary": f"이번 작기는 {use or '자가'} 용도라 출하·저장 판단이 없습니다"})
     tg = sorted((t for t in (targets or []) if t.get("target_date")), key=lambda t: t["target_date"])
     if not tg:
         return Envelope("판단 불가(데이터)", "ship_or_store", sid, as_of,
                         missing=[{"axis": "plan.target_date", "who_can_fill": "농가 — 납품 계획일(채팅: '10월 30일 납품 예정')"}],
-                        result={"why": "납품 계획일이 없다", "summary": "납품 계획일 대기"})
+                        result={"why": "납품 계획일이 없다", "summary": "납품 계획일이 없습니다 — 채팅에 '10월 30일 납품 예정' 처럼 한 줄"})
     if harvest is None or harvest.kind != "판단함":
         return Envelope("판단 불가(데이터)", "ship_or_store", sid, as_of, missing=[{"axis": "anchor", "who_can_fill": "수확 시기 판정이 먼저"}],
                         result={"why": "수확 창이 없다"})
@@ -447,7 +448,7 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
     if deadline is None:
         # [B6 코드 쪽 2026-09-20] 전에는 63 을 기본값으로 메웠다(하드코딩 · 대리값 금지 위반) — 격자에 마감이 없으면 지식 미비다
         return Envelope("판단 불가(지식)", "ship_or_store", sid, as_of,
-                        result={"why": "격자 칸 5 '출하 또는 단기 저장' 작업에 마감(retry.deadline_day)이 없다 — 값을 지어내지 않는다", "summary": "출하 마감 미채움"})
+                        result={"why": "격자 칸 5 '출하 또는 단기 저장' 작업에 마감(retry.deadline_day)이 없다 — 값을 지어내지 않는다", "summary": "출하 마감이 기준에 없습니다 — 지어내지 않습니다"})
     a = date.fromisoformat(subject["anchor"])
     caps = []
     if target > a + timedelta(days=deadline):
@@ -533,7 +534,7 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
                                     "summary": f"본 것이 기준이 아는 증상 말과 안 맞습니다 — 기준이 아는 말: {known}. 기준을 넓히면 원인 후보를 냅니다"})
         return Envelope("판단 불가(데이터)", did, sid, as_of,
                         missing=[{"axis": "observation", "who_can_fill": "농가 — 밭에서 본 것 한 줄(잎 색 · 시듦 · 무름 · 반점 …)"}],
-                        result={"why": f"최근 {lookback}일 관찰에 증상 어휘가 없다 — 최종 심급은 농가 관찰", "summary": "증상 관찰 대기"})
+                        result={"why": f"최근 {lookback}일 관찰에 증상 어휘가 없다 — 최종 심급은 농가 관찰", "summary": "본 것을 한 줄 적어 주시면 원인을 좁힙니다"})
     causes: list[dict[str, Any]] = []
     for r, _ in hits:
         for c in r.get("causes") or []:
@@ -724,7 +725,7 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
     water = stage.get("water")
     if not isinstance(water, dict):
         return Envelope("판단 불가(지식)", did, sid, as_of, result={"why": f"격자 {uid} 칸 {stage.get('order')} 의 water 미채움 · 고칠 파일 {grid_schema.unit_file_name(uid)}",
-                                                                     "summary": "이 칸의 수분 요구가 격자에 없어 가뭄을 판단할 수 없습니다"})
+                                                                     "summary": "이 칸의 수분 요구가 기준에 없어 가뭄을 판단할 수 없습니다"})
     water_txt = f"수분 요구 {water.get('demand')} · 결핍 민감 {water.get('deficit_sensitivity')}"
     rules = stage.get(key)
     if not (isinstance(rules, dict) and isinstance(rules.get("dry_days"), int)):

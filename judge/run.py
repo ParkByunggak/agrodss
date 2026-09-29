@@ -66,7 +66,8 @@ def gather_outlook(today: date) -> tuple[list[dict[str, Any]] | None, str]:
     if live:
         return live, tail.lstrip(" ·")
     if not recs:
-        return None, (f"등재된 장기 전망 없음 — 설정 → 장기 전망 등재(또는 {outlook.local_path().name})에 기상청 1·3개월 전망 발표문 수치를 출처와 함께 넣는다(값은 발행자 몫)" + tail)   # [⑤b 뒤 2026-09-29] 파일보다 폼이 먼저
+        # [발행자 2026-09-29 "기상청에 장기예보가 없다는 것인가?"] 아니다 — 1·3개월 전망은 발표되지만 자동으로 받는 길(오픈 API)이 없다(VELA 실측 2026-08-05). 문장이 그것을 말해야 한다
+        return None, (f"등재된 장기 전망 없음 — 기상청 1·3개월 전망은 발표되지만 자동으로 받는 길(오픈 API)이 없어, 발표문 수치를 설정 → 장기 전망 등재(또는 {outlook.local_path().name})에 출처와 함께 넣어야 합니다(값은 발행자 몫)" + tail)
     return None, f"등재된 장기 전망 {len(recs)}건이 모두 지난 기간(마지막 {recs[-1]['period_to']})" + tail
 
 

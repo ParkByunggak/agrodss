@@ -134,7 +134,7 @@ def judge(subject: dict[str, Any], today: date | None = None, psis_search=None) 
         return Envelope("판단 불가(지식)", DECISION_ID, sid, as_of,
                         result={"why": f"'{cert}' 갈래의 자재 규칙 정본이 아직 없다 — 유기(공시) · 관행(PSIS) 두 갈래만 서 있다. "
                                        f"규칙이 서면 답이 바뀌므로 '해당 없음'(= 볼 일이 아니다)이 아니다",
-                                "summary": f"{cert} 갈래 자재 규칙 미정 — 정본 대기"})
+                                "summary": f"{cert} 의 자재 기준이 아직 없습니다 — 지금은 유기 · 관행만 있습니다"})   # [사유 문면 전수 2026-09-29] 농가 말로
     if cert not in CERTS:
         return Envelope("해당 없음", DECISION_ID, sid, as_of,
                         result={"why": f"인증 유형 {cert!r} 은 아는 갈래가 아니다 — 유기 · 무농약 · 관행 중 하나로 적는다"})

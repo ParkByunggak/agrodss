@@ -83,10 +83,10 @@ def test_top_dressing_keeps_judging_the_window_but_names_the_broken_file_for_the
     e = SD.judge_top_dressing(_subject(), "top_dressing_1", TD_TODAY, evts=[], prescriptions=[], unreadable=[name])
     assert e.kind == "판단함"
     assert "판단 불가(데이터)" in e.result["amount"] and name in e.result["amount"] and "없는 것이 아니다" in e.result["amount"]
-    assert "저장된 처방이 깨져" in e.result["summary"]                     # 카드에서 읽히는 줄에서도 갈린다(표현 층)
+    assert "저장된 처방을 못 읽어" in e.result["summary"]                   # 카드에서 읽히는 줄에서도 갈린다(표현 층) — 문면은 농가 말(2026-09-29)
     bare = SD.judge_top_dressing(_subject(), "top_dressing_1", TD_TODAY, evts=[], prescriptions=[], unreadable=[])
     assert "판단 불가(지식)" in bare.result["amount"] and "미도착" in bare.result["amount"]      # 반대편도 그대로
-    assert "양은 정본 대기" in bare.result["summary"]
+    assert "양은 검정 처방이 오면 냅니다" in bare.result["summary"]
 
 
 def test_the_screen_path_carries_the_unreadable_signal_all_the_way():
@@ -99,5 +99,5 @@ def test_the_screen_path_carries_the_unreadable_signal_all_the_way():
     envs = judge_run.judgments_for(SID, today=TD_TODAY)
     top = next(e for e in envs if e.decision_id == "top_dressing_1")
     assert name in top.result["amount"] and "있는데 읽지 못했다" in top.result["amount"]
-    assert "저장된 처방이 깨져" in top.result["summary"]
+    assert "저장된 처방을 못 읽어" in top.result["summary"]                 # 문면은 농가 말(2026-09-29) — 갈림은 그대로
     assert any(d["path"] == name for d in dropped.all_drops())           # 같은 읽기가 /changes 에도 남는다
