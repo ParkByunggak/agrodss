@@ -16,7 +16,7 @@ const say = (k, v) => console.log(`${k}: ${typeof v === "string" ? v : JSON.stri
   page.on("response", (r) => { if (r.status() >= 400) errors.push(`${r.status()} ${r.url()}`); });
 
   const enc = encodeURIComponent(sid);
-  const PAGES = ["/", `/c/${enc}`, `/diary/${enc}`, "/judge", "/me", "/improve", "/changes", "/media", "/events", `/mall/${enc}`];
+  const PAGES = ["/", `/c/${enc}`, `/diary/${enc}`, "/judge", "/me", "/improve", "/changes", "/media", "/events", `/mall/${enc}`, "/selfcheck", "/me/outlook"];   // [①⑤a 2026-09-29] 자기 점검 · 장기 전망 폼(390px 에서 400px 로 넘치던 것을 안 걷고 있었다)도 걷는다
   const overflow = async () => await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
   let bad = 0;
 

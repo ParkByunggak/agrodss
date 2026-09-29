@@ -137,7 +137,9 @@ def shell(title: str, side: str, main: str, panel: str | None, footer: str) -> s
     자리(스타일)는 CSS 의 `#footer` 하나가 정한다: 본문에 박아 두면 다음 요청 때 여기저기를 고쳐야 하고,
     검사도 그 문자열을 물고 있어 **맞는 고침이 관문을 빨갛게 만든다**(오늘 네 번 겪은 그 형태).
     """
-    cols = "" if panel is not None else "<style>.app{grid-template-columns:260px 1fr}.composer{right:0}</style>"
+    # [①⑤a 걷기 실측 2026-09-29] 이 덮어쓰기가 CSS 뒤에 실려 720px 미디어 규칙(.app{1fr})을 이겼다 — 휴대폰(390px)에서 패널 없는 화면 전부
+    # (/me · /me/outlook · /c/new · /diary · /selfcheck)가 사이드바 260px + 본문 130px 이었다(/me/outlook 은 400px 로 넘침). 데스크톱에서만 덮어쓴다.
+    cols = "" if panel is not None else "<style>@media (min-width:721px){.app{grid-template-columns:260px 1fr}}.composer{right:0}</style>"
     title = title if title.startswith(BRAND) else f"{BRAND} — {title}"
     return (f'<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:,">'
             f"<title>{_e(title)}</title><style>{CSS}</style>{cols}</head><body><div class=\"app\">"
@@ -162,7 +164,8 @@ def sidebar(current: str, docs: list[str], today: date) -> str:
         out.append(f'<a class="chat{cls}" href="/c/{quote(s["id"])}"><b>{_e(s.get("crop"))}<span class="pill {pill}">{_e(st)}</span></b><span>{meta}</span></a>')
     out.append('<div class="grp">화면</div>')
     first = subs[0]["id"] if subs else ""
-    for href, label in (("/improve", "고쳐 달라는 말 · 스스로 개선"), ("/judge", "판단 전체"), ("/media", "영상 반입"), ("/events", "한 일 · 못 한 이유(표)"),
+    for href, label in (("/improve", "고쳐 달라는 말 · 스스로 개선"), ("/judge", "판단 전체"), ("/selfcheck", "자기 점검 — 화면이 스스로 확인"),   # [①⑤a 2026-09-29]
+                        ("/media", "영상 반입"), ("/events", "한 일 · 못 한 이유(표)"),
                         (f"/mall/{quote(first)}" if first else "/c/new", "몰 상세페이지 목업 (M-11)")):
         out.append(f'<a class="lnk" href="{href}">{label}</a>')
     out.append('<div class="grp">문서</div>')

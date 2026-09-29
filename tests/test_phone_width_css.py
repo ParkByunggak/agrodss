@@ -41,6 +41,19 @@ def test_the_chat_shell_does_not_let_a_wide_form_push_the_page_sideways():
     assert "overflow-x:auto" in _rule(phone, "table.tb"), "표가 제자리에서 옆으로 밀리지 않고 화면을 넘긴다"
 
 
+def test_the_panel_less_shell_keeps_the_phone_layout():
+    """[①⑤a 걷기 실측 2026-09-29] 패널 없는 셸이 `.app{grid-template-columns:260px 1fr}` 을 CSS 뒤에 인라인으로 실어 720px 미디어 규칙을 이겼다 —
+    휴대폰에서 /me · /me/outlook · /c/new · /diary · /selfcheck 전부 사이드바 260px + 본문 130px(측정: /me/outlook 400px 넘침). 덮어쓰기는 데스크톱 폭에서만."""
+    page = chat_pages.shell("t", "side", "main", None, "f")
+    inline = "".join(re.findall(r"<style>(.*?)</style>", page, re.S)[1:])                # 첫 <style> 은 CSS 정본, 그 뒤가 인라인 덮어쓰기
+    m = re.search(r"\.app\s*\{[^}]*grid-template-columns[^}]*\}", inline)
+    assert m, "패널 없는 셸의 열 덮어쓰기가 없다"
+    before = inline[:m.start()]
+    assert re.search(r"@media \(min-width:\s*721px\)\s*\{[^{}]*$", before), "열 덮어쓰기가 미디어 밖에 있다 — 휴대폰에서 720px 규칙을 이긴다"
+    with_panel = chat_pages.shell("t", "side", "main", "panel", "f")
+    assert len(re.findall(r"<style>", with_panel)) == 1                                  # 패널 있는 셸은 정본 CSS 하나뿐(인라인 덮어쓰기 없음)
+
+
 def test_the_table_screens_fit_a_phone():
     css = render.CSS
     assert "max-width:100%" in _rule(css, "input, select"), "size=40 입력칸이 화면을 넘긴다(/events 452px)"

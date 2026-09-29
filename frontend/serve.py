@@ -476,6 +476,14 @@ def outlook_page(message: str = "", error: str = "", form: dict[str, str] | None
     return (400 if error else 200), _shell("/me", chat_pages.outlook_main(message, error, form), None, "장기 전망 등재")
 
 
+def selfcheck_page() -> tuple[int, str]:
+    """[검토표 ①⑤a 2026-09-29] 자기 점검 — 읽기 전용. 카드 존재는 /judge 화면 그대로에서 본다(판정 목록이 아니라 화면 — 배선까지)."""
+    from frontend import selfcheck
+    today = config.today()
+    report = selfcheck.run(today, judge_page()[1])
+    return 200, _shell("/selfcheck", selfcheck.main_html(report, today), None, "자기 점검")
+
+
 def improve_page(message: str = "", error: str = "", cycle=None) -> tuple[int, str]:
     return (400 if error else 200), _shell("/improve", chat_pages.improve_main(config.today(), message, error, cycle), None, "개선 · 자율진화")
 
@@ -605,6 +613,8 @@ class Handler(BaseHTTPRequestHandler):
             status, body = me_page()
         elif p == "/me/outlook":
             status, body = outlook_page()
+        elif p == "/selfcheck":
+            status, body = selfcheck_page()
         elif p.startswith("/mall/"):
             status, body = mall_page(unquote(p[len("/mall/"):]))
         elif p == "/media":
