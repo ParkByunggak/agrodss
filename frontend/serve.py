@@ -30,6 +30,7 @@ from ingest import events as ev  # noqa: E402  — 사건 원장도 ingest 를 �
 from ingest import media  # noqa: E402  — 입력 화면은 ingest 를 통해서만 1층에 쓴다(원장 파일을 직접 열지 않는다)
 from ingest import parcels  # noqa: E402  — 필지 등록부 쓰기(/me/parcel)도 ingest 를 통해서만
 from ingest import dropped  # noqa: E402  — 읽다 버린 것(조용한 실패)을 /changes 가 말한다
+from ingest import misclassified  # noqa: E402  — [검토표 ③] 종류 고침 재료 건수를 /changes 가 상시로 말한다(읽기 전용 · 건수만)
 from grid import capture as grid_capture  # noqa: E402  — 촬영 시점 알림(격자 지식, 원장 아님)
 from judge import run as judge_run  # noqa: E402  — 4층은 3층 봉투만 받는다
 
@@ -111,7 +112,12 @@ def changes_page() -> tuple[int, str]:
     else:
         drop_html = ('<p style="color:var(--muted)">읽다 버린 것 없음 — 저장소의 기록을 전부 읽었다'
                      '(시스템이 제 손으로 쓴 파일을 못 읽으면 여기 뜬다).</p>')
-    body = (f"<h1>변경 로그</h1><p>{state}</p>{drop_html}"
+    # [검토표 ③ 2026-09-29] WO-LLM-01 의 두 줄을 발행자가 PC 에서 손으로 재던 것 — 화면이 열 때마다 원장을 읽어 **건수만** 낸다(원문은 PII · 저장 없음).
+    # 문턱(30)을 넘는 날 발행자 결정(트리거 D)이 필요하다는 것도 이 줄이 말한다.
+    m = misclassified.measure()
+    mis_html = (f'<p><span class="st st-{"진행" if m["enough"] else "완료"}">종류 고침</span> {html.escape(misclassified.status_line(m))} · '
+                f'잰 때 {html.escape(render.local_time(m["measured_at"]))}</p>')
+    body = (f"<h1>변경 로그</h1><p>{state}</p>{mis_html}{drop_html}"
             f"<table><thead><tr><th>커밋</th><th>날짜</th><th>제목</th></tr></thead><tbody>{rows or '<tr><td colspan=3>git 이력을 읽지 못했다</td></tr>'}</tbody></table>"
             # [U-26 2026-09-26] 커밋 제목은 **인용된 기록**이라 낱말 표를 대지 않는다(농가 글과 같은 축) — 화면의 제 문장만 사람 말로
             "<p style='color:var(--muted)'>저장소 <code>git log</code> 의 제목 20건 — 무엇이 언제 바뀌었는지. 반영 상태는 위 한 줄이다(커밋 완료 ≠ 반영 완료).</p>")

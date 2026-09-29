@@ -195,7 +195,7 @@ assert set(KIND_PLAIN) == set(KIND_LABEL)      # 종류가 늘면 사람 말도 
 
 CONFIRM_LABEL = "일지에 넣기"            # 옛 문면 "확인 → 원장"
 OTHER_KIND_LABEL = "다르게 적을까요?"     # 옛 문면 "다른 종류:"
-CHOSEN_WHY = "사람이 고름"               # 사람이 종류를 고른 초안의 표지 — 오분류 측정(scripts/measure_misclassified.py)이 이 표지를 읽는다(정본 하나)
+CHOSEN_WHY = "사람이 고름"               # 사람이 종류를 고른 초안의 표지 — 오분류 측정(ingest/misclassified.py · /changes 상시)이 이 표지를 읽는다(정본 하나)
 SAVED_LABEL = "일지에 넣었습니다"         # 옛 문면 "원장에 들어감"
 PENDING_LABEL = "아직 안 넣은 것"         # 옛 문면 "미확인 초안"
 

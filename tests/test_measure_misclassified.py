@@ -57,8 +57,9 @@ def test_it_reads_only_and_nothing_else_writes():
     mm.report(mm.measure())
     after = {p.name: hashlib.sha1(p.read_bytes()).hexdigest() for p in d.rglob("*") if p.is_file()}
     assert before == after and before
-    src = (ROOT / "scripts" / "measure_misclassified.py").read_text(encoding="utf-8")
-    assert "write_text" not in src and "write_bytes" not in src and 'open(' not in src.replace("path.exists()", "")   # 쓰는 호출형이 없다
+    for rel in (("ingest", "misclassified.py"), ("scripts", "measure_misclassified.py")):                          # 정본과 콘솔 껍데기 둘 다(검토표 ③)
+        src = (ROOT / rel[0] / rel[1]).read_text(encoding="utf-8")
+        assert "write_text" not in src and "write_bytes" not in src and 'open(' not in src.replace("path.exists()", ""), rel   # 쓰는 호출형이 없다
     assert mm.measure(Path("/nonexistent/index.jsonl"))["total"] == 0                                                # 원장이 없으면 0
 
 
@@ -66,8 +67,10 @@ def test_the_marker_it_reads_is_the_one_choose_kind_writes():
     """어휘 한 벌 — 측정기의 표지와 choose_kind 의 표지가 갈리면 측정이 조용히 0 이 된다(한쪽으로 쏠린 결과는 도구 버그의 표지)."""
     src = (ROOT / "ingest" / "chat.py").read_text(encoding="utf-8")
     assert src.count('"사람이 고름"') == 1                                    # 정의 한 곳뿐 — 리터럴을 두 번 쓰지 않는다
-    msrc = (ROOT / "scripts" / "measure_misclassified.py").read_text(encoding="utf-8")
+    msrc = (ROOT / "ingest" / "misclassified.py").read_text(encoding="utf-8")                                     # [검토표 ③] 정본이 ingest 로 옮겨졌다
     assert "chat.CHOSEN_WHY" in msrc and "사람이 고름" not in msrc.split("def measure")[1]
+    ssrc = (ROOT / "scripts" / "measure_misclassified.py").read_text(encoding="utf-8")
+    assert "from ingest.misclassified import" in ssrc and "def measure" not in ssrc                                # 껍데기는 정본을 부를 뿐 두 벌을 만들지 않는다
     sid = _sid()
     m, _ = chat.send(sid, "어제 웃거름 줬다", today=T, now=NOW)
     assert chat.choose_kind(m["id"], "observation.note", today=T)["drafts"][0]["why"] == chat.CHOSEN_WHY
