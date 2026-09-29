@@ -115,6 +115,30 @@ def test_thirty_dry_observed_days_is_a_judgement_not_a_question(tmp_path, monkey
     assert e.result["summary"].startswith("최근 30일 동안 비도 관수 기록도 없습니다(기상청 관측 지점 131)") and "관수 검토" in e.result["summary"]
 
 
+def test_the_observation_window_follows_the_threshold_not_the_thirty_day_lookback(tmp_path, monkeypatch):
+    """[구조적 위험 2026-09-29] 첫 답이 관측을 최대 30번 부르던 것 — 임계 N 이 있으면 N 일만 보면 판단이 선다(그 안에 비가 없으면 무강수는 이미 임계 이상).
+    판정기: 관측이 덮은 날수 ≥ 임계 이고 비가 없으면 판단함 · 그보다 적게 받았으면 아직 묻는다. 수집기: 부르는 날수 = min(30, 임계) · 임계가 없으면 30."""
+    _synthetic_grid(tmp_path, monkeypatch)                                                       # 임계 7
+    s = _subject()
+    dry7 = [_obs((TODAY - timedelta(days=k)).isoformat(), 0.0) for k in range(1, 8)]
+    e = SD.judge_drought_alert(s, TODAY, evts=[], observations=[], obs_rain=dry7)
+    assert e.kind == "판단함" and e.result["dry_days"] == 7 and e.result["due"] is True and "무강수 7일 이상" in e.result["summary"]
+    e6 = SD.judge_drought_alert(s, TODAY, evts=[], observations=[], obs_rain=dry7[:6])
+    assert e6.kind == "판단 불가(데이터)" and "6일만 받음" in e6.result["why"]                     # 임계에 못 미치는 날수만 봤으면 아직 모른다
+    from judge import run as judge_run
+    from ingest import kma
+    monkeypatch.setenv("KMA_API_HUB_KEY", "x")
+    monkeypatch.setattr(kma, "nearest_station", lambda lat, lon, allowed_ids=None: {"id": 131, "name": "충주"})
+    seen = []
+    monkeypatch.setattr(kma, "fetch_recent_obs", lambda stn, today, lookback, wet_mm=0.1: seen.append(lookback) or {"status": "success", "records": [], "days_seen": 0})
+    judge_run.gather_obs_rain(dict(s, lat=36.75, lon=127.98), TODAY)
+    assert seen == [7]                                                                            # 임계 7 → 7일만 부른다
+    _synthetic_grid(tmp_path, monkeypatch, rules=None)                                           # 임계 없음 → 30
+    judge_run.gather_obs_rain(dict(s, lat=36.75, lon=127.98), TODAY)
+    assert seen == [7, 30]
+    assert judge_run.drought_days_needed(dict(s, anchor=None), TODAY, 30) == 30                   # 심은 날이 없으면 칸을 못 정한다 → 30
+
+
 def test_without_observed_rain_the_reason_travels_and_the_grid_can_override_wet_mm(tmp_path, monkeypatch):
     _synthetic_grid(tmp_path, monkeypatch, rules=dict(RULES, wet_mm=1.0))
     s = _subject()

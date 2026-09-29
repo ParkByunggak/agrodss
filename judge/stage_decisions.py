@@ -758,11 +758,13 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
     else:
         notes.append(f"기상청 지난 일강수 없음 — {obs_rain_why or '이유 없음'}")
     if not wet:
-        # 기상청 관측이 뒤돌아본 날 전부를 덮었는데 비가 없었다면 그것도 사실이다 — 무강수 lookback 일 이상(원천이 있는데 묻지 않는다)
+        # 기상청 관측이 뒤돌아본 날에 비가 없었고 그 날수가 임계 이상이면 그것도 사실이다 — 무강수 N일 이상(원천이 있는데 묻지 않는다).
+        # [2026-09-29] 관측은 임계 날수만 보면 된다(run.drought_days_needed) — 30일을 다 불러야 판정하던 것을 임계 이상이면 판정으로
         obs_days = {str(r.get("observed_at") or "")[:10] for r in obs_rows}
-        if obs_days and len(obs_days) >= lookback:
-            last_wet, dry, src = None, lookback, f"기상청 관측 지점 {stn}"
-            summary = f"최근 {lookback}일 동안 비도 관수 기록도 없습니다({src}) — 무강수 {lookback}일 이상, 임계 {threshold}일 이상: 관수 검토 · {water_txt}"
+        covered = len(obs_days)
+        if obs_days and covered >= threshold:
+            last_wet, dry, src = None, covered, f"기상청 관측 지점 {stn}"
+            summary = f"최근 {covered}일 동안 비도 관수 기록도 없습니다({src}) — 무강수 {covered}일 이상, 임계 {threshold}일 이상: 관수 검토 · {water_txt}"
             return Envelope("판단함", did, sid, as_of, inputs=inputs, grade="추정", revisit_at=(today + timedelta(days=1)).isoformat(),
                             result={"dry_days": dry, "threshold": threshold, "last_wet": None, "wet_source": src, "due": True, "water": dict(water), "summary": summary}, notes=notes)
         return Envelope("판단 불가(데이터)", did, sid, as_of,

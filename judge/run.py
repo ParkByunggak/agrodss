@@ -10,6 +10,8 @@ from typing import Any
 from ingest import events as ev
 from ingest import feedback as fb
 from ingest import kma, media, ncpms, outlook, parcels, soil_store
+from grid import capture as grid_capture
+from grid import schema as grid_schema
 from judge import boundary, evolve, harvest_timing, material_citation, plan_vs_actual, registry, risk_alert, stage_decisions
 from judge.envelope import Envelope
 
@@ -58,6 +60,19 @@ def gather_mid(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, st
     return r["records"], (f"일부만 — {r['partial']}" if r.get("partial") else "")
 
 
+def drought_days_needed(subject: dict[str, Any], today: date, lookback: int) -> int:
+    """관측을 며칠 뒤로 볼지 — 임계(오늘 칸 drought_rules.dry_days)가 있으면 그 날수면 충분하다: 그 안에 비가 없었으면 무강수는 이미 임계 이상이고
+    (정확한 날수는 몰라도 판단은 선다), 있었으면 그 날이 마지막 비 온 날이다. 임계가 없으면 lookback(30). [2026-09-29 구조적 위험 처방 — 첫 답이 최대 30번 부르던 것]"""
+    unit, miss = grid_schema.load_unit(subject)
+    anchor = subject.get("anchor")
+    if miss is not None or not anchor:
+        return lookback
+    stage = grid_capture.stage_for_day(unit, (today - date.fromisoformat(anchor)).days)
+    rules = (stage or {}).get(grid_schema.DROUGHT_RULES_KEY)
+    dd = rules.get("dry_days") if isinstance(rules, dict) else None
+    return min(lookback, int(dd)) if isinstance(dd, int) and not isinstance(dd, bool) and dd >= 1 else lookback
+
+
 def gather_obs_rain(subject: dict[str, Any], today: date) -> tuple[list[dict[str, Any]] | None, str]:
     """[D-20 · 발행자 2026-09-29 "기상청 현시점 이전의 무강수일을 활용해서 관수를 권고해야"] 최근접 관측 지점의 지난 일강수(kma_sfcdd) — 마지막 비 온 날의
     원천. 좌표·apihub 키가 있을 때만. 없으면 (None, 이유) — 가뭄 판단은 그때 농가의 비·관수 기록으로만 센다."""
@@ -70,7 +85,7 @@ def gather_obs_rain(subject: dict[str, Any], today: date) -> tuple[list[dict[str
     if not stn:
         return None, "가까운 관측 지점을 못 찾았다"
     d = registry.get("drought_alert")
-    r = kma.fetch_recent_obs(int(stn["id"]), today, int(d.params["lookback_days"]), float(d.params["wet_mm"]))
+    r = kma.fetch_recent_obs(int(stn["id"]), today, drought_days_needed(subject, today, int(d.params["lookback_days"])), float(d.params["wet_mm"]))
     if r["status"] != "success":
         return (r["records"] or None), f"관측 원천 {r['status']}: {r.get('message', '')}(지점 {stn['name']} · {r.get('days_seen', 0)}일까지 받음)"
     return r["records"], ""
