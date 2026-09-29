@@ -26,7 +26,7 @@ CORPUS = [
     ("오늘 상태 어때", "question", None),
     ("뭐부터 챙겨야 해", "question", "plan_vs_actual"),
     ("출하는 언제가 좋을까", "question", "ship_or_store"),
-    ("진딧물 방제 뭘로 하나요", "question", "pest_alert"),
+    ("진딧물 방제 뭘로 하나요", "question", "risk_alert"),       # [2026-09-29] 병·벌레 물음은 칸 비특정 → 위험 경보(pest_alert 는 칸 3 카드)
     ("쪽파를 현재 관리해야 할 항목들을 알려줘요", "question", "plan_vs_actual"),     # 발행자 라이브 2026-09-19
     # 사건(과거)
     ("오늘 웃거름 줬다", "event", None),
@@ -125,7 +125,7 @@ CORPUS = [
     # 관찰 메모로 떨어졌다(물음이 원장에 관찰로 쌓이고 답은 안 나온다). 간접 의문 어미(-는지 · -은지 · -ㄴ지 · -을지)를 본다.
     ("웃거름 지금 줘도 되는지", "question", "top_dressing_1"),
     ("지금 웃거름 시기 맞는지", "question", "top_dressing_1"),
-    ("벌레 약 쳐야 하는지", "question", "pest_alert"),
+    ("벌레 약 쳐야 하는지", "question", "risk_alert"),          # [2026-09-29] 같은 이유
     ("고랑 물 빠짐 괜찮은지", "question", "drainage_alert"),
     ("지금 상태 어떤지", "question", None),
     ("수확하고 나서 뭐 심을지", "question", None),

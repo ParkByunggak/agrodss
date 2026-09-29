@@ -208,6 +208,14 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
             out.append("<table><tr><th>날</th><th>최저~최고</th><th>비 올 확률(최대)</th><th>강수량</th></tr>" + "".join(
                 f"<tr><td>{_e(x['day'])}</td><td>{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃{' (시간대 값)' if x.get('approx') else ''}</td>"
                 f"<td>{'' if x['pop_max'] is None else str(int(x['pop_max'])) + '%'}</td><td>{'' if x['rain_mm'] is None else str(x['rain_mm']) + 'mm'}</td></tr>" for x in r["days"]) + "</table>")
+            # [발행자 2026-09-29 17시] 단기예보는 3시간 단위 — 날마다 접이식 3시간 표(시각 · 기온 · 하늘 · 비 확률 · 강수량 · 바람). 값은 원천 그대로
+            for x in r["days"]:
+                hs = x.get("hours") or []
+                if not hs:
+                    continue
+                out.append(f"<details><summary>{_e(x['day'])} 3시간 단위 ({len(hs)}줄)</summary><table class=\"tb\"><tr><th>시각</th><th>기온</th><th>하늘</th><th>비 올 확률</th><th>강수량</th><th>바람</th></tr>" + "".join(
+                    f"<tr><td>{_e(str(h.get('t') or '')[:2])}시</td><td>{'' if h.get('tmp') is None else str(round(h['tmp'])) + '℃'}</td><td>{_e(' '.join(w for w in (h.get('sky'), h.get('pty')) if w))}</td>"
+                    f"<td>{'' if h.get('pop') is None else str(int(h['pop'])) + '%'}</td><td>{'' if not h.get('pcp') else str(h['pcp']) + 'mm'}</td><td>{'' if h.get('wsd') is None else format(h['wsd'], 'g') + 'm/s'}</td></tr>" for h in hs) + "</table></details>")
             out.append(f"<p class=\"meta\">{_e(c.get('note', ''))}</p>")
         else:
             out.append(f"<p><b>단기</b> · 못 받음 — {_e(r.get('short_why') or '')}</p>")

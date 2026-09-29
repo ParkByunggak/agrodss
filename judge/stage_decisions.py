@@ -337,7 +337,13 @@ def _delegate_risk(subject, did: str, today: date, forecast, pest) -> Envelope:
         return Envelope(r.kind, did, sid, as_of, missing=list(r.missing), result=dict(r.result), notes=list(r.notes))
     tag = f"{stage['order']}. {stage['name']}"
     if tag not in (r.result.get("stages") or []):
-        return Envelope("해당 없음", did, sid, as_of, result={"why": f"칸 '{tag}' 가 horizon 밖", "summary": "칸이 창 밖"})
+        # [발행자 2026-09-29 "답이 틀렸습니다 — '칸이 기간이 아닙니다' 는 농가에게 하는 말이 아니다"] 안쪽 사유("칸이 창 밖")가 낱말 표를 거쳐 뜻 없는 말이 됐다
+        # (SURF-1 내부 표현 노출). 사람에게는 **오늘이 어느 칸이고 무엇을 보면 되는지**를 말한다 — 정확한 사유는 why 에 남긴다.
+        now_cells = " · ".join(r.result.get("stages") or []) or "없음"
+        day = r.result.get("days_since_anchor")
+        return Envelope("해당 없음", did, sid, as_of,
+                        result={"why": f"칸 '{tag}' 가 horizon 밖 — 오늘 {day}일째, 보는 칸 {now_cells}",
+                                "summary": f"{tag} 칸의 경보는 지금 볼 때가 아닙니다 — 오늘은 파종 {day}일째라 {now_cells} 칸을 봅니다. 그 칸의 위험은 「위험 경보」 에 전부 있습니다"})
     alerts = [a for a in r.result.get("alerts", []) if a.get("stage") == tag]
     body = " / ".join(f"{a['level']} {a['risk']}" for a in alerts) or "이 칸에 경보 없음"
     return Envelope("판단함", did, sid, as_of, inputs=list(r.inputs), grade=r.grade, revisit_at=r.revisit_at,
@@ -551,6 +557,25 @@ def _issued(iso: Any) -> str:
     return s[:10]
 
 
+def _fmt_forecast_hour(h: dict[str, Any]) -> str:
+    """3시간 한 줄 — "· 06시 16℃ 흐림 비 60% 1.0mm 바람 2m/s". 없는 값은 비운다(대리값 없음).
+    [발행자 2026-09-29 17시 *"단기예보는 격자형예보로 3시간 단위로 예보를 사용자에게 알려 줘야 한다"*]"""
+    t = str(h.get("t") or "")
+    parts = [f"{t[:2]}시" if len(t) >= 2 else t]
+    if h.get("tmp") is not None:
+        parts.append(f"{round(h['tmp'])}℃")
+    sky = " ".join(w for w in (h.get("sky"), h.get("pty")) if w)
+    if sky:
+        parts.append(sky)
+    if h.get("pop") is not None:
+        parts.append(f"비 {int(h['pop'])}%")
+    if h.get("pcp"):
+        parts.append(f"{h['pcp']}mm")
+    if h.get("wsd") is not None:
+        parts.append(f"바람 {h['wsd']:g}m/s")
+    return "· " + " ".join(parts)
+
+
 def _fmt_forecast_day(x: dict[str, Any]) -> str:
     t = "" if x["tmin"] is None and x["tmax"] is None else f"{'' if x['tmin'] is None else round(x['tmin'])}~{'' if x['tmax'] is None else round(x['tmax'])}℃{'(시간대 값)' if x.get('approx') else ''}"
     p = "" if x["pop_max"] is None else f" 비 {int(x['pop_max'])}%"
@@ -615,7 +640,8 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         tmin, tmax = v.get("tmin"), v.get("tmax")
         approx = tmin is None or tmax is None                      # 발표 시각 뒤의 날은 TMN/TMX 가 없어 시간대 값으로 — 표기에 남긴다(대리값을 숨기지 않는다)
         days.append({"day": r["for_day"], "tmin": tmin if tmin is not None else v.get("tmin_from_tmp"), "tmax": tmax if tmax is not None else v.get("tmax_from_tmp"),
-                     "pop_max": v.get("pop_max"), "rain_mm": v.get("rain_mm"), "approx": approx})
+                     "pop_max": v.get("pop_max"), "rain_mm": v.get("rain_mm"), "approx": approx,
+                     "hours": [h for h in (r.get("hours") or []) if isinstance(h, dict)]})      # 3시간 줄 — 원천 그대로(발행자 2026-09-29 17시)
     mdays: list[dict[str, Any]] = []
     for r in mrows:
         v = r.get("values") or {}
@@ -630,8 +656,10 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         cit = {"source": src, "observed_at": issued, "resolution": res, "note": "기상청 단기예보 그대로 — 해석·권고 없음(경보는 위험 경보 몫 · D-21)"}
         # [발행자 2026-09-29 "이 날씨는 어느 지점을 말하는가"] 어느 자리의 예보인지를 줄에 싣는다 — 단기는 필지 좌표가 든 기상청 5km 격자 칸
         # [발행자 2026-09-29 "가독성이 떨어진다 — 시간과 날짜 단위로 줄바꿈"] 지평 머리 한 줄 + 날마다 한 줄. ' · ' 로 잇던 줄은 휴대폰에서 못 읽었다
-        parts.append(f"단기 — 기상청 단기예보 · 필지 자리 5km 예보 구역 · 발표 {_issued(issued)}")   # '격자' 는 화면 낱말 표가 재배 달력으로 바꾼다 — 농가 말로
-        parts += [_fmt_forecast_day(x) for x in days]
+        parts.append(f"단기 — 기상청 단기예보 · 필지 자리 5km 예보 구역 · 3시간 단위 · 발표 {_issued(issued)}")   # '격자' 는 화면 낱말 표가 재배 달력으로 바꾼다 — 농가 말로
+        for x in days:                                                   # 날 한 줄 + 그 아래 3시간마다 한 줄(원천이 3시간 단위다 — 하루로 접지 않는다)
+            parts.append(_fmt_forecast_day(x))
+            parts += [_fmt_forecast_hour(h) for h in x["hours"]]
     else:
         notes.append(f"단기예보는 못 받았다 — {short_reason}")
         parts.append(f"단기 — 못 받음: {short_reason}")

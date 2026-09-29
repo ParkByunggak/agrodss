@@ -245,8 +245,16 @@ def _pcp_mm(s: str) -> float | None:
         return None
 
 
+# 기상청 단기예보 코드값(공공데이터포털 「기상청_단기예보 조회서비스」 문서의 코드표 — 원천의 사실이지 지식이 아니다) → 사람 말
+SKY_SAID = {"1": "맑음", "3": "구름많음", "4": "흐림"}
+PTY_SAID = {"0": "", "1": "비", "2": "비/눈", "3": "눈", "4": "소나기", "5": "빗방울", "6": "빗방울/눈날림", "7": "눈날림"}
+
+
 def parse_vilage(payload: dict[str, Any], nx: int, ny: int, fetched_at: str | None = None) -> list[dict[str, Any]]:
-    """응답 JSON → 날짜별 요약 레코드(TMX·TMN·POP 최대·PCP 합·TMP 시간대). 판단 없음."""
+    """응답 JSON → 날짜별 요약 레코드(TMX·TMN·POP 최대·PCP 합·TMP 시간대) + **3시간 줄**(`hours`). 판단 없음.
+
+    [발행자 2026-09-29 17시 *"단기예보는 격자형예보로 3시간 단위로 예보를 사용자에게 알려 줘야 한다"*] 원천이 3시간 단위인데 하루로 접어 냈다 —
+    시각마다 기온 · 하늘 · 강수형태 · 비 확률 · 강수량 · 바람을 그대로 싣는다(코드는 원천 코드표로 말만 바꾼다 · 값은 그대로)."""
     fetched_at = fetched_at or _now_iso()
     try:
         body = payload["response"]["body"]["items"]["item"]
@@ -261,7 +269,7 @@ def parse_vilage(payload: dict[str, Any], nx: int, ny: int, fetched_at: str | No
         if not d:
             continue
         base_date, base_time = it.get("baseDate", base_date), it.get("baseTime", base_time)
-        rec = days.setdefault(d, {"tmax": None, "tmin": None, "pop_max": None, "rain_mm": 0.0, "tmp": {}, "sky": {}, "pty": {}})
+        rec = days.setdefault(d, {"tmax": None, "tmin": None, "pop_max": None, "rain_mm": 0.0, "tmp": {}, "sky": {}, "pty": {}, "pop": {}, "pcp": {}, "wsd": {}})
         cat, val, t = it.get("category"), str(it.get("fcstValue", "")), it.get("fcstTime", "")
         # [코드 평가 C10] 값이 숫자가 아니면(빈 문자열 · '-') 그 항목만 결측(None) — float() 이 그날 예보 전부를 죽이지 않게
         fv = _float_or_none(val)
@@ -272,10 +280,13 @@ def parse_vilage(payload: dict[str, Any], nx: int, ny: int, fetched_at: str | No
         elif cat == "POP":
             if fv is not None:
                 rec["pop_max"] = max(rec["pop_max"] or 0, int(fv))
+                rec["pop"][t] = int(fv)
         elif cat == "PCP":
             mm = _pcp_mm(val)
             if mm is not None and rec["rain_mm"] is not None:
                 rec["rain_mm"] += mm
+            if mm is not None:
+                rec["pcp"][t] = mm
         elif cat == "TMP":
             if fv is not None:
                 rec["tmp"][t] = fv
@@ -283,6 +294,9 @@ def parse_vilage(payload: dict[str, Any], nx: int, ny: int, fetched_at: str | No
             rec["sky"][t] = val
         elif cat == "PTY":
             rec["pty"][t] = val
+        elif cat == "WSD":
+            if fv is not None:
+                rec["wsd"][t] = fv
     out = []
     for d in sorted(days):
         r = days[d]
@@ -290,13 +304,17 @@ def parse_vilage(payload: dict[str, Any], nx: int, ny: int, fetched_at: str | No
             r["tmax_from_tmp"] = max(r["tmp"].values())     # TMX 가 없는 날(발표 시각 뒤)은 시간대 최고로 — 표기 구분
         if r["tmin"] is None and r["tmp"]:
             r["tmin_from_tmp"] = min(r["tmp"].values())
+        times = sorted(set(r["tmp"]) | set(r["sky"]) | set(r["pty"]) | set(r["pop"]) | set(r["pcp"]) | set(r["wsd"]))
+        hours = [{"t": t, "tmp": r["tmp"].get(t), "sky": SKY_SAID.get(r["sky"].get(t, ""), r["sky"].get(t) or None),
+                  "pty": PTY_SAID.get(r["pty"].get(t, ""), r["pty"].get(t) or None) or None,
+                  "pop": r["pop"].get(t), "pcp": r["pcp"].get(t), "wsd": r["wsd"].get(t)} for t in times]
         out.append({
             "kind": "forecast.weather_daily", "axis": ["forecast"],
             "observed_at": f"{base_date[:4]}-{base_date[4:6]}-{base_date[6:]}T{base_time[:2]}:{base_time[2:]}:00+09:00" if base_date else None,
             "for_day": f"{d[:4]}-{d[4:6]}-{d[6:]}", "fetched_at": fetched_at,
             "source": SRC_FCST, "resolution": f"grid5km:{nx},{ny}",
-            "values": {k: v for k, v in r.items() if k not in ("tmp", "sky", "pty")},
-            "hourly_tmp": r["tmp"], "sky": r["sky"], "pty": r["pty"],
+            "values": {k: v for k, v in r.items() if k not in ("tmp", "sky", "pty", "pop", "pcp", "wsd")},
+            "hourly_tmp": r["tmp"], "sky": r["sky"], "pty": r["pty"], "hours": hours,      # hours: 3시간 줄(원천 시각 그대로 · 코드는 말로)
         })
     return out
 

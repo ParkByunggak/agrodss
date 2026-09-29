@@ -159,6 +159,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     sig = _signals(forecast or [], today, d.params) if forecast else None
     alerts: list[dict[str, Any]] = []
     watched = 0
+    watch: list[dict[str, Any]] = []                   # [발행자 2026-09-29] 열린 칸의 회복 가능 위험 중 신호가 없어 경보는 아닌 것 — "무엇을 봐야 하나" 에 이름은 말한다(판정은 안 바꾼다)
     for s in stages:
         risks = s.get("risks")
         if risks == grid_schema.NA or not risks:
@@ -178,7 +179,9 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
             else:
                 watched += 1
                 if not basis:
-                    continue                       # 회복 가능 — 신호 없으면 침묵(confident_only)
+                    if stage_open:
+                        watch.append({"risk": r["name"], "stage": f"{s['order']}. {s['name']}"})
+                    continue                       # 회복 가능 — 신호 없으면 경보는 침묵(confident_only) · 이름만 '지켜볼 것' 으로
                 level = "경보"
             alerts.append({"risk": r["name"], "stage": f"{s['order']}. {s['name']}", "level": level,
                            "recoverable": not unrec, "policy": r.get("alert"), "basis": basis,
@@ -215,7 +218,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         "판단함", DECISION_ID, sid, as_of, inputs=inputs,
         revisit_at=(today + timedelta(days=d.revisit_days)).isoformat(), grade=weakest(grades),
         result={"days_since_anchor": day, "horizon_days": horizon, "stages": [f"{s['order']}. {s['name']}" for s in stages],
-                "alerts": alerts, "watched_recoverable": watched,
+                "alerts": alerts, "watched_recoverable": watched, "watch": watch,
                 "signals": sig or {"note": "예보 없음"}},
         notes=notes,
     )

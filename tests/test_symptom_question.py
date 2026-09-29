@@ -94,7 +94,7 @@ def test_no_decision_word_is_a_single_syllable_that_hides_inside_other_words():
                        ("비가림 없이 키워도 되나", None), ("캐릭터 이름은 어떻게 지을까", None)):
         assert chat.topic_of(q) == allowed, (q, chat.topic_of(q))
     # 반대편 — 진짜 그 뜻이면 그대로 간다
-    for q, did in (("언제 캐면 되나?", "harvest_timing"), ("병이 온 것 같은데 약 있나", "pest_alert"), ("서리 오면 어떻게 하죠", "risk_alert"),
+    for q, did in (("언제 캐면 되나?", "harvest_timing"), ("병이 온 것 같은데 약 있나", "risk_alert"), ("서리 오면 어떻게 하죠", "risk_alert"),   # 병 물음 → 위험 경보(2026-09-29)
                    ("지금 쓸 수 있는 약 있나요", "material_citation"), ("비가 많이 오면 위험한가", "risk_alert"), ("고랑이 과습인데", "drainage_alert")):
         assert chat.topic_of(q) == did, (q, chat.topic_of(q))
 

@@ -83,11 +83,22 @@ def test_parse_vilage_daily_summary():
         {"baseDate": "20260918", "baseTime": "0500", "fcstDate": "20260919", "fcstTime": "1500", "category": "PCP", "fcstValue": "강수없음"},
         {"baseDate": "20260918", "baseTime": "0500", "fcstDate": "20260919", "fcstTime": "1200", "category": "TMP", "fcstValue": "22"},
         {"baseDate": "20260918", "baseTime": "0500", "fcstDate": "20260920", "fcstTime": "0600", "category": "TMP", "fcstValue": "11"},
+        {"baseDate": "20260918", "baseTime": "0500", "fcstDate": "20260919", "fcstTime": "1200", "category": "SKY", "fcstValue": "4"},
+        {"baseDate": "20260918", "baseTime": "0500", "fcstDate": "20260919", "fcstTime": "1200", "category": "PTY", "fcstValue": "1"},
+        {"baseDate": "20260918", "baseTime": "0500", "fcstDate": "20260919", "fcstTime": "1200", "category": "WSD", "fcstValue": "2.3"},
+        {"baseDate": "20260918", "baseTime": "0500", "fcstDate": "20260919", "fcstTime": "0900", "category": "SKY", "fcstValue": "1"},
+        {"baseDate": "20260918", "baseTime": "0500", "fcstDate": "20260919", "fcstTime": "0900", "category": "PTY", "fcstValue": "0"},
     ]
     recs = kma.parse_vilage({"response": {"body": {"items": {"item": items}}}}, 69, 107, fetched_at="x")
     assert [r["for_day"] for r in recs] == ["2026-09-19", "2026-09-20"]
     d1 = recs[0]
     assert d1["values"]["tmax"] == 24.0 and d1["values"]["tmin"] == 12.0 and d1["values"]["pop_max"] == 60 and d1["values"]["rain_mm"] == 1.0
+    # [발행자 2026-09-29 17시 "3시간 단위"] 시각마다 한 줄 — 코드는 원천 코드표로 말만 바꾸고 값은 그대로 · 없는 값은 None(0 으로 지어내지 않는다)
+    assert [h["t"] for h in d1["hours"]] == ["0900", "1200", "1500"]                                                  # TMN/TMX 만 있는 06시는 3시간 줄이 아니다(하루 값)
+    assert d1["hours"][1] == {"t": "1200", "tmp": 22.0, "sky": "흐림", "pty": "비", "pop": 60, "pcp": 1.0, "wsd": 2.3}
+    assert d1["hours"][0] == {"t": "0900", "tmp": None, "sky": "맑음", "pty": None, "pop": 30, "pcp": None, "wsd": None}   # PTY 0(없음)은 말이 없다 · 값 없는 항목은 None
+    assert d1["hours"][2] == {"t": "1500", "tmp": None, "sky": None, "pty": None, "pop": None, "pcp": 0.0, "wsd": None}   # '강수없음' 은 0
+    assert "pop" not in d1["values"] and "wsd" not in d1["values"]                                                    # 하루 요약 칸은 그대로
     assert d1["resolution"] == "grid5km:69,107" and d1["source"] == kma.SRC_FCST
     assert d1["observed_at"] == "2026-09-18T05:00:00+09:00"     # 발표 시각 — 예보의 관측 시각
     d2 = recs[1]

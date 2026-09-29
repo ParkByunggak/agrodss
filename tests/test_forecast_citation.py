@@ -99,7 +99,7 @@ def test_mid_term_days_follow_the_short_window_verbatim_and_the_short_window_win
     assert [i.source for i in e.inputs] == ["external:kma:vilage", "external:kma_midfcst"]                                     # 원천 둘이 입력에 따로
     s = e.result["summary"]
     # [발행자 2026-09-29 "가독성이 떨어진다 — 시간과 날짜 단위로 줄바꿈"] 지평 머리 한 줄 + 날마다 한 줄. ' · ' 로 잇던 한 줄은 휴대폰에서 못 읽었다
-    assert s.split("\n") == ["단기 — 기상청 단기예보 · 필지 자리 5km 예보 구역 · 발표 09-28 05시",       # [발행자 2026-09-29 "어느 지점을 말하는가"] 자리를 머리에
+    assert s.split("\n") == ["단기 — 기상청 단기예보 · 필지 자리 5km 예보 구역 · 3시간 단위 · 발표 09-28 05시",       # [발행자 2026-09-29 "어느 지점을 말하는가"] 자리를 머리에
                              "09-28 12~21℃ 비 30%", "09-29 11~22℃ 비 60% 5.0mm", "09-30 10~19℃(시간대 값) 비 20%",
                              "중기 — 괴산 권역 · 기상청 중기예보 · 발표 09-27 18시",
                              "10-01 7~17℃ 비 70%", "10-02 6~18℃ 비 20%", "10-05 5~16℃ 비 40%",
@@ -149,6 +149,23 @@ def test_the_mid_term_reason_and_rows_reach_the_decision_through_the_gate(monkey
     assert e.kind == "사실 인용" and [x["day"] for x in e.result["mid"]["days"]] == ["2026-10-01", "2026-10-02", "2026-10-05"]
     info = next(i for ss, _, i in jr.all_judgments(today=TODAY, only=s["id"]))
     assert info["mid"] == "중기예보 사용" and info["forecast"] == "단기 없음(검사)"
+
+
+def test_the_short_forecast_is_told_in_three_hour_lines_under_each_day():
+    """[발행자 2026-09-29 17시] *"단기예보는 격자형예보로 3시간 단위로 예보를 사용자에게 알려 줘야 한다"* — 원천이 3시간 단위인데 하루로 접어 냈다.
+    날 한 줄 아래 시각마다 한 줄 · 값은 원천 그대로 · 없는 값은 비운다 · 3시간 줄이 없는 레코드(옛 형태)는 날 한 줄만."""
+    hours = [{"t": "0600", "tmp": 12.0, "sky": "맑음", "pty": None, "pop": 0, "pcp": None, "wsd": 1.2},
+             {"t": "0900", "tmp": 16.0, "sky": "흐림", "pty": "비", "pop": 60, "pcp": 1.0, "wsd": None},
+             {"t": "1200", "tmp": None, "sky": None, "pty": None, "pop": None, "pcp": 0.0, "wsd": None}]
+    fc = [dict(FORECAST[1], hours=hours)] + FORECAST[2:]
+    e = SD.judge_forecast_citation(_subject(), TODAY, forecast=fc, why=None)
+    assert e.result["days"][0]["hours"] == hours and e.result["days"][1]["hours"] == []
+    lines = e.result["summary"].split("\n")
+    assert lines[0] == "단기 — 기상청 단기예보 · 필지 자리 5km 예보 구역 · 3시간 단위 · 발표 09-28 05시"
+    assert lines[1:5] == ["09-28 12~21℃ 비 30%", "· 06시 12℃ 맑음 비 0% 바람 1.2m/s", "· 09시 16℃ 흐림 비 비 60% 1.0mm", "· 12시"]
+    assert lines[5].startswith("09-29 ") and lines[6].startswith("09-30 ")                                 # 3시간 줄 없는 날은 날 한 줄만
+    for bad in ("None", "nan"):
+        assert bad not in e.result["summary"]
 
 
 def test_a_day_between_the_horizons_is_filled_from_the_short_source_or_named_as_missing():
