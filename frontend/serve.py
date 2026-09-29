@@ -490,6 +490,11 @@ def outlook_page(message: str = "", error: str = "", form: dict[str, str] | None
     return (400 if error else 200), _shell("/me", chat_pages.outlook_main(message, error, form), None, "장기 전망 등재")
 
 
+def decisions_page(message: str = "", error: str = "", form: dict[str, str] | None = None) -> tuple[int, str]:
+    """[WO-PB-01 다음 한 수 2026-09-29] 일괄 결정 — 쓰기는 덮개(git 밖)에만 · 틀리면 저장하지 않고 이유(400)."""
+    return (400 if error else 200), _shell("/me/decisions", chat_pages.decisions_main(message, error, form), None, "결정 — 한 화면에서 답하기")
+
+
 def selfcheck_page() -> tuple[int, str]:
     """[검토표 ①⑤a 2026-09-29] 자기 점검 — 읽기 전용. 카드 존재는 /judge 화면 그대로에서 본다(판정 목록이 아니라 화면 — 배선까지)."""
     from frontend import selfcheck
@@ -627,6 +632,8 @@ class Handler(BaseHTTPRequestHandler):
             status, body = me_page()
         elif p == "/me/outlook":
             status, body = outlook_page()
+        elif p == "/me/decisions":
+            status, body = decisions_page()
         elif p == "/selfcheck":
             status, body = selfcheck_page()
         elif p.startswith("/mall/"):
@@ -747,6 +754,21 @@ class Handler(BaseHTTPRequestHandler):
                 status, body = outlook_page(message=f"지움 — {gone.get('period_type', '')} {gone.get('target_from', '')} ~ {gone.get('target_to', '')} {gone.get('region', '')}")
             except ValueError as e:
                 status, body = outlook_page(error=str(e))
+        elif p == "/me/decisions":
+            # [WO-PB-01 다음 한 수 2026-09-29] 답 하나 — 검증(ingest.decisions)이 먼저, 틀리면 아무것도 안 쓰고 이유. 같은 답은 한 번만(멱등)
+            from ingest import decisions as _dc
+            try:
+                r = _dc.answer(form.get("id", ""), form.get("verdict", ""), note=form.get("note", ""))
+                status, body = decisions_page(message=f"적었다 — {form.get('id', '')} {r['verdict']}" + (f" — {r['note']}" if r.get("note") else ""))
+            except ValueError as e:
+                status, body = decisions_page(error=f"저장하지 않았다 — {e}", form=form)
+        elif p == "/me/decisions/delete":
+            from ingest import decisions as _dc
+            try:
+                _dc.remove(form.get("id", ""))
+                status, body = decisions_page(message=f"지움 — {form.get('id', '')}")
+            except ValueError as e:
+                status, body = decisions_page(error=str(e))
         elif p == "/me":
             try:
                 u = profile.save(form.get("name", ""), form.get("role", "farmer"), note=form.get("note", ""))

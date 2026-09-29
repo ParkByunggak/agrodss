@@ -9,7 +9,7 @@ const { chromium } = require("playwright");
 const base = process.argv[2], sid = process.argv[3];
 const EXE = process.env.PLAYWRIGHT_CHROMIUM || "/opt/pw-browsers/chromium";
 const W = parseInt(process.env.WIDTH || "390", 10);
-const PAGES = (process.env.PAGES || "/,/c/SID,/diary/SID,/judge,/me,/me/outlook,/c/new,/improve,/changes,/media,/events,/selfcheck")
+const PAGES = (process.env.PAGES || "/,/c/SID,/diary/SID,/judge,/me,/me/outlook,/c/new,/improve,/changes,/media,/events,/selfcheck,/me/decisions")
   .split(",").map((p) => p.replace("SID", encodeURIComponent(sid)));
 const say = (k, v) => console.log(`${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
 

@@ -165,6 +165,7 @@ def sidebar(current: str, docs: list[str], today: date) -> str:
     out.append('<div class="grp">화면</div>')
     first = subs[0]["id"] if subs else ""
     for href, label in (("/improve", "고쳐 달라는 말 · 스스로 개선"), ("/judge", "판단 전체"), ("/selfcheck", "자기 점검 — 화면이 스스로 확인"),   # [①⑤a 2026-09-29]
+                        ("/me/decisions", "결정 — 한 화면에서 답하기"),   # [WO-PB-01 다음 한 수 2026-09-29] 검토지(파일)가 11일째 비어 있던 자리를 화면으로
                         ("/media", "영상 반입"), ("/events", "한 일 · 못 한 이유(표)"),
                         (f"/mall/{quote(first)}" if first else "/c/new", "몰 상세페이지 목업 (M-11)")):
         out.append(f'<a class="lnk" href="{href}">{label}</a>')
@@ -333,6 +334,47 @@ def _safe_entry(e: dict[str, Any]) -> bool:
         return False
 
 
+def decisions_main(message: str = "", error: str = "", form: dict[str, str] | None = None) -> str:
+    """[WO-PB-01 다음 한 수 · 발행자 승인 2026-09-29] 일괄 결정 — 발행자만 답할 수 있는 것(P1)을 제안값과 함께 한 화면에. 답은 덮개(git 밖)에만.
+    발행자 셋: 「모르겠다」 1급 선택지(쌓이면 P4 신호) · 제안값의 출처 표시(추론은 맞다를 눌러도 남는다) · 맨 위 D-2."""
+    from ingest import decisions as dc
+    f = form or {}
+    answers = dc.load()
+    sm = dc.summary(answers)
+    c = sm["counts"]
+    out = ['<div class="thead"><div><h1>결정 — 한 화면에서 답하기</h1><div class="meta">발행자만 답할 수 있는 것을 제안값과 함께 놓았다. 줄마다 맞다 / 다르다(→ 무엇) / 모르겠다 중 하나. '
+           '답은 이 PC 의 덮개 파일(git 밖)에 남고, 아래 「세션에 보낼 것」 을 붙이면 세션이 작업 기록에 옮긴다 — 이 화면은 항목을 닫지 않는다.</div></div></div><div class="msgs">']
+    if error:
+        out.append(f'<p class="err">{_e(error)}</p>')
+    if message:
+        out.append(f'<p class="ok">{_e(message)}</p>')
+    out.append(f'<p class="meta">답 {sm["answered"]}/{sm["total"]} · 맞다 {c["맞다"]} · 다르다 {c["다르다"]} · 모르겠다 {c["모르겠다"]}</p>')
+    if sm["unknown_ids"]:
+        out.append(f'<p class="meta">모르겠다 {len(sm["unknown_ids"])}건({_e(" · ".join(sm["unknown_ids"]))}) — 모르겠다가 쌓이면 그 항목은 발행자만 답할 수 있는 것이 아니라 '
+                   '아직 어디에도 없는 값이었다는 신호다(첫 시즌 실측을 기다린다). 세션이 그 갈래를 고친다.</p>')
+    for it in dc.ITEMS:
+        a = answers.get(it["id"])
+        out.append(f'<div class="card dec"><b>{_e(it["id"])} · {_e(it["ask"])}</b>'
+                   f'<div style="margin-top:4px">제안: {_e(it["default"])} <span class="st">{_e(it["basis"])}</span></div>'
+                   f'<div class="meta">{_e(dc.BASIS_SAID[it["basis"]])}</div>'
+                   f'<div class="meta">풀리는 것: {_e(it["unblocks"])}</div>')
+        if a:
+            out.append(f'<div class="ok">답: {_e(a.get("verdict", ""))}{(" — " + _e(a["note"])) if a.get("note") else ""} <span class="meta">{_e(str(a.get("at", ""))[:10])}</span></div>'
+                       f'<form method="post" action="/me/decisions/delete" style="margin-top:4px"><input type="hidden" name="id" value="{_e(it["id"])}"><button class="btn" type="submit">이 답 지우기</button></form>')
+        else:
+            mine = f.get("id") == it["id"]
+            picked = (f.get("verdict") or "") if mine else ""
+            radios = " ".join(f'<label style="display:inline-block;margin-right:10px"><input type="radio" name="verdict" value="{v}"{" checked" if picked == v else ""} required> {v}</label>' for v in dc.VERDICTS)
+            out.append(f'<form method="post" action="/me/decisions" style="margin-top:6px"><input type="hidden" name="id" value="{_e(it["id"])}">{radios}'
+                       f'<input name="note" placeholder="다르다면 → 무엇" value="{_e((f.get("note") or "") if mine else "")}" style="width:60%;max-width:420px">'
+                       f' <button class="btn pri" type="submit">저장</button></form>')
+        out.append('</div>')
+    text = dc.to_session_text(answers)
+    out.append('<h2 style="font-size:14px">세션에 보낼 것</h2><p class="meta">답한 것만 · 항목 순서 · 한 줄씩. 이 글을 세션에 붙이면 세션이 작업 기록에 옮기고 항목을 닫는다.</p>')
+    out.append(f'<pre class="send" style="white-space:pre-wrap">{_e(text) if text else "아직 답이 없다"}</pre></div>')
+    return words.plain("".join(out))
+
+
 def me_main(message: str = "", error: str = "", form: dict[str, str] | None = None) -> str:
     u = profile.load()
     f = form or {}
@@ -348,6 +390,7 @@ def me_main(message: str = "", error: str = "", form: dict[str, str] | None = No
                f'<label>메모(연락처 금지)</label><input name="note" value="{_e(f.get("note") or u.get("note") or "")}">'
                '<div style="margin-top:12px"><button class="btn pri" type="submit">저장</button></div></form></div>')
     out.append('<h2 style="font-size:14px">장기 전망</h2><p class="meta"><a href="/me/outlook">장기 전망 등재 →</a> 기상청 1·3개월 전망 발표문 수치를 출처와 함께(덮개 · git 밖). 날씨 물음의 「장기」 줄이 이것을 낸다.</p>')
+    out.append('<h2 style="font-size:14px">결정</h2><p class="meta"><a href="/me/decisions">결정 — 한 화면에서 답하기 →</a> 발행자만 답할 수 있는 것을 제안값과 함께. 줄마다 맞다 / 다르다 / 모르겠다.</p>')
     out.append('<h2 style="font-size:14px">필지</h2>')
     for p in parcels.load():
         v = parcels.public_view(p)
