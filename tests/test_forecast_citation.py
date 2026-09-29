@@ -67,7 +67,7 @@ def test_without_a_forecast_it_carries_the_reason_it_was_not_fetched():
     # [중기] 이유가 둘 — 단기·중기 각각의 문장이 그대로(한쪽 이유로 다른 쪽을 덮지 않는다)
     e3 = SD.judge_forecast_citation(_subject(), TODAY, forecast=None, why="단기예보 키 없음", mid=None, mid_why="중기예보 원천 no_region: 권역을 못 찾았다")
     assert e3.kind == "판단 불가(데이터)" and e3.result["short_why"] == "단기예보 키 없음" and "권역을 못 찾았다" in e3.result["mid_why"]
-    assert "단기: 단기예보 키 없음" in e3.result["summary"] and "중기: 중기예보 원천 no_region" in e3.result["summary"]
+    assert "\n단기 — 단기예보 키 없음" in e3.result["summary"] and "\n중기 — 중기예보 원천 no_region" in e3.result["summary"]   # [2026-09-29 가독성] 이유도 줄마다
 
 
 def test_with_a_forecast_it_cites_three_days_verbatim_and_marks_approximate_extremes():
@@ -84,7 +84,7 @@ def test_with_a_forecast_it_cites_three_days_verbatim_and_marks_approximate_extr
     for bad in ("권고", "해야", "주의", "위험"):
         assert bad not in s                                                                # 해석·권고를 붙이지 않는다
     assert e.result["mid"]["days"] == [] and "3일" not in e.result["mid"]["why"] and "2026-09-30 뒤" in e.result["mid"]["why"]   # 중기 없음 — 이유가 자리에
-    assert "중기: 못 받음" in s and "중기예보는 못 받았다" in " ".join(e.notes)
+    assert "\n중기 — 못 받음: " in s and "중기예보는 못 받았다" in " ".join(e.notes)
 
 
 def test_mid_term_days_follow_the_short_window_verbatim_and_the_short_window_wins_on_overlap():
@@ -98,18 +98,21 @@ def test_mid_term_days_follow_the_short_window_verbatim_and_the_short_window_win
     assert m["citation"]["source"] == "external:kma_midfcst" and m["citation"]["region"] == "괴산" and m["why"] is None
     assert [i.source for i in e.inputs] == ["external:kma:vilage", "external:kma_midfcst"]                                     # 원천 둘이 입력에 따로
     s = e.result["summary"]
-    assert "09-30 10~19℃(시간대 값) 비 20%" in s and "중기(괴산 권역) 10-01 7~17℃ 비 70% · 10-02 6~18℃ 비 20% · 10-05 5~16℃ 비 40% (기상청 중기예보 · 발표 09-27 18시)" in s
-    assert "(기상청 단기예보 · 필지 자리 5km 예보 구역 · 발표 09-28 05시)" in s and "격자" not in s   # '격자' 는 낱말 표가 재배 달력으로 바꾼다                   # [발행자 2026-09-29 "어느 지점을 말하는가"] 자리를 줄에 싣는다
+    # [발행자 2026-09-29 "가독성이 떨어진다 — 시간과 날짜 단위로 줄바꿈"] 지평 머리 한 줄 + 날마다 한 줄. ' · ' 로 잇던 한 줄은 휴대폰에서 못 읽었다
+    assert s.split("\n") == ["단기 — 기상청 단기예보 · 필지 자리 5km 예보 구역 · 발표 09-28 05시",       # [발행자 2026-09-29 "어느 지점을 말하는가"] 자리를 머리에
+                             "09-28 12~21℃ 비 30%", "09-29 11~22℃ 비 60% 5.0mm", "09-30 10~19℃(시간대 값) 비 20%",
+                             "중기 — 괴산 권역 · 기상청 중기예보 · 발표 09-27 18시",
+                             "10-01 7~17℃ 비 70%", "10-02 6~18℃ 비 20%", "10-05 5~16℃ 비 40%",
+                             "장기 — 없음: 오늘 뒤를 덮는 장기 전망 등재 없음"], s
+    assert "격자" not in s                                                                  # '격자' 는 낱말 표가 재배 달력으로 바꾼다
     e3 = SD.judge_forecast_citation(_subject(), TODAY, forecast=FORECAST, why=None, mid=[dict(r, ta_region="충주") for r in MID], mid_why=None)
-    assert "중기(괴산 권역 · 기온은 충주 기준) 10-01" in e3.result["summary"] and e3.result["mid"]["citation"]["ta_region"] == "충주"   # 빌린 기온 코드를 숨기지 않는다
-    lines = s.split("\n")                                                                  # 지평마다 한 줄 — 한 줄로 이으면 휴대폰에서 못 읽는다
-    assert len(lines) == 3 and lines[0].startswith("09-28 ") and lines[1].startswith("중기(괴산 권역) ") and lines[2].startswith("장기: 없음")
+    assert "\n중기 — 괴산 권역 · 기온은 충주 기준 · 기상청 중기예보" in e3.result["summary"] and e3.result["mid"]["citation"]["ta_region"] == "충주"   # 빌린 기온 코드를 숨기지 않는다
     for bad in ("권고", "해야", "주의", "위험"):
         assert bad not in s
     # 반대편 — 단기가 없고 중기만 있어도 사실 인용이다(못 받은 쪽의 이유가 자리에 남는다)
     e2 = SD.judge_forecast_citation(_subject(), TODAY, forecast=None, why="예보 원천 error: HTTP 500", mid=MID, mid_why=None)
     assert e2.kind == "사실 인용" and e2.result["days"] == [] and e2.result["short_why"] == "예보 원천 error: HTTP 500"
-    assert [x["day"] for x in e2.result["mid"]["days"]] == ["2026-10-01", "2026-10-02", "2026-10-05"] and "단기: 못 받음 — 예보 원천 error: HTTP 500" in e2.result["summary"]
+    assert [x["day"] for x in e2.result["mid"]["days"]] == ["2026-10-01", "2026-10-02", "2026-10-05"] and e2.result["summary"].startswith("단기 — 못 받음: 예보 원천 error: HTTP 500\n중기 — ")
     assert e2.result["citation"]["source"] is None and [i.source for i in e2.inputs] == ["external:kma_midfcst"]
 
 
@@ -148,6 +151,22 @@ def test_the_mid_term_reason_and_rows_reach_the_decision_through_the_gate(monkey
     assert info["mid"] == "중기예보 사용" and info["forecast"] == "단기 없음(검사)"
 
 
+def test_a_day_between_the_horizons_is_filled_from_the_short_source_or_named_as_missing():
+    """[발행자 실사용 2026-09-29 14시] 단기 09-29~10-01 · 중기 10-03~ — 10-02 가 어느 줄에도 없었다(06시 발표 중기의 D+3 이 원천에 비어 줄이 안 섰고 단기는 창 3일에서
+    잘렸다). 빈 날은 단기 원천에 더 있는 날로 메우고, 그래도 없으면 없다고 말한다 — 조용히 건너뛰지 않는다."""
+    mid_late = [dict(r, for_day="2026-10-03") for r in MID if r["for_day"] == "2026-10-05"]                    # 중기가 10-03 부터
+    short4 = FORECAST                                                                                            # 단기 원천에 4일째 10-01 이 이미 있다(창 3일이 자르던 것)
+    e = SD.judge_forecast_citation(_subject(), TODAY, forecast=short4, why=None, mid=mid_late, mid_why=None)
+    assert [x["day"] for x in e.result["days"]] == ["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01"] and e.result["gap_days"] == ["2026-10-02"]
+    lines = e.result["summary"].split("\n")
+    assert lines[4].startswith("10-01 ") and lines[5] == "10-02 값 없음 — 단기 창 뒤 · 중기 시작 전(두 원천 어느 쪽에도 없음)" and lines[6].startswith("중기 — ")
+    assert any("2026-10-02" in n and "어느 쪽에도" in n for n in e.notes)
+    e2 = SD.judge_forecast_citation(_subject(), TODAY, forecast=FORECAST, why=None, mid=MID, mid_why=None)     # 중기가 바로 이어지면 빈 날 없음
+    assert e2.result["gap_days"] == [] and "값 없음" not in e2.result["summary"]
+    e3 = SD.judge_forecast_citation(_subject(), TODAY, forecast=short4, why=None, mid=None, mid_why="x")       # 중기가 없으면 단기 창(3일)은 그대로 — 창 계약
+    assert [x["day"] for x in e3.result["days"]] == ["2026-09-28", "2026-09-29", "2026-09-30"] and e3.result["gap_days"] == []
+
+
 def test_the_chat_card_and_judge_page_render_a_citation_without_crashing(srv, monkeypatch):
     from judge import run as jr
     monkeypatch.setattr(jr, "gather_forecast", lambda s0: (FORECAST, ""))
@@ -156,11 +175,11 @@ def test_the_chat_card_and_judge_page_render_a_citation_without_crashing(srv, mo
     s = _subject()
     e = next(x for x in jr.judgments_for(s["id"], today=TODAY) if x.decision_id == "forecast_citation")
     card = chat.summarize_envelope(e)
-    assert card.startswith(f"[{words.said('사실 인용')}]") and "09-29" in card and "\n중기(괴산 권역) 10-01" in card and "해석·권고 없음" in card
+    assert card.startswith(f"[{words.said('사실 인용')}]\n단기 — ") and "\n09-29 " in card and "\n중기 — 괴산 권역 · " in card and card.endswith("\n해석·권고 없음")   # 머리·꼬리도 제 줄
     a = chat.answer(s, "내일 날씨 어때", TODAY)
-    assert "\n중기(괴산 권역) 10-01" in a and "\n장기: 없음" in a, a                           # 답변까지 줄이 산다
+    assert "\n중기 — 괴산 권역 · " in a and "\n10-01 7~17℃" in a and "\n장기 — 없음: " in a, a       # 답변까지 줄이 산다
     for q in ("오늘 날씨 어떄", "오늘 날씨는", "오늘 날씨"):                                       # [2026-09-29] 오타 · 조사로 끝나는 물음도 같은 답
-        assert "\n중기(괴산 권역) 10-01" in chat.answer(s, q, TODAY), q
+        assert "\n중기 — 괴산 권역 · " in chat.answer(s, q, TODAY), q
     from frontend import chat_pages
     css = chat_pages.__dict__.get("CSS") or open(chat_pages.__file__, encoding="utf-8").read()
     assert ".msg.sys .bub" in css and "white-space:pre-wrap" in css[css.index(".msg.sys .bub"):css.index("}", css.index(".msg.sys .bub"))]   # 말풍선이 줄을 보인다

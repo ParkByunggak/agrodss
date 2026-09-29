@@ -581,10 +581,21 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
     n = int(d.params["days"])
     last = (today + timedelta(days=n - 1)).isoformat()
     rows = sorted((r for r in (forecast or []) if r.get("kind") == "forecast.weather_daily" and r.get("for_day")), key=lambda r: r["for_day"])
-    rows = [r for r in rows if today.isoformat() <= r["for_day"] <= last]
+    all_short = [r for r in rows if r["for_day"] >= today.isoformat()]
+    rows = [r for r in all_short if r["for_day"] <= last]
     # [D-21 중기] 단기 창 **뒤**의 날만 — 발표일에 따라 D+3 이 단기 창과 겹치면 단기(격자 5km)가 이긴다. 오늘 이전 줄(어제 저녁 발표)도 버린다
     mrows = sorted((r for r in (mid or []) if r.get("kind") == "forecast.weather_mid" and r.get("for_day")), key=lambda r: r["for_day"])
     mrows = [r for r in mrows if r["for_day"] > last]
+    # [발행자 실사용 2026-09-29 14시] 단기 09-29~10-01 · 중기 10-03~ — **10-02 가 어느 줄에도 없었다**(06시 발표 중기의 D+3 이 원천에 비어 줄이 안 섰고,
+    # 단기는 창 3일에서 잘렸다). 두 지평 사이의 빈 날은 단기 원천에 더 있는 날(창 뒤 · 중기 시작 전)로 메우고, 그래도 없는 날은 **없다고 말한다**.
+    gap_days: list[str] = []
+    if mrows:
+        first_mid = mrows[0]["for_day"]
+        spill = [r for r in all_short if last < r["for_day"] < first_mid]
+        rows += spill
+        covered = {r["for_day"] for r in rows}
+        d0, d1 = date.fromisoformat(last) + timedelta(days=1), date.fromisoformat(first_mid)
+        gap_days = [x.isoformat() for x in (d0 + timedelta(days=i) for i in range((d1 - d0).days)) if x.isoformat() not in covered]
     # [D-21 장기] 발행자 등재분 — 오늘 뒤를 덮는 항목만(끝난 기간은 전망이 아니다). 원천을 부른 적 없는 값이라 source 가 publisher: 다
     lrows = sorted((r for r in (outlook or []) if r.get("kind") == "reference.climate_outlook" and r.get("period_to")), key=lambda r: (r["period_from"], r["period_to"]))
     lrows = [r for r in lrows if r["period_to"] >= today.isoformat()]
@@ -596,7 +607,8 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         return Envelope("판단 불가(데이터)", did, sid, as_of,
                         missing=[{"axis": "forecast", "who_can_fill": f"예보를 못 받았다 — {reason}"}],
                         result={"why": reason, "short_why": short_reason, "mid_why": mid_reason, "long_why": long_reason,
-                                "summary": f"예보를 받지 못해 날씨를 말할 수 없습니다 — {reason}"})
+                                # [발행자 2026-09-29 "가독성"] 지평마다 한 줄 — 이유 셋을 한 줄로 이으면 휴대폰에서 못 읽는다
+                                "summary": "\n".join(["예보를 받지 못해 날씨를 말할 수 없습니다", f"단기 — {short_reason}", f"중기 — {mid_reason}", f"장기 — {long_reason}"])})
     days: list[dict[str, Any]] = []
     for r in rows:
         v = r.get("values") or {}
@@ -617,10 +629,15 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         inputs.append(AxisUse("forecast", str(issued), str(src), str(res), "관측"))
         cit = {"source": src, "observed_at": issued, "resolution": res, "note": "기상청 단기예보 그대로 — 해석·권고 없음(경보는 위험 경보 몫 · D-21)"}
         # [발행자 2026-09-29 "이 날씨는 어느 지점을 말하는가"] 어느 자리의 예보인지를 줄에 싣는다 — 단기는 필지 좌표가 든 기상청 5km 격자 칸
-        parts.append(" · ".join(_fmt_forecast_day(x) for x in days) + f" (기상청 단기예보 · 필지 자리 5km 예보 구역 · 발표 {_issued(issued)})")   # '격자' 는 화면 낱말 표가 재배 달력으로 바꾼다 — 농가 말로
+        # [발행자 2026-09-29 "가독성이 떨어진다 — 시간과 날짜 단위로 줄바꿈"] 지평 머리 한 줄 + 날마다 한 줄. ' · ' 로 잇던 줄은 휴대폰에서 못 읽었다
+        parts.append(f"단기 — 기상청 단기예보 · 필지 자리 5km 예보 구역 · 발표 {_issued(issued)}")   # '격자' 는 화면 낱말 표가 재배 달력으로 바꾼다 — 농가 말로
+        parts += [_fmt_forecast_day(x) for x in days]
     else:
         notes.append(f"단기예보는 못 받았다 — {short_reason}")
-        parts.append(f"단기: 못 받음 — {short_reason}")
+        parts.append(f"단기 — 못 받음: {short_reason}")
+    for g in gap_days:
+        notes.append(f"{g} 는 단기 창 뒤 · 중기 시작 전인데 두 원천 어느 쪽에도 값이 없다")
+        parts.append(f"{g[5:]} 값 없음 — 단기 창 뒤 · 중기 시작 전(두 원천 어느 쪽에도 없음)")
     mcit = None
     if mrows:
         msrc, missued, mres = mrows[0].get("source") or "기상청 중기예보", mrows[0].get("observed_at") or "", mrows[0].get("resolution") or ""
@@ -629,11 +646,11 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         mcit = {"source": msrc, "observed_at": missued, "resolution": mres, "region": mrows[0].get("region"), "ta_region": ta_from,
                 "note": "기상청 중기예보(권역) 그대로 — 강수 확률은 오전·오후 중 큰 값 · 강수량은 중기에 없다"}
         where = str(mrows[0].get("region") or "권역") + (f" 권역 · 기온은 {ta_from} 기준" if ta_from else " 권역")   # 어느 자리인지(권역 · 빌린 기온 코드)
-        parts.append("중기(" + where + ") " + " · ".join(_fmt_forecast_day(x) for x in mdays)
-                     + f" (기상청 중기예보 · 발표 {_issued(missued)})")
+        parts.append(f"중기 — {where} · 기상청 중기예보 · 발표 {_issued(missued)}")
+        parts += [_fmt_forecast_day(x) for x in mdays]
     else:
         notes.append(f"중기예보는 못 받았다 — {mid_reason}")
-        parts.append(f"중기: 못 받음 — {mid_reason}")
+        parts.append(f"중기 — 못 받음: {mid_reason}")
     periods: list[dict[str, Any]] = []
     for r in lrows:
         v, c = r.get("values") or {}, r.get("citation") or {}
@@ -644,14 +661,14 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         lsrc, lissued = lrows[0].get("source") or "publisher:kma_outlook", lrows[0].get("observed_at") or ""
         inputs.append(AxisUse("forecast", str(lissued), str(lsrc), "region:" + " · ".join(dict.fromkeys(str(p["region"]) for p in periods)), "관측"))
         lcit = {"source": lsrc, "observed_at": lissued, "note": "기상청 1·3개월 전망 — 발행자가 발표문 수치를 출처와 함께 등재한 것(확률 3분위) · 시스템이 원천을 부른 적 없다 · 해석·권고 없음"}
-        parts.append("장기(" + " · ".join(dict.fromkeys(str(p["type"]) + " 전망" for p in periods)) + f" · 등재 정본 · 발표 {str(lissued)[:10]}) "
-                     + " · ".join(_fmt_outlook_period(p) for p in periods))
+        parts.append("장기 — " + " · ".join(dict.fromkeys(str(p["type"]) + " 전망" for p in periods)) + f" · 등재 정본 · 발표 {str(lissued)[:10]}")
+        parts += [_fmt_outlook_period(p) for p in periods]
     else:
         notes.append(f"장기 전망은 없다 — {long_reason}")
-        parts.append(f"장기: 없음 — {long_reason}")
+        parts.append(f"장기 — 없음: {long_reason}")
     return Envelope("사실 인용", did, sid, as_of, inputs=inputs, revisit_at=(today + timedelta(days=1)).isoformat(),
                     result={"citation": cit or {"source": None, "observed_at": None, "resolution": None, "note": f"단기예보 없음 — {short_reason}"},
-                            "days": days, "short_why": short_reason,
+                            "days": days, "short_why": short_reason, "gap_days": gap_days,
                             "mid": {"citation": mcit, "days": mdays, "why": mid_reason},
                             "long": {"citation": lcit, "periods": periods, "why": long_reason},
                             # [표현 2026-09-28] 단기 · 중기 · 장기는 줄을 나눈다 — 한 줄로 이으면 380자가 넘어 휴대폰에서 못 읽는다(채팅 말풍선은 pre-wrap · 줄이 산다)

@@ -127,12 +127,12 @@ def test_the_citation_carries_the_outlook_after_short_and_mid_and_its_reason_whe
     assert lg["periods"][0]["temp"] == {"above": 50.0, "normal": 30.0, "below": 20.0} and lg["periods"][0]["url"] == GOOD["source_url"] and lg["periods"][1]["precip"] is None
     assert [i.source for i in e.inputs] == ["publisher:kma_outlook"] and e.inputs[0].resolution == "region:충북"
     sm = e.result["summary"]
-    assert "장기(1개월 전망 · 등재 정본 · 발표 2026-09-24) 10-05~10-11 충북 기온 높음 50% · 비슷 30% · 낮음 20% / 강수 많음 30% · 비슷 40% · 적음 30% · 10-12~10-18 충북 기온 높음 50% · 비슷 30% · 낮음 20%" in sm
-    assert "단기: 못 받음 — 단기 없음" in sm and "중기: 못 받음 — 중기 없음" in sm
+    assert sm.split("\n") == ["단기 — 못 받음: 단기 없음", "중기 — 못 받음: 중기 없음", "장기 — 1개월 전망 · 등재 정본 · 발표 2026-09-24",   # [2026-09-29 가독성] 기간마다 한 줄
+                              "10-05~10-11 충북 기온 높음 50% · 비슷 30% · 낮음 20% / 강수 많음 30% · 비슷 40% · 적음 30%", "10-12~10-18 충북 기온 높음 50% · 비슷 30% · 낮음 20%"], sm
     for bad in ("권고", "해야", "주의", "위험"):
         assert bad not in sm
     e2 = SD.judge_forecast_citation(s, TODAY, forecast=None, why="단기 없음", mid=None, mid_why="중기 없음", outlook=None, outlook_why="등재된 장기 전망 없음 — climate_outlook.json")
-    assert e2.kind == "판단 불가(데이터)" and e2.result["long_why"].startswith("등재된 장기 전망 없음") and "장기: 등재된 장기 전망 없음" in e2.result["summary"]
+    assert e2.kind == "판단 불가(데이터)" and e2.result["long_why"].startswith("등재된 장기 전망 없음") and "\n장기 — 등재된 장기 전망 없음" in e2.result["summary"]
 
 
 def test_the_outlook_and_its_reason_reach_the_decision_through_the_gate(tmp_path, monkeypatch):

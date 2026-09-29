@@ -740,7 +740,7 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
         body = " / ".join(f"{a.get('level')} {a.get('risk')}({a.get('stage')})" for a in al) or "지금 창에 경보 없음"
         return f"{head} {body} · 등급 {e.grade} · 재판정 {e.revisit_at}"
     if e.decision_id == "forecast_citation":                       # [D-21] 예보 그대로 — summary 가 이미 원천 · 발표 시각을 품는다
-        return f"{head} {r.get('summary', '')} · 해석·권고 없음"
+        return f"{head}\n{r.get('summary', '')}\n해석·권고 없음"   # [발행자 2026-09-29 "가독성"] 머리·꼬리도 제 줄에 — 요약이 여러 줄이라 이어 붙이면 마지막 날 뒤에 붙는다
     if e.decision_id == "material_citation":
         fams = r.get("cited_families")
         n = fams if isinstance(fams, int) else len(fams or [])

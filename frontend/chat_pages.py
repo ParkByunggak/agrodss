@@ -300,7 +300,7 @@ def outlook_main(message: str = "", error: str = "", form: dict[str, str] | None
     recs, bad = _ol.load()
     today = config.today().isoformat()                                                  # 화면의 오늘은 정본 하나(AGRODSS_TODAY 고정을 따른다 — today 래칫)
     if not recs and not bad:
-        out.append('<p class="meta">아직 없다 — 지금 날씨 물음은 「장기: 없음 — 등재된 장기 전망 없음」 이라고 답한다.</p>')
+        out.append('<p class="meta">아직 없다 — 지금 날씨 물음은 「장기 — 없음: 등재된 장기 전망 없음」 이라고 답한다.</p>')
     for i, e in enumerate(_ol.local_entries()):
         try:
             r = _ol.entry_to_record(e)
