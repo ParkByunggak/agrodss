@@ -19,6 +19,7 @@ from typing import Any
 # 발행자 몫 ① 의 그 두 문장(대장 페이지 「① 확인 셋」 과 같은 문면) — 다른 말로 물어도 같은 답이어야 한다
 SYMPTOM_QUESTIONS = ("잎 끝이 누렇게 되는데 왜 그런가요", "잎이 노래지는데 어떻게 해야 하나")
 WEATHER_QUESTION = "내일 날씨 어때"
+DROUGHT_QUESTION = "가뭄이 심한데 물 줘야 하나"      # [D-20 2026-09-29] 관측 원천(기상청 지난 일강수)이 붙었는지는 이 답의 괄호로 보인다
 CARD_DECISION = "symptom_triage"
 BROWSER_ONLY = "㉠ 엔터로 보내기(Shift+Enter 는 줄바꿈) — 브라우저 안의 동작이라 화면이 스스로 볼 수 없다. 세션의 걷기 도구가 본다"
 NO_SUBJECT = "심은 날이 적힌 목록이 없어 점검할 재료가 없다 — 새 채팅에서 작목과 심은 날을 넣으면 여기가 채워진다"
@@ -67,6 +68,14 @@ def run(today: date, judge_html: str | None) -> dict[str, Any]:
     ok = a.startswith(f"[{cited}]")
     checks.append({"id": "⑤a", "name": f"날씨 물음 「{WEATHER_QUESTION}」", "expect": f"「{cited}」 와 단기·중기 줄",
                    "actual": _first_line(a), "ok": ok, "sec": _since(t0)})
+    # [D-20 2026-09-29] 가뭄 물음 — 임계가 서면 판단함(마지막 비 온 날의 원천이 괄호에), 임계가 없으면 「기준이 없습니다」(아는 상태). 「마지막으로 비 온 날 …」 이면
+    # 비 온 날의 원천(기상청 관측 · 농가 기록)이 하나도 안 닿은 것 — 관측 키·좌표를 본다. 걸린 시간이 관측 호출(최대 30일)의 값이다
+    t0 = datetime.now()
+    a = chat.answer(s, DROUGHT_QUESTION, today)
+    no_knowledge = words.said("판단 불가(지식)")
+    ok = a.startswith(f"[{judged}]") or a.startswith(f"[{no_knowledge}]")
+    checks.append({"id": "⑤b", "name": f"가뭄 물음 「{DROUGHT_QUESTION}」", "expect": f"「{judged} · 마지막 비·관수 …(원천) 뒤 무강수 N일」 또는 임계가 없으면 「{no_knowledge}」",
+                   "actual": _first_line(a) + ("" if ok else " · 비 온 날의 원천이 하나도 안 닿았다(관측 키 · 좌표)"), "ok": ok, "sec": _since(t0)})
     return {"subject": s, "checks": checks, "ok": sum(1 for c in checks if c["ok"]), "total": len(checks)}
 
 

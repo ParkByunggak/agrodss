@@ -33,15 +33,29 @@ def test_the_checks_run_on_the_real_grid_and_write_nothing(monkeypatch):
     before = _files_under("AGRODSS_CHAT_DIR", "AGRODSS_EVENTS_DIR", "AGRODSS_FEEDBACK_DIR")
     r = selfcheck.run(TODAY, serve.judge_page()[1])
     assert _files_under("AGRODSS_CHAT_DIR", "AGRODSS_EVENTS_DIR", "AGRODSS_FEEDBACK_DIR") == before     # 읽기 전용 — 물음은 answer 로만(send 는 원장에 쓴다)
-    assert r["subject"]["id"] == media.load_subjects()[0]["id"] and r["total"] == 4
+    assert r["subject"]["id"] == media.load_subjects()[0]["id"] and r["total"] == 5
     ids = [c["id"] for c in r["checks"]]
-    assert ids == ["㉡", "㉡", "㉢", "⑤a"]
+    assert ids == ["㉡", "㉡", "㉢", "⑤a", "⑤b"]
     for c in r["checks"][:2]:                                                                             # 증상 두 문장 — 다른 말, 같은 답
         assert c["ok"] and c["actual"].startswith(f"[{words.said('판단함')}]") and "원인 후보" in c["actual"], c
     assert r["checks"][2]["ok"] and r["checks"][2]["actual"] == "있다"
     w = r["checks"][3]
     assert not w["ok"] and w["actual"] and w["sec"] >= 0                                                  # 격리 환경엔 좌표·키가 없다 — 못 받은 이유가 실제 칸에 그대로
-    assert r["ok"] == 3
+    dr = r["checks"][4]                                                                                   # [D-20] 실제 격자엔 임계가 없다 — 「기준이 없습니다」 는 아는 상태라 맞다
+    assert dr["ok"] and dr["actual"].startswith(f"[{words.said('판단 불가(지식)')}]") and dr["sec"] >= 0
+    assert r["ok"] == 4
+
+
+def test_the_drought_row_differs_when_no_rain_source_reaches_the_judge(monkeypatch):
+    """[D-20 2026-09-29] 관측 키·좌표가 없고 농가 기록도 없으면 「마지막으로 비 온 날 …」(판단 불가(데이터)) — 그것은 원천이 하나도 안 닿은 것이라 다르다 · 이유를 덧붙인다."""
+    monkeypatch.setenv(config.TODAY_ENV, TODAY.isoformat())
+    real = chat.answer
+    monkeypatch.setattr(chat, "answer", lambda s, q, today: f"[{words.said('판단 불가(데이터)')}] 마지막으로 비 온 날이나 관수한 날을 알면 판단합니다" if q == selfcheck.DROUGHT_QUESTION else real(s, q, today))
+    r = selfcheck.run(TODAY, serve.judge_page()[1])
+    dr = r["checks"][4]
+    assert not dr["ok"] and dr["actual"].endswith("비 온 날의 원천이 하나도 안 닿았다(관측 키 · 좌표)")
+    monkeypatch.setattr(chat, "answer", lambda s, q, today: f"[{words.said('판단함')}] 마지막 비·관수 2026-09-25(기상청 관측 지점 131) 뒤 무강수 4일 — 임계 7일 미만" if q == selfcheck.DROUGHT_QUESTION else real(s, q, today))
+    assert selfcheck.run(TODAY, serve.judge_page()[1])["checks"][4]["ok"]
 
 
 def test_it_says_differs_only_from_the_comparison_not_by_default(monkeypatch):
@@ -49,7 +63,7 @@ def test_it_says_differs_only_from_the_comparison_not_by_default(monkeypatch):
     judge_html = serve.judge_page()[1]
     monkeypatch.setattr(chat, "answer", lambda s, q, today: f"[{words.said('판단 불가(지식)')}]. 기준이 없습니다.")
     r = selfcheck.run(TODAY, judge_html)
-    assert [c["ok"] for c in r["checks"]] == [False, False, True, False] and r["ok"] == 1              # 답이 달라지면 두 줄이 다르다 — 카드 줄은 화면을 보므로 그대로
+    assert [c["ok"] for c in r["checks"]] == [False, False, True, False, True] and r["ok"] == 2        # 답이 달라지면 두 줄이 다르다 — 카드 줄은 화면을 보므로 그대로 · 가뭄 줄은 「기준이 없습니다」 라 맞다
     html = selfcheck.main_html(r, TODAY)
     assert "다른 것 3" in html and "전부 맞다" not in html
     r2 = selfcheck.run(TODAY, "")                                                                        # 카드는 /judge 화면에서 본다 — 화면에 없으면 없다
@@ -83,8 +97,8 @@ def test_no_subject_with_an_anchor_is_said_not_hidden(monkeypatch):
 def test_the_page_is_reachable_from_every_menu_and_speaks_plainly(srv, monkeypatch):
     monkeypatch.setenv(config.TODAY_ENV, TODAY.isoformat())
     status, body = _get(srv, "/selfcheck")
-    assert status == 200 and "자기 점검" in body and body.count('class="card chk"') == 4                    # 줄 4 — 카드(표는 390px 에서 넘쳤다)
-    assert "다른 것 1" in body and "3/4 맞음" in body                                                       # 격리 환경: 날씨만 못 받는다
+    assert status == 200 and "자기 점검" in body and body.count('class="card chk"') == 5                    # 줄 5 — 카드(표는 390px 에서 넘쳤다)
+    assert "다른 것 1" in body and "4/5 맞음" in body                                                       # 격리 환경: 날씨만 못 받는다(가뭄은 임계 없음 = 아는 상태)
     assert selfcheck.BROWSER_ONLY.split(" — ")[0] in body and "걷기 도구" in body                            # ㉠ 은 못 본다고 말한다
     assert re.search(r"\d+\.\d초", body)                                                                    # 걸린 시간 — 원천이 죽어 있으면 여기서 보인다
     _, me = _get(srv, "/me")                                                                                # "/" 는 첫 채팅으로 넘긴다(본문 없음)
