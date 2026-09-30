@@ -40,6 +40,7 @@ LONG_OPEN_DAYS = 30                             # §2 "30일 넘게 열려 있�
 REACHED, UNREACHED = "도달", "미확인"           # §4 — "없음" 이라는 상태는 이 도구에 없다
 GROUPS = ("대장", "핸드오버", "검토지")
 PROBE_TIMEOUT = 15
+NEXT_MOVE_BUILT = "5b8d9e3"      # §5 의 한 수(일괄 결정 화면)가 선 커밋 — 비면 아직 안 선 것(문서가 "별도 묶음" 까지만 말한다)
 
 
 @dataclass(frozen=True)
@@ -389,6 +390,10 @@ def render(today: date, backlog_text: str | None = None) -> str:
              "자리가 없는 것이 아니라 자리가 **파일**이라 화면에서 안 보였다(⑤b 장기 전망 폼이 파일 편집을 화면으로 옮긴 것과 같은 형태).")
     L.append("")
     L.append("이것은 이 문서의 범위 밖(§7 — 대기 항목을 닫지 않는다)이라 **별도 묶음**이다. P2 보류 {0}행은 그 화면과 무관하게 발행자 PC 의 `--probe` 한 번으로 확정/P4 가 갈린다 — 그것은 한 수가 아니라 측정의 나머지다.".format(len(p2)))
+    if NEXT_MOVE_BUILT:
+        L.append("")
+        L.append(f"**[그 뒤]** 이 한 수는 발행자 승인(2026-09-29 · 「모르겠다」 1급 · 출처 표시 · 맨 위 D-2)으로 **세워졌다** — `/me/decisions`({NEXT_MOVE_BUILT}). "
+                 "이제 이 측정의 다음은 그 화면의 답이 오는 것이고, 「모르겠다」 가 쌓인 행은 이 표의 갈래를 P1 → P4 로 고친다(사후 교정 경로).")
     L.append("")
     L.append("§6 확인 비용 측정은 H1 일 때만 한다(지시서) — 이번 판정이 H2 라 하지 않는다. 단 되풀이 목록의 P2 둘(D-20 · D-21)은 §6 의 후보로 남는다.")
     L.append("")
