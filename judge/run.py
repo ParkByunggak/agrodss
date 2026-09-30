@@ -60,22 +60,27 @@ def gather_mid(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, st
     return r["records"], (f"일부만 — {r['partial']}" if r.get("partial") else "")
 
 
-def drought_days_needed(subject: dict[str, Any], today: date, lookback: int) -> int:
-    """관측을 며칠 뒤로 볼지 — 임계(오늘 칸 drought_rules.dry_days)가 있으면 그 날수면 충분하다: 그 안에 비가 없었으면 무강수는 이미 임계 이상이고
-    (정확한 날수는 몰라도 판단은 선다), 있었으면 그 날이 마지막 비 온 날이다. 임계가 없으면 lookback(30). [2026-09-29 구조적 위험 처방 — 첫 답이 최대 30번 부르던 것]"""
+def drought_days_needed(subject: dict[str, Any], today: date) -> int:
+    """관측을 며칠 뒤로 볼지 — 임계(오늘 칸 drought_rules.dry_days)가 있으면 **그 날수**: 그 안에 비가 없었으면 무강수는 이미 임계 이상이고
+    (정확한 날수는 몰라도 판단은 선다), 있었으면 그 날이 마지막 비 온 날이다. [2026-09-29 구조적 위험 처방 — 첫 답이 최대 30번 부르던 것]
+    [산출물 검토 2026-09-30] ① 임계가 30보다 커도 그만큼 본다 — min(30, N) 이면 창이 임계를 못 덮어 관측으로는 **영영** 판단이 안 섰다(「30일만 받음」).
+    ② 임계가 없으면 0 — 판정기가 관측을 읽기 전에 판단 불가(지식)로 돌아가므로 부르는 것은 낭비였다(임계 없는 지금 답마다 30번)."""
     unit, miss = grid_schema.load_unit(subject)
     anchor = subject.get("anchor")
     if miss is not None or not anchor:
-        return lookback
+        return 0
     stage = grid_capture.stage_for_day(unit, (today - date.fromisoformat(anchor)).days)
     rules = (stage or {}).get(grid_schema.DROUGHT_RULES_KEY)
     dd = rules.get("dry_days") if isinstance(rules, dict) else None
-    return min(lookback, int(dd)) if isinstance(dd, int) and not isinstance(dd, bool) and dd >= 1 else lookback
+    return int(dd) if isinstance(dd, int) and not isinstance(dd, bool) and dd >= 1 else 0
 
 
 def gather_obs_rain(subject: dict[str, Any], today: date) -> tuple[list[dict[str, Any]] | None, str]:
     """[D-20 · 발행자 2026-09-29 "기상청 현시점 이전의 무강수일을 활용해서 관수를 권고해야"] 최근접 관측 지점의 지난 일강수(kma_sfcdd) — 마지막 비 온 날의
     원천. 좌표·apihub 키가 있을 때만. 없으면 (None, 이유) — 가뭄 판단은 그때 농가의 비·관수 기록으로만 센다."""
+    need = drought_days_needed(subject, today)
+    if need <= 0:
+        return None, "임계(격자 drought_rules.dry_days)가 없어 관측을 부르지 않는다 — 임계가 서면 그 날수만 부른다"   # [2026-09-30] 임계 없이는 판정기가 관측을 안 읽는다
     lat, lon = subject.get("lat"), subject.get("lon")
     if lat is None or lon is None:
         return None, "재배 단위에 좌표가 없다(I-6 — 주소→좌표는 ingest.soil_exam 지오코딩)"
@@ -85,7 +90,7 @@ def gather_obs_rain(subject: dict[str, Any], today: date) -> tuple[list[dict[str
     if not stn:
         return None, "가까운 관측 지점을 못 찾았다"
     d = registry.get("drought_alert")
-    r = kma.fetch_recent_obs(int(stn["id"]), today, drought_days_needed(subject, today, int(d.params["lookback_days"])), float(d.params["wet_mm"]))
+    r = kma.fetch_recent_obs(int(stn["id"]), today, need, float(d.params["wet_mm"]))
     if r["status"] != "success":
         return (r["records"] or None), f"관측 원천 {r['status']}: {r.get('message', '')}(지점 {stn['name']} · {r.get('days_seen', 0)}일까지 받음)"
     return r["records"], ""

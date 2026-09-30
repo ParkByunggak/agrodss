@@ -740,7 +740,8 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
                                 "summary": f"가뭄을 판단할 기준(무강수 며칠)이 아직 없습니다 — 지금 칸은 {water_txt}. 기준이 서면 관수 검토 여부를 냅니다"})
     threshold = int(rules["dry_days"])
     wet_mm = float(rules.get("wet_mm", d.params["wet_mm"]))                # 비 온 날의 기준 — 격자(발행자)가 있으면 그것, 없으면 기상청 강수일 정의
-    since = (today - timedelta(days=lookback)).isoformat()
+    window = max(lookback, threshold)                                      # [2026-09-30] 임계가 30보다 크면 창도 그만큼 — 창이 임계보다 짧으면 그 사이의 비 온 날이 버려진다
+    since = (today - timedelta(days=window)).isoformat()
     from ingest.chat import rain_in                                        # 비 어휘 정본은 1층 하나(증상 어휘와 같은 규율)
     wet: list[tuple[str, str]] = [(str(o.get("observed_at") or "")[:10], "농가 관찰") for o in (observations or []) if rain_in(o.get("text") or "")]
     irr = str(d.params["irrigation_event"])
@@ -769,7 +770,7 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
                             result={"dry_days": dry, "threshold": threshold, "last_wet": None, "wet_source": src, "due": True, "water": dict(water), "summary": summary}, notes=notes)
         return Envelope("판단 불가(데이터)", did, sid, as_of,
                         missing=[{"axis": "precip", "who_can_fill": "농가 — 마지막으로 비 온 날 또는 관수한 날 한 줄"}],
-                        result={"why": f"최근 {lookback}일에 비 관찰도 관수 사건도 없고 기상청 관측도 {'비 온 날이 없다(' + str(len(obs_days)) + '일만 받음)' if obs_days else '없다 — ' + (obs_rain_why or '')} — 무강수 일수를 셀 수 없다",
+                        result={"why": f"최근 {window}일에 비 관찰도 관수 사건도 없고 기상청 관측도 {'비 온 날이 없다(' + str(len(obs_days)) + '일만 받음)' if obs_days else '없다 — ' + (obs_rain_why or '')} — 무강수 일수를 셀 수 없다",
                                 "summary": f"마지막으로 비 온 날이나 관수한 날을 알면 판단합니다 — 지금 칸은 {water_txt}"}, notes=notes)
     last_wet, src = max(wet)
     dry = (today - date.fromisoformat(last_wet)).days

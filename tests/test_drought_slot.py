@@ -133,10 +133,32 @@ def test_the_observation_window_follows_the_threshold_not_the_thirty_day_lookbac
     monkeypatch.setattr(kma, "fetch_recent_obs", lambda stn, today, lookback, wet_mm=0.1: seen.append(lookback) or {"status": "success", "records": [], "days_seen": 0})
     judge_run.gather_obs_rain(dict(s, lat=36.75, lon=127.98), TODAY)
     assert seen == [7]                                                                            # 임계 7 → 7일만 부른다
-    _synthetic_grid(tmp_path, monkeypatch, rules=None)                                           # 임계 없음 → 30
+    _synthetic_grid(tmp_path, monkeypatch, rules=None)                                           # 임계 없음 → 관측을 부르지 않는다(판정기가 읽기 전에 판단 불가(지식))
+    recs, why = judge_run.gather_obs_rain(dict(s, lat=36.75, lon=127.98), TODAY)
+    assert recs is None and "임계" in why and "부르지 않는다" in why and seen == [7]
+    assert judge_run.drought_days_needed(dict(s, anchor=None), TODAY) == 0                       # 심은 날이 없으면 칸을 못 정한다 → 0(판정기도 기준점에서 멈춘다)
+
+
+def test_a_threshold_beyond_thirty_days_is_still_covered_by_the_window(tmp_path, monkeypatch):
+    """[산출물 검토 2026-09-30] min(30, N) 이면 N=45 에 창 30 → 「30일만 받음」 이 영영 이어진다. 창은 임계만큼 — 판정기의 since 도 함께(그 사이의 비 온 날이 버려지지 않게)."""
+    _synthetic_grid(tmp_path, monkeypatch, rules=dict(RULES, dry_days=45))
+    s = _subject()
+    from judge import run as judge_run
+    from ingest import kma
+    monkeypatch.setenv("KMA_API_HUB_KEY", "x")
+    monkeypatch.setattr(kma, "nearest_station", lambda lat, lon, allowed_ids=None: {"id": 131, "name": "충주"})
+    seen = []
+    monkeypatch.setattr(kma, "fetch_recent_obs", lambda stn, today, lookback, wet_mm=0.1: seen.append(lookback) or {"status": "success", "records": [], "days_seen": 0})
     judge_run.gather_obs_rain(dict(s, lat=36.75, lon=127.98), TODAY)
-    assert seen == [7, 30]
-    assert judge_run.drought_days_needed(dict(s, anchor=None), TODAY, 30) == 30                   # 심은 날이 없으면 칸을 못 정한다 → 30
+    assert seen == [45]
+    dry = [_obs((TODAY - timedelta(days=k)).isoformat(), 0.0) for k in range(1, 46)]
+    e44 = SD.judge_drought_alert(s, TODAY, evts=[], observations=[], obs_rain=dry[:44])
+    assert e44.kind == "판단 불가(데이터)" and "44일만 받음" in e44.result["why"] and "최근 45일" in e44.result["why"]
+    e45 = SD.judge_drought_alert(s, TODAY, evts=[], observations=[], obs_rain=dry)
+    assert e45.kind == "판단함" and e45.result["dry_days"] == 45 and e45.result["due"] is True
+    wet40 = (TODAY - timedelta(days=40)).isoformat()
+    e40 = SD.judge_drought_alert(s, TODAY, evts=[], observations=[], obs_rain=dry[:39] + [_obs(wet40, 3.0)])
+    assert e40.result["last_wet"] == wet40 and e40.result["dry_days"] == 40 and e40.result["due"] is False   # 창이 30이면 이 비가 버려져 「40일만 받음」 이 됐다
 
 
 def test_without_observed_rain_the_reason_travels_and_the_grid_can_override_wet_mm(tmp_path, monkeypatch):
