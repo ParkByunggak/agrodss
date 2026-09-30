@@ -56,6 +56,8 @@ ITEMS: tuple[dict[str, Any], ...] = (
      "basis": BASIS_INFERRED, "basis_from": "배수 물음의 칸 묶임", "unblocks": "배수 물음의 길"},
     {"id": "H-후보㉢", "ask": "평년값(기상청 평년)을 날씨 답에 인용할 것인가", "default": "올린다 — 「평년보다 N℃ 높다」 한 줄",
      "basis": BASIS_INFERRED, "basis_from": "평년값 인용", "unblocks": "날씨 답의 평년 비교 줄"},
+    {"id": "H-후보㉣", "ask": "재배 목록·필지·사용자 정보 덮개 파일이 깨졌을 때 — 씨앗으로 화면을 내되 그 사실을 말할 것인가(지금은 모든 화면이 오류)", "default": "씨앗으로 내되 그 사실을 말한다 — 화면 전체가 죽는 것보다 낫고 「버린 것을 말한다」 와 같은 형태",
+     "basis": BASIS_RECOMMENDED, "basis_from": "씨앗으로 내되 그 사실을 말하는 쪽", "unblocks": "세 로더의 손상 파일 처방(결정 화면과 같은 형태)"},
 )
 IDS = tuple(i["id"] for i in ITEMS)
 

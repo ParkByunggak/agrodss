@@ -21,6 +21,18 @@ def _files_under(*envs: str) -> int:
     return sum(len(list(Path(os.environ[e]).rglob("*"))) for e in envs if os.environ.get(e) and Path(os.environ[e]).exists())
 
 
+def _threshold_today() -> bool:
+    """실제 격자의 오늘 칸에 가뭄 임계가 있는가 — 검사가 격자 상태에 매이지 않게(2026-09-30 미리 걷기 실측: 이 검사 둘이 임계 없는 상태를 박아 두어 한 명령이 거부됐다).
+    임계가 있으면 격리 환경(관측 키·좌표·농가 기록 없음)의 ⑤b 는 「마지막으로 비 온 날 …」 이라 다르다가 맞다 · 없으면 「기준이 없습니다」 가 맞다."""
+    from grid import capture, schema as grid_schema
+    from judge import stage_decisions as SD
+    s = media.load_subjects()[0]
+    unit, _ = grid_schema.load_unit(s)
+    st = capture.stage_for_day(unit, (TODAY - date.fromisoformat(s["anchor"])).days) or {}
+    rules = st.get(SD.DROUGHT_RULES_KEY)
+    return isinstance(rules, dict) and isinstance(rules.get("dry_days"), int)
+
+
 def _get(port, path):
     c = http.client.HTTPConnection("127.0.0.1", port, timeout=90)
     c.request("GET", path)
@@ -41,9 +53,14 @@ def test_the_checks_run_on_the_real_grid_and_write_nothing(monkeypatch):
     assert r["checks"][2]["ok"] and r["checks"][2]["actual"] == "있다"
     w = r["checks"][3]
     assert not w["ok"] and w["actual"] and w["sec"] >= 0                                                  # 격리 환경엔 좌표·키가 없다 — 못 받은 이유가 실제 칸에 그대로
-    dr = r["checks"][4]                                                                                   # [D-20] 실제 격자엔 임계가 없다 — 「기준이 없습니다」 는 아는 상태라 맞다
-    assert dr["ok"] and dr["actual"].startswith(f"[{words.said('판단 불가(지식)')}]") and dr["sec"] >= 0
-    assert r["ok"] == 4
+    dr = r["checks"][4]                                                                                   # [D-20] 격자 상태를 따른다(_threshold_today)
+    if _threshold_today():                                                                                # 임계 있음 · 격리 환경엔 비 온 날의 원천이 없다 → 「마지막으로 비 온 날 …」 = 다르다
+        assert not dr["ok"] and dr["actual"].startswith(f"[{words.said('판단 불가(데이터)')}]") and dr["actual"].endswith("(관측 키 · 좌표)")
+        assert r["ok"] == 3
+    else:                                                                                                 # 임계 없음 — 「기준이 없습니다」 는 아는 상태라 맞다
+        assert dr["ok"] and dr["actual"].startswith(f"[{words.said('판단 불가(지식)')}]")
+        assert r["ok"] == 4
+    assert dr["sec"] >= 0
 
 
 def test_the_drought_row_differs_when_no_rain_source_reaches_the_judge(monkeypatch):
@@ -98,7 +115,8 @@ def test_the_page_is_reachable_from_every_menu_and_speaks_plainly(srv, monkeypat
     monkeypatch.setenv(config.TODAY_ENV, TODAY.isoformat())
     status, body = _get(srv, "/selfcheck")
     assert status == 200 and "자기 점검" in body and body.count('class="card chk"') == 5                    # 줄 5 — 카드(표는 390px 에서 넘쳤다)
-    assert "다른 것 1" in body and "4/5 맞음" in body                                                       # 격리 환경: 날씨만 못 받는다(가뭄은 임계 없음 = 아는 상태)
+    diff = 2 if _threshold_today() else 1                                                                  # 격리 환경: 날씨 + (임계가 있으면 가뭄 원천도) 못 받는다 · 임계 없으면 「기준이 없습니다」 = 아는 상태
+    assert f"다른 것 {diff}" in body and f"{5 - diff}/5 맞음" in body
     assert selfcheck.BROWSER_ONLY.split(" — ")[0] in body and "걷기 도구" in body                            # ㉠ 은 못 본다고 말한다
     assert re.search(r"\d+\.\d초", body)                                                                    # 걸린 시간 — 원천이 죽어 있으면 여기서 보인다
     _, me = _get(srv, "/me")                                                                                # "/" 는 첫 채팅으로 넘긴다(본문 없음)

@@ -57,11 +57,19 @@ def test_the_decision_is_registered_undeclared_and_judged_before_symptoms():
 def test_with_the_real_grid_it_says_which_cell_is_empty_and_what_the_water_values_are():
     """**상태 검사 — 실제 격자의 가뭄 임계를 보는 유일한 검사.** 지금은 임계가 없다 — 어디가 비었는지 + 지금 칸의 수분 값(정본이 이미 아는 것)을 함께."""
     s = _subject()
-    e = SD.judge_drought_alert(s, TODAY, evts=[], observations=[{"id": "o", "text": "가을 가뭄이 심하다", "observed_at": TODAY.isoformat()}])
     st = _stage_today(s)
-    assert e.kind == "판단 불가(지식)"
-    assert f"칸 {st['order']}" in e.result["why"] and SD.DROUGHT_RULES_KEY in e.result["why"] and "D-20" in e.result["why"] and ".json" in e.result["why"]
-    assert st["water"]["demand"] in e.result["summary"] and st["water"]["deficit_sensitivity"] in e.result["summary"] and "기준" in e.result["summary"]
+    rules = st[SD.DROUGHT_RULES_KEY]                                                            # [2026-09-30 · apply_grid_value] 칸 3·4 에 임계 7일 — 발행자 측 추론(표준 아님)이 출처에 그대로
+    assert rules["dry_days"] == 7 and "추론" in rules["source"] and "표준 아님" in rules["source"]
+    e = SD.judge_drought_alert(s, TODAY, evts=[], observations=[{"id": "o", "text": "가을 가뭄이 심하다", "observed_at": TODAY.isoformat()}])
+    assert e.kind == "판단 불가(데이터)" and e.missing[0]["axis"] == "precip"                     # 임계는 있고 비·관수·관측 기록이 없다 → 마지막 비 온 날을 묻는다
+    assert any("임계 7일 — 출처: " in n and "추론" in n for n in e.notes)                          # 출처가 추론이면 그 표시가 답까지 간다
+    for w in (st["water"]["demand"], st["water"]["deficit_sensitivity"], st["water"]["excess_sensitivity"]):
+        assert w in e.result["summary"]                                                         # 과습 민감도 함께(4단계는 과습이 회복 불가)
+    wet = {"id": "r", "text": "어제 비가 왔다", "observed_at": (TODAY - timedelta(days=3)).isoformat()}
+    e3 = SD.judge_drought_alert(s, TODAY, evts=[], observations=[wet])
+    assert e3.kind == "판단함" and e3.result["dry_days"] == 3 and e3.result["due"] is False and e3.result["threshold"] == 7
+    e8 = SD.judge_drought_alert(s, TODAY, evts=[], observations=[dict(wet, observed_at=(TODAY - timedelta(days=8)).isoformat())])
+    assert e8.result["due"] is True and "관수 검토" in e8.result["summary"] and "과습 민감" in e8.result["summary"]
 
 
 def test_with_a_threshold_but_no_rain_or_irrigation_record_it_asks_for_the_last_wet_day(tmp_path, monkeypatch):

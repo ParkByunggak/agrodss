@@ -53,7 +53,7 @@ def test_every_item_is_a_p1_judgment_and_every_p1_decision_is_on_the_screen():
     p1 = {k for k, v in judged.items() if v.branch == "P1"}
     on_screen = set(dc.IDS)
     grouped = {i for i in on_screen if i.startswith("H-후보")}                      # 측정은 후보 셋을 한 행(H-후보 · n=3)으로 — 화면은 셋으로 편다
-    assert grouped == {"H-후보㉠", "H-후보㉡", "H-후보㉢"} and "H-후보" in p1
+    assert grouped == {"H-후보㉠", "H-후보㉡", "H-후보㉢", "H-후보㉣"} and "H-후보" in p1 and judged["H-후보"].n == len(grouped)   # 측정 행의 문항 수 = 화면의 후보 수
     for i in on_screen - grouped:
         assert i in p1, f"{i}: 측정에서 P1 이 아닌 것이 맞다/다르다 화면에 있다 — 외부 정본(P2)·내부 논리(P3)는 답을 사람에게 묻지 않는다"
     missing = p1 - (on_screen - grouped) - P1_NOT_A_DECISION

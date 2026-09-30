@@ -732,7 +732,7 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
     if not isinstance(water, dict):
         return Envelope("판단 불가(지식)", did, sid, as_of, result={"why": f"격자 {uid} 칸 {stage.get('order')} 의 water 미채움 · 고칠 파일 {grid_schema.unit_file_name(uid)}",
                                                                      "summary": "이 칸의 수분 요구가 기준에 없어 가뭄을 판단할 수 없습니다"})
-    water_txt = f"수분 요구 {water.get('demand')} · 결핍 민감 {water.get('deficit_sensitivity')}"
+    water_txt = f"수분 요구 {water.get('demand')} · 결핍 민감 {water.get('deficit_sensitivity')} · 과습 민감 {water.get('excess_sensitivity')}"   # [2026-09-30] 과습도 함께 — 4단계는 과습이 회복 불가라 관수 검토 줄에 그 경계가 보여야 한다
     rules = stage.get(key)
     if not (isinstance(rules, dict) and isinstance(rules.get("dry_days"), int)):
         return Envelope("판단 불가(지식)", did, sid, as_of,
@@ -752,7 +752,8 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
             if (r.get("values") or {}).get("rn_day_mm") is not None and float(r["values"]["rn_day_mm"]) >= wet_mm]
     wet = [(w, src) for w, src in wet if w and since <= w <= today.isoformat()]
     inputs = _anchor_inputs(subject, anchor)
-    notes = ["관수 검토는 권고이지 양·방법이 아니다 — 임계는 격자 drought_rules(D-20 · 발행자 정본)"]
+    notes = ["관수 검토는 권고이지 양·방법이 아니다 — 임계는 격자 drought_rules(D-20 · 발행자 정본)",
+             f"임계 {threshold}일 — 출처: {rules.get('source') or '적히지 않음'}"]      # [2026-09-30] 출처가 추론이면 그 표시가 답까지 간다(맞다가 눌려도 추론이 정본으로 승격되지 않게)
     if obs_rows:
         inputs.append(AxisUse("precip", str(obs_rows[0].get("fetched_at") or ""), str(obs_rows[0].get("source") or ""), str(obs_rows[0].get("resolution") or ""), "관측"))
         notes.append(f"기상청 지난 일강수 {len(obs_rows)}일 읽음(지점 {stn}) · 비 온 날 = 일강수 {wet_mm:g}mm 이상")
