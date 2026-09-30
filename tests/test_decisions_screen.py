@@ -155,6 +155,38 @@ def test_the_screen_flow_get_answer_refuse_delete_and_the_ledger_stays_untouched
     assert hashlib.sha256(backlog.read_bytes()).hexdigest() == before                             # 화면은 항목을 닫지 않는다
 
 
+def test_a_corrupt_answer_file_is_said_on_the_screen_not_a_500_and_is_never_overwritten(srv, tmp_path, monkeypatch):
+    """[2026-09-30 실측] load() 예외 → 화면 통째로 500. 이제 (빈 답, 이유) — 폼은 그대로, 저장은 거부, 파일은 그대로, /changes 에도 뜬다(U-21 형태)."""
+    from ingest import dropped
+    p = Path(dc.local_path())
+    assert p != dc.LOCAL_PATH                                        # conftest 의 tmp — 운영 덮개가 아니다
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("{not json", encoding="utf-8")
+    raw = p.read_bytes()
+    answers, why = dc.read_for_screen()
+    assert answers == {} and why and "못 읽었다" in why
+    status, body = _get(srv, "/me/decisions")
+    assert status == 200 and "답 파일을 못 읽었다" in body and body.count('class="card dec"') == len(dc.IDS)   # 500 이 아니라 이유 + 폼 전부
+    status, body = _post(srv, "/me/decisions", {"id": "D-2", "verdict": "맞다", "note": ""})
+    assert status == 400 and "저장하지 않았다" in body and p.read_bytes() == raw                             # 덮어쓰지 않는다
+    assert any(d["where"] == dc.DROP_WHERE for d in dropped.all_drops())
+    _, changes = _get(srv, "/changes")
+    assert dc.DROP_WHERE in changes
+    p.write_text('{"answers": {}}', encoding="utf-8")
+    assert dc.read_for_screen() == ({}, None)                                                                  # 고치면 바로 읽힌다
+
+
+def test_the_answer_time_is_shown_in_the_viewers_clock_not_a_utc_date_slice(tmp_path, monkeypatch):
+    """[C16 형태] 저녁 답(UTC 23:30 = KST 다음날 08:30)이 어제 날짜로 뜨던 자르기 — 화면 시각은 render.local_time 하나."""
+    from frontend import render
+    monkeypatch.setenv("AGRODSS_DECISIONS_LOCAL_PATH", str(tmp_path / "d.json"))
+    at = datetime(2026, 9, 29, 23, 30, tzinfo=timezone.utc)
+    dc.answer("D-2", "맞다", now=at)
+    html = chat_pages.decisions_main()
+    assert render.local_time(at.isoformat(timespec="seconds")) in html
+    assert "2026-09-29</span>" not in html                                                                    # UTC 날짜 조각이 그대로 나가지 않는다
+
+
 def test_the_screen_is_linked_from_the_menu_and_me_and_speaks_plainly(srv):
     _, me = _get(srv, "/me")
     _, body = _get(srv, "/me/decisions")

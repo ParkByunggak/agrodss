@@ -339,7 +339,7 @@ def decisions_main(message: str = "", error: str = "", form: dict[str, str] | No
     발행자 셋: 「모르겠다」 1급 선택지(쌓이면 P4 신호) · 제안값의 출처 표시(추론은 맞다를 눌러도 남는다) · 맨 위 D-2."""
     from ingest import decisions as dc
     f = form or {}
-    answers = dc.load()
+    answers, unreadable = dc.read_for_screen()          # 못 읽으면 (빈 답, 이유) — 화면은 500 이 아니라 이유를 말한다(U-21)
     sm = dc.summary(answers)
     c = sm["counts"]
     out = ['<div class="thead"><div><h1>결정 — 한 화면에서 답하기</h1><div class="meta">발행자만 답할 수 있는 것을 제안값과 함께 놓았다. 줄마다 맞다 / 다르다(→ 무엇) / 모르겠다 중 하나. '
@@ -348,6 +348,8 @@ def decisions_main(message: str = "", error: str = "", form: dict[str, str] | No
         out.append(f'<p class="err">{_e(error)}</p>')
     if message:
         out.append(f'<p class="ok">{_e(message)}</p>')
+    if unreadable:
+        out.append(f'<p class="err">답 파일을 못 읽었다 — {_e(unreadable)}. 고치기 전까지 답은 저장되지 않는다(파일은 그대로 둔다 · 변경 로그 「읽다 버린 것」 에도 뜬다).</p>')
     out.append(f'<p class="meta">답 {sm["answered"]}/{sm["total"]} · 맞다 {c["맞다"]} · 다르다 {c["다르다"]} · 모르겠다 {c["모르겠다"]}</p>')
     if sm["unknown_ids"]:
         out.append(f'<p class="meta">모르겠다 {len(sm["unknown_ids"])}건({_e(" · ".join(sm["unknown_ids"]))}) — 모르겠다가 쌓이면 그 항목은 발행자만 답할 수 있는 것이 아니라 '
@@ -359,7 +361,7 @@ def decisions_main(message: str = "", error: str = "", form: dict[str, str] | No
                    f'<div class="meta">{_e(dc.BASIS_SAID[it["basis"]])}</div>'
                    f'<div class="meta">풀리는 것: {_e(it["unblocks"])}</div>')
         if a:
-            out.append(f'<div class="ok">답: {_e(a.get("verdict", ""))}{(" — " + _e(a["note"])) if a.get("note") else ""} <span class="meta">{_e(str(a.get("at", ""))[:10])}</span></div>'
+            out.append(f'<div class="ok">답: {_e(a.get("verdict", ""))}{(" — " + _e(a["note"])) if a.get("note") else ""} <span class="meta">{_e(render.local_time(a.get("at")))}</span></div>'     # 시각은 local_time 으로만(C16 — [:10] 은 UTC 날짜를 잘라 저녁 답이 어제로 뜬다)
                        f'<form method="post" action="/me/decisions/delete" style="margin-top:4px"><input type="hidden" name="id" value="{_e(it["id"])}"><button class="btn" type="submit">이 답 지우기</button></form>')
         else:
             mine = f.get("id") == it["id"]

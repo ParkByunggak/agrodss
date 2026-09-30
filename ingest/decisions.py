@@ -16,8 +16,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ingest import dropped
+
 ROOT = Path(__file__).resolve().parent.parent
 LOCAL_PATH = ROOT / "data" / "decisions_local.json"
+DROP_WHERE = "결정 답"      # /changes 「읽다 버린 것」 의 '어디' 열 — 화면에 실리는 말
 VERDICTS = ("맞다", "다르다", "모르겠다")
 UNKNOWN = "모르겠다"
 # 제안값의 출처 종류 — 화면이 이 이름을 그대로 단다. 「추론」 은 세션이 미룬 값이라 맞다를 눌러도 표시가 남는다(승격 금지).
@@ -90,6 +93,18 @@ def _write(p: Path, doc: dict[str, Any]) -> None:
 def load(p: Path | None = None) -> dict[str, dict[str, Any]]:
     """{id: {verdict, note, at}} — 없는 항목의 답은 버리지 않고 그대로 둔다(항목이 바뀌어도 답이 사라지지 않게) · 화면은 IDS 만 보인다."""
     return dict(_read(p or local_path())["answers"])
+
+
+def read_for_screen(p: Path | None = None) -> tuple[dict[str, dict[str, Any]], str | None]:
+    """화면용 읽기(U-21 형태) — 못 읽으면 (빈 답, 이유). 화면은 이유를 말하고 폼은 그대로 낸다 · 저장은 answer() 가 같은 이유로 거부한다(파일을 덮어쓰지 않는다).
+    [2026-09-30 실측] 손상 JSON 에 load() 가 예외를 던져 /me/decisions 가 통째로 500 이었다 — 서버의 마지막 방어선이 오류 페이지로 바꾸지만 폼도 이유도 없다."""
+    p = p or local_path()
+    try:
+        return load(p), None
+    except ValueError as e:
+        why = str(e)
+        dropped.note(DROP_WHERE, p.name, why)      # /changes 에도 뜬다(조용한 실패 금지)
+        return {}, why
 
 
 def answer(id_: str, verdict: str, note: str = "", p: Path | None = None, now: datetime | None = None) -> dict[str, Any]:
