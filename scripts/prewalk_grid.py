@@ -26,6 +26,9 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from grid import schema  # noqa: E402 — 격자 정규 형식(dump_text) 하나를 쓴다(2026-09-30)
+
 GRID_DIR = ROOT / "data" / "grid"
 DOC_BUILDER = "scripts/build_grid_doc.py"
 FAIL_RE = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.M)
@@ -79,7 +82,7 @@ def walk(grid_stem: str, stage_order: int | list[int], key: str, value: Any, tes
         unit = json.loads(g.read_text(encoding="utf-8"))
         for o in orders:
             set_in_unit(unit, o, key, value)
-        g.write_text(json.dumps(unit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        g.write_text(schema.dump_text(unit), encoding="utf-8")            # 정규 형식 하나(grid.schema.dump_text) — apply_grid_value 와 같은 글자로
         py = [sys.executable, "-B", "-m", "pytest", "-p", "no:cacheprovider", "-q", "--no-header", *(tests or [])]
         rc, log = _sh(py, wt)
         out["failures_before_doc"] = parse_failures(log)

@@ -47,6 +47,12 @@ def load(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def dump_text(unit: dict[str, Any]) -> str:
+    """격자 파일의 **정규 형식 하나** — 쓰는 곳(apply_grid_value · prewalk_grid · 사람)이 전부 이것을 쓴다. [2026-09-30 실측] 한 명령이 값 하나를 넣자
+    파일 전체가 다른 배치로 다시 써져 수백 줄 diff 가 됐다(값이 어디 바뀌었는지 안 보인다). 검사가 모든 격자 파일이 이 형식인지 본다."""
+    return json.dumps(unit, ensure_ascii=False, indent=2) + "\n"
+
+
 def unit_path(unit_id: str) -> Path:
     """재배 단위 id → 격자 파일 경로. [A13] 이 규칙(붙임표→밑줄)이 세 곳에 따로 적혀 있었다 —
     어긋나면 격자를 못 찾아 판단 불가가 되고, 원인은 파일 이름 한 글자다. 규칙은 여기 하나."""

@@ -18,7 +18,11 @@
     {
       "order": 1,
       "name": "종구 준비 · 파종",
-      "window": {"from_day": -7, "to_day": 0, "basis": "anchor"},
+      "window": {
+        "from_day": -7,
+        "to_day": 0,
+        "basis": "anchor"
+      },
       "confidence": "중",
       "risks": [
         {
@@ -26,7 +30,11 @@
           "trigger": "중부 노지 기준 9월 중순 이후 파종이면 첫 서리 전 생육 일수가 부족하다 — 이 작기에서는 되돌릴 수 없다",
           "recoverable": false,
           "alert": "oversignal_ok",
-          "axes": ["anchor", "temp", "forecast"],
+          "axes": [
+            "anchor",
+            "temp",
+            "forecast"
+          ],
           "parcel_correction": false,
           "source": "추론 — 적기 날짜의 정본은 농사로 대조 대기"
         },
@@ -36,7 +44,11 @@
           "recoverable": true,
           "deadline_day": 14,
           "alert": "confident_only",
-          "axes": ["temp", "precip", "soil_water"],
+          "axes": [
+            "temp",
+            "precip",
+            "soil_water"
+          ],
           "parcel_correction": false,
           "source": "추론"
         }
@@ -45,35 +57,90 @@
         {
           "name": "종구 선별 · 소독",
           "work_day": -3,
-          "lead_days": {"own": 1, "rental": 1},
-          "tools": ["선별 상자"],
-          "materials": {"관행": ["등록 종자 소독제(PSIS 조회)"], "유기": ["온탕 침지(자재 없음)", "공시 유기농업자재 중 종자 소독 용도(공시목록 조회)"]},
-          "retry": {"possible": false, "deadline_day": 0},
+          "lead_days": {
+            "own": 1,
+            "rental": 1
+          },
+          "tools": [
+            "선별 상자"
+          ],
+          "materials": {
+            "관행": [
+              "등록 종자 소독제(PSIS 조회)"
+            ],
+            "유기": [
+              "온탕 침지(자재 없음)",
+              "공시 유기농업자재 중 종자 소독 용도(공시목록 조회)"
+            ]
+          },
+          "retry": {
+            "possible": false,
+            "deadline_day": 0
+          },
           "source": "추론 — 온탕 조건(온도·시간)은 미채움"
         },
         {
           "name": "밑거름 · 두둑 · 파종",
           "work_day": 0,
-          "lead_days": {"own": 3, "rental": 14},
-          "tools": ["관리기 또는 괭이", "두둑 비닐(선택)"],
-          "materials": {"관행": ["밑거름 화학비료(처방 정본 도착 전 미채움)"], "유기": ["완숙 퇴비", "공시 유기질 비료"]},
-          "retry": {"possible": true, "deadline_day": 14},
+          "lead_days": {
+            "own": 3,
+            "rental": 14
+          },
+          "tools": [
+            "관리기 또는 괭이",
+            "두둑 비닐(선택)"
+          ],
+          "materials": {
+            "관행": [
+              "밑거름 화학비료(처방 정본 도착 전 미채움)"
+            ],
+            "유기": [
+              "완숙 퇴비",
+              "공시 유기질 비료"
+            ]
+          },
+          "retry": {
+            "possible": true,
+            "deadline_day": 14
+          },
           "source": "추론 — 시비량은 soil_chem 도착 뒤 처방 정본에서"
         }
       ],
-      "required_axes": ["anchor", "temp", "soil_water", "soil_chem", "cert"],
-      "forbidden_axes": ["humidity_air"],
-      "water": {"demand": "중간", "deficit_sensitivity": "높음", "excess_sensitivity": "높음"},
+      "required_axes": [
+        "anchor",
+        "temp",
+        "soil_water",
+        "soil_chem",
+        "cert"
+      ],
+      "forbidden_axes": [
+        "humidity_air"
+      ],
+      "water": {
+        "demand": "중간",
+        "deficit_sensitivity": "높음",
+        "excess_sensitivity": "높음"
+      },
       "variety_dependence": "time_only",
       "unit_scope": "cultivation_unit",
       "judge_without_variety": "ok",
-      "capture": {"shoot": true, "scene": "파종 직후 두둑 전경 — 종구 간격이 보이게 (상세페이지 첫 장면)"},
-      "decisions": ["sowing_window", "base_fertilization"]
+      "capture": {
+        "shoot": true,
+        "scene": "파종 직후 두둑 전경 — 종구 간격이 보이게 (상세페이지 첫 장면)"
+      },
+      "decisions": [
+        "sowing_window",
+        "base_fertilization"
+      ]
     },
     {
       "order": 2,
       "name": "발아 · 출현",
-      "window": {"from_day": 1, "to_day": 10, "basis": "anchor"},
+      "window": {
+        "from_day": 1,
+        "to_day": 10,
+        "basis": "anchor"
+      },
       "confidence": "중",
       "risks": [
         {
@@ -82,7 +149,11 @@
           "recoverable": true,
           "deadline_day": 14,
           "alert": "confident_only",
-          "axes": ["temp", "soil_water", "precip"],
+          "axes": [
+            "temp",
+            "soil_water",
+            "precip"
+          ],
           "parcel_correction": false,
           "source": "추론"
         }
@@ -91,35 +162,75 @@
         {
           "name": "관수(건조 시)",
           "work_day": 3,
-          "lead_days": {"own": 0, "rental": 0},
-          "tools": ["관수 시설 또는 물뿌리개(필지 속성 '관수' 에 따름)"],
+          "lead_days": {
+            "own": 0,
+            "rental": 0
+          },
+          "tools": [
+            "관수 시설 또는 물뿌리개(필지 속성 '관수' 에 따름)"
+          ],
           "materials": "N/A",
-          "retry": {"possible": true, "deadline_day": 10},
+          "retry": {
+            "possible": true,
+            "deadline_day": 10
+          },
           "source": "추론"
         },
         {
           "name": "보식",
           "work_day": 10,
-          "lead_days": {"own": 1, "rental": 1},
+          "lead_days": {
+            "own": 1,
+            "rental": 1
+          },
           "tools": [],
-          "materials": {"관행": ["예비 종구"], "유기": ["예비 종구"]},
-          "retry": {"possible": true, "deadline_day": 14},
+          "materials": {
+            "관행": [
+              "예비 종구"
+            ],
+            "유기": [
+              "예비 종구"
+            ]
+          },
+          "retry": {
+            "possible": true,
+            "deadline_day": 14
+          },
           "source": "추론"
         }
       ],
-      "required_axes": ["anchor", "temp", "soil_water"],
-      "forbidden_axes": ["humidity_air"],
-      "water": {"demand": "중간", "deficit_sensitivity": "높음", "excess_sensitivity": "높음"},
+      "required_axes": [
+        "anchor",
+        "temp",
+        "soil_water"
+      ],
+      "forbidden_axes": [
+        "humidity_air"
+      ],
+      "water": {
+        "demand": "중간",
+        "deficit_sensitivity": "높음",
+        "excess_sensitivity": "높음"
+      },
       "variety_dependence": "time_only",
       "unit_scope": "cultivation_unit",
       "judge_without_variety": "ok",
-      "capture": {"shoot": true, "scene": "출현 상태 전경 — 결주가 보이게"},
-      "decisions": ["replant"]
+      "capture": {
+        "shoot": true,
+        "scene": "출현 상태 전경 — 결주가 보이게"
+      },
+      "decisions": [
+        "replant"
+      ]
     },
     {
       "order": 3,
       "name": "생육 초기 (잎 2~4매)",
-      "window": {"from_day": 10, "to_day": 30, "basis": "anchor"},
+      "window": {
+        "from_day": 10,
+        "to_day": 30,
+        "basis": "anchor"
+      },
       "confidence": "중",
       "risks": [
         {
@@ -127,7 +238,12 @@
           "trigger": "미숙 퇴비 · 전작 파속 이력 · 인접 발생. 유충이 인경·뿌리를 가해하면 그 개체는 회복되지 않는다",
           "recoverable": false,
           "alert": "oversignal_ok",
-          "axes": ["temp", "pest_regional", "pest_history", "microclimate"],
+          "axes": [
+            "temp",
+            "pest_regional",
+            "pest_history",
+            "microclimate"
+          ],
           "parcel_correction": true,
           "source": "추론 — 발생 예찰 임계는 NCPMS 대조 대기(M-15 ②)"
         },
@@ -136,7 +252,12 @@
           "trigger": "고온 건조가 이어질 때 밀도 증가",
           "recoverable": true,
           "alert": "confident_only",
-          "axes": ["temp", "precip", "pest_regional", "microclimate"],
+          "axes": [
+            "temp",
+            "precip",
+            "pest_regional",
+            "microclimate"
+          ],
           "parcel_correction": true,
           "source": "추론"
         },
@@ -145,7 +266,13 @@
           "trigger": "저온 다습 · 잎 젖음 지속",
           "recoverable": true,
           "alert": "confident_only",
-          "axes": ["temp", "precip", "forecast", "pest_regional", "microclimate"],
+          "axes": [
+            "temp",
+            "precip",
+            "forecast",
+            "pest_regional",
+            "microclimate"
+          ],
           "parcel_correction": true,
           "source": "추론 — 잎 젖음 축은 I-4 에 없다(대기 습도는 금지·후보) — 미채움으로 남긴다"
         }
@@ -154,47 +281,128 @@
         {
           "name": "예찰(트랩 · 육안)",
           "work_day": 14,
-          "lead_days": {"own": 3, "rental": 3},
-          "tools": ["끈끈이 트랩", "페로몬 트랩(파좀나방)"],
-          "materials": {"관행": ["등록 약제(PSIS, 발생 확인 후)"], "유기": ["BT제", "님 추출물", "유황·석회보르도액(노균병) — 공시목록에서 상품 확인"]},
-          "retry": {"possible": true, "deadline_day": 30},
+          "lead_days": {
+            "own": 3,
+            "rental": 3
+          },
+          "tools": [
+            "끈끈이 트랩",
+            "페로몬 트랩(파좀나방)"
+          ],
+          "materials": {
+            "관행": [
+              "등록 약제(PSIS, 발생 확인 후)"
+            ],
+            "유기": [
+              "BT제",
+              "님 추출물",
+              "유황·석회보르도액(노균병) — 공시목록에서 상품 확인"
+            ]
+          },
+          "retry": {
+            "possible": true,
+            "deadline_day": 30
+          },
           "source": "추론 — organic_control_map 계열 지식과 같은 결(상품 아님)"
         },
         {
           "name": "웃거름 1회",
           "work_day": 22,
-          "lead_days": {"own": 2, "rental": 2},
+          "lead_days": {
+            "own": 2,
+            "rental": 2
+          },
           "tools": [],
-          "materials": {"관행": ["웃거름(처방 정본 도착 전 미채움)"], "유기": ["공시 유기질 비료"]},
-          "retry": {"possible": true, "deadline_day": 30},
+          "materials": {
+            "관행": [
+              "웃거름(처방 정본 도착 전 미채움)"
+            ],
+            "유기": [
+              "공시 유기질 비료"
+            ]
+          },
+          "retry": {
+            "possible": true,
+            "deadline_day": 30
+          },
           "source": "추론 — 양은 미채움"
         },
         {
           "name": "제초",
           "work_day": 20,
-          "lead_days": {"own": 0, "rental": 0},
-          "tools": ["호미"],
+          "lead_days": {
+            "own": 0,
+            "rental": 0
+          },
+          "tools": [
+            "호미"
+          ],
           "materials": "N/A",
-          "retry": {"possible": true, "deadline_day": 40},
+          "retry": {
+            "possible": true,
+            "deadline_day": 40
+          },
           "source": "추론"
         }
       ],
-      "required_axes": ["anchor", "temp", "precip", "pest_regional", "microclimate", "cert"],
-      "forbidden_axes": ["humidity_air"],
-      "water": {"demand": "중간", "deficit_sensitivity": "중간", "excess_sensitivity": "높음"},
+      "required_axes": [
+        "anchor",
+        "temp",
+        "precip",
+        "pest_regional",
+        "microclimate",
+        "cert"
+      ],
+      "forbidden_axes": [
+        "humidity_air"
+      ],
+      "water": {
+        "demand": "중간",
+        "deficit_sensitivity": "중간",
+        "excess_sensitivity": "높음"
+      },
       "variety_dependence": "time_only",
       "unit_scope": "parcel",
       "judge_without_variety": "ok",
-      "capture": {"shoot": true, "scene": "잎 수·잎 길이가 보이는 근접 + 두둑 전경 (T+24 첫 촬영이 여기)"},
-      "decisions": ["pest_alert", "top_dressing_1"],
+      "capture": {
+        "shoot": true,
+        "scene": "잎 수·잎 길이가 보이는 근접 + 두둑 전경 (T+24 첫 촬영이 여기)"
+      },
+      "decisions": [
+        "pest_alert",
+        "top_dressing_1"
+      ],
       "symptom_rules": [
         {
-          "symptoms": ["노랗", "노란", "노래", "누렇", "누래", "황화"],
+          "symptoms": [
+            "노랗",
+            "노란",
+            "노래",
+            "누렇",
+            "누래",
+            "황화"
+          ],
           "causes": [
-            {"name": "과습 · 뿌리 상함", "check": "뽑아서 인경 밑이 구더기 없이 물렁하고 젖어 있는가(4단계 회복 불가 위험)", "recoverable": false},
-            {"name": "고자리파리 유충", "check": "인경 밑이 물렁하고 구더기 · 냄새가 있는가(예찰 마감을 넘겼으면 더 의심)", "recoverable": false},
-            {"name": "양분 부족(웃거름 1회 미이행)", "check": "뽑아 보아 뿌리가 멀쩡한가 — 잎 끝만 노란 것은 덜 전형", "recoverable": true},
-            {"name": "노균병 · 잎마름", "check": "잎에 반점 · 회색 곰팡이가 있는가", "recoverable": true}
+            {
+              "name": "과습 · 뿌리 상함",
+              "check": "뽑아서 인경 밑이 구더기 없이 물렁하고 젖어 있는가(4단계 회복 불가 위험)",
+              "recoverable": false
+            },
+            {
+              "name": "고자리파리 유충",
+              "check": "인경 밑이 물렁하고 구더기 · 냄새가 있는가(예찰 마감을 넘겼으면 더 의심)",
+              "recoverable": false
+            },
+            {
+              "name": "양분 부족(웃거름 1회 미이행)",
+              "check": "뽑아 보아 뿌리가 멀쩡한가 — 잎 끝만 노란 것은 덜 전형",
+              "recoverable": true
+            },
+            {
+              "name": "노균병 · 잎마름",
+              "check": "잎에 반점 · 회색 곰팡이가 있는가",
+              "recoverable": true
+            }
           ],
           "first_check": "증상 있는 포기를 몇 개 뽑아 인경 밑을 본다 — 물렁+구더기 → 고자리파리 · 구더기 없이 물렁·젖음 → 뿌리 상함 · 뿌리 멀쩡 → 양분",
           "source": "D-18 발행자 감별 2026-09-26 · 결정 2026-09-28 (쪽파 잎 끝 황화 · 파종 후 30일 · 3→4단계 경계) — 회복 불가 둘이라 확인이 급하다"
@@ -204,7 +412,11 @@
     {
       "order": 4,
       "name": "생육 중기 · 비대",
-      "window": {"from_day": 30, "to_day": 50, "basis": "anchor"},
+      "window": {
+        "from_day": 30,
+        "to_day": 50,
+        "basis": "anchor"
+      },
       "confidence": "중",
       "risks": [
         {
@@ -212,7 +424,11 @@
           "trigger": "연속 강우 + 배수 불량 필지. 인경 부패는 회복되지 않는다",
           "recoverable": false,
           "alert": "oversignal_ok",
-          "axes": ["precip", "forecast", "soil_water"],
+          "axes": [
+            "precip",
+            "forecast",
+            "soil_water"
+          ],
           "parcel_correction": false,
           "source": "추론 — 배수 등급은 필지 고정 정보(I-3)"
         },
@@ -221,7 +437,12 @@
           "trigger": "가을 저온기 잎 노화와 함께",
           "recoverable": true,
           "alert": "confident_only",
-          "axes": ["temp", "precip", "pest_regional", "microclimate"],
+          "axes": [
+            "temp",
+            "precip",
+            "pest_regional",
+            "microclimate"
+          ],
           "parcel_correction": true,
           "source": "추론"
         }
@@ -230,35 +451,79 @@
         {
           "name": "배수 관리(고랑 정비)",
           "work_day": 35,
-          "lead_days": {"own": 0, "rental": 0},
-          "tools": ["괭이"],
+          "lead_days": {
+            "own": 0,
+            "rental": 0
+          },
+          "tools": [
+            "괭이"
+          ],
           "materials": "N/A",
-          "retry": {"possible": true, "deadline_day": 50},
+          "retry": {
+            "possible": true,
+            "deadline_day": 50
+          },
           "source": "추론"
         },
         {
           "name": "웃거름 2회(필요 시)",
           "work_day": 40,
-          "lead_days": {"own": 2, "rental": 2},
+          "lead_days": {
+            "own": 2,
+            "rental": 2
+          },
           "tools": [],
-          "materials": {"관행": ["웃거름(미채움)"], "유기": ["공시 유기질 비료"]},
-          "retry": {"possible": true, "deadline_day": 50},
+          "materials": {
+            "관행": [
+              "웃거름(미채움)"
+            ],
+            "유기": [
+              "공시 유기질 비료"
+            ]
+          },
+          "retry": {
+            "possible": true,
+            "deadline_day": 50
+          },
           "source": "추론 — 필요 여부 판정 규칙 미채움"
         }
       ],
-      "required_axes": ["anchor", "temp", "precip", "forecast", "soil_water", "cert"],
-      "forbidden_axes": ["humidity_air"],
-      "water": {"demand": "중간", "deficit_sensitivity": "중간", "excess_sensitivity": "높음"},
+      "required_axes": [
+        "anchor",
+        "temp",
+        "precip",
+        "forecast",
+        "soil_water",
+        "cert"
+      ],
+      "forbidden_axes": [
+        "humidity_air"
+      ],
+      "water": {
+        "demand": "중간",
+        "deficit_sensitivity": "중간",
+        "excess_sensitivity": "높음"
+      },
       "variety_dependence": "time_only",
       "unit_scope": "parcel",
       "judge_without_variety": "ok",
-      "capture": {"shoot": true, "scene": "두둑 전경 — 잎 길이·색 (상세페이지 생육 장면)"},
-      "decisions": ["drainage_alert", "top_dressing_2"]
+      "capture": {
+        "shoot": true,
+        "scene": "두둑 전경 — 잎 길이·색 (상세페이지 생육 장면)"
+      },
+      "decisions": [
+        "drainage_alert",
+        "top_dressing_2"
+      ]
     },
     {
       "order": 5,
       "name": "수확",
-      "window": {"from_day": 50, "to_day": 70, "basis": "anchor"},
+      "window": {
+        "from_day": 50,
+        "to_day": 70,
+        "basis": "anchor"
+      },
       "confidence": "중",
       "risks": [
         {
@@ -266,7 +531,10 @@
           "trigger": "예보상 첫 서리 또는 영하 — 잎 품질 손상은 회복되지 않는다. 수확 앞당김 판단",
           "recoverable": false,
           "alert": "oversignal_ok",
-          "axes": ["forecast", "temp"],
+          "axes": [
+            "forecast",
+            "temp"
+          ],
           "parcel_correction": false,
           "source": "추론 — 쪽파 내한성 한계 온도는 미채움(정본 대조)"
         },
@@ -275,7 +543,11 @@
           "trigger": "창을 넘기면 잎끝 마름·도복으로 상품성 하락",
           "recoverable": false,
           "alert": "oversignal_ok",
-          "axes": ["anchor", "gdd", "temp"],
+          "axes": [
+            "anchor",
+            "gdd",
+            "temp"
+          ],
           "parcel_correction": false,
           "source": "추론"
         }
@@ -284,55 +556,105 @@
         {
           "name": "수확(뽑기) · 다듬기 · 세척",
           "work_day": 60,
-          "lead_days": {"own": 1, "rental": 1},
-          "tools": ["호미", "세척 통", "포장재"],
+          "lead_days": {
+            "own": 1,
+            "rental": 1
+          },
+          "tools": [
+            "호미",
+            "세척 통",
+            "포장재"
+          ],
           "materials": "N/A",
-          "retry": {"possible": false, "deadline_day": 70},
+          "retry": {
+            "possible": false,
+            "deadline_day": 70
+          },
           "source": "추론 — 잎 길이 기준(30~40cm)은 농가 관찰이 최종 심급"
         },
         {
           "name": "출하 또는 단기 저장",
           "work_day": 60,
-          "lead_days": {"own": 1, "rental": 3},
-          "tools": ["저온 보관(있으면)"],
+          "lead_days": {
+            "own": 1,
+            "rental": 3
+          },
+          "tools": [
+            "저온 보관(있으면)"
+          ],
           "materials": "N/A",
-          "retry": {"possible": false, "deadline_day": 63},
+          "retry": {
+            "possible": false,
+            "deadline_day": 63
+          },
           "source": "저장성 낮음(crop_axes) — 수일 안"
         }
       ],
-      "required_axes": ["anchor", "gdd", "temp", "forecast"],
-      "forbidden_axes": ["humidity_air"],
-      "water": {"demand": "낮음", "deficit_sensitivity": "낮음", "excess_sensitivity": "중간"},
+      "required_axes": [
+        "anchor",
+        "gdd",
+        "temp",
+        "forecast"
+      ],
+      "forbidden_axes": [
+        "humidity_air"
+      ],
+      "water": {
+        "demand": "낮음",
+        "deficit_sensitivity": "낮음",
+        "excess_sensitivity": "중간"
+      },
       "variety_dependence": "time_only",
       "unit_scope": "cultivation_unit",
       "judge_without_variety": "range",
-      "capture": {"shoot": true, "scene": "수확 직전 전경 + 수확물 근접 (상세페이지 마지막 장면)"},
-      "decisions": ["harvest_timing", "ship_or_store"]
+      "capture": {
+        "shoot": true,
+        "scene": "수확 직전 전경 + 수확물 근접 (상세페이지 마지막 장면)"
+      },
+      "decisions": [
+        "harvest_timing",
+        "ship_or_store"
+      ]
     },
     {
       "order": 6,
       "name": "수확 후 · 후작",
-      "window": {"from_day": 70, "to_day": 90, "basis": "anchor"},
+      "window": {
+        "from_day": 70,
+        "to_day": 90,
+        "basis": "anchor"
+      },
       "confidence": "하",
       "risks": "N/A",
       "tasks": [
         {
           "name": "잔사 정리 · 후작 준비",
           "work_day": 72,
-          "lead_days": {"own": 0, "rental": 0},
+          "lead_days": {
+            "own": 0,
+            "rental": 0
+          },
           "tools": [],
           "materials": "N/A",
-          "retry": {"possible": true, "deadline_day": 90},
+          "retry": {
+            "possible": true,
+            "deadline_day": 90
+          },
           "source": "추론 — 월동시켜 봄 수확하는 경우는 별개 단위(jjokpa-spring)"
         }
       ],
-      "required_axes": ["anchor"],
+      "required_axes": [
+        "anchor"
+      ],
       "forbidden_axes": [],
       "water": "N/A",
       "variety_dependence": "N/A",
       "unit_scope": "parcel",
       "judge_without_variety": "N/A",
-      "capture": {"shoot": false, "scene": ""},
+      "capture": {
+        "shoot": false,
+        "scene": ""
+      },
       "decisions": []
     }
   ]

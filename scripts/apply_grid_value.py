@@ -57,7 +57,7 @@ def apply(grid_stem: str, orders: list[int], key: str, value: Any, tests: list[s
     if not rep.ok:
         out["why"] = "형태 검증 실패 — 격자에 쓰지 않았다: " + " · ".join(rep.errors)
         return out
-    target.write_text(json.dumps(unit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    target.write_text(schema.dump_text(unit), encoding="utf-8")            # 정규 형식 하나(grid.schema.dump_text) — 값 하나가 파일 전체 diff 가 되지 않게(2026-09-30 실측)
     rc, log = pw._sh([sys.executable, "-B", pw.DOC_BUILDER], root)
     if rc != 0:
         target.write_text(before, encoding="utf-8")                          # 문서를 못 만들면 격자도 되돌린다 — 반쪽 커밋을 남기지 않는다

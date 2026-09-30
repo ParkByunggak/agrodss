@@ -29,6 +29,18 @@ def test_jjokpa_autumn_validates(unit):
     assert rep.ok, rep.errors
 
 
+def test_every_grid_file_is_in_the_one_canonical_form_the_writers_use():
+    """[2026-09-30 실측] 한 명령(apply_grid_value)이 값 하나를 넣자 격자 파일 전체가 다른 배치로 다시 써져 수백 줄 diff 가 됐다 — 값이 어디 바뀌었는지가 안 보인다.
+    정규 형식은 하나(`schema.dump_text`)이고 파일은 늘 그 형식이어야 한다(손으로 고쳐도 · 스크립트가 써도). 쓰는 스크립트 둘 다 그 함수를 부른다(호출형 래칫)."""
+    for p in sorted(schema.GRID_DIR.glob("*.json")):
+        text = p.read_text(encoding="utf-8")
+        assert text == schema.dump_text(schema.load(p)), f"{p.name}: 정규 형식이 아니다 — python -m scripts.build_grid_doc 전에 schema.dump_text 로 다시 쓴다"
+    for rel in ("scripts/apply_grid_value.py", "scripts/prewalk_grid.py"):
+        src = (ROOT / rel).read_text(encoding="utf-8")
+        assert "schema.dump_text(" in src and "json.dumps(unit" not in src, f"{rel}: 격자를 제 형식으로 쓴다 — 정규 형식 하나를 부른다"
+    assert schema.dump_text({"a": [1, 2]}).endswith("\n") and "ensure_ascii" not in schema.dump_text({"k": "한글"})
+
+
 def test_axes_constant_matches_i4():
     assert len(schema.AXES) == 12 and "humidity_air" not in schema.AXES
 
