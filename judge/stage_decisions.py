@@ -219,7 +219,8 @@ def judge_sowing_window(subject, today: date) -> Envelope:
     if day > stage["window"]["to_day"]:
         return Envelope("해당 없음", "sowing_window", sid, as_of, result={"why": f"이미 파종됨(기준점 {anchor}, {day}일 경과)", "summary": f"이미 심었습니다 — 심은 날 {anchor}, 오늘 {day}일째"})
     return Envelope("판단함", "sowing_window", sid, as_of, inputs=_anchor_inputs(subject, anchor), grade=weakest(["관측", _grid_grade(unit)]),
-                    result={"window_start": s.isoformat(), "window_end": e.isoformat(), "summary": f"파종 때 {s} ~ {e}"})
+                    result={"window_start": s.isoformat(), "window_end": e.isoformat(), "summary": f"파종 때 {s} ~ {e}"},
+                    notes=[grid_schema.source_note(unit)])      # [2026-10-01 전수] 격자 출처(추론 초안 · 검토 대기)가 답까지
 
 
 def _prescription(prescriptions: list[dict[str, Any]] | None) -> dict[str, Any] | None:
@@ -290,7 +291,7 @@ def judge_base_fertilization(subject, today: date, prescriptions: list[dict[str,
     # [M-15 ⑥] 처방 정본 도착 — 기비 N·P·K 와 퇴비(kg/10a). 유기 갈래는 화학비료가 아니라 **목표 양분량**으로 읽는다(자재 환산 규칙은 정본 없음)
     v = p.get("values", {})
     compost = {k: v[k] for k in ("compost_cattle", "compost_pig", "compost_chicken", "compost_mixed") if k in v}
-    notes = [f"출처: {p['source']} · 조회 {str(p.get('fetched_at', ''))[:10]} · 작물코드 {p.get('crop_code')}"]
+    notes = [grid_schema.source_note(unit), f"출처: {p['source']} · 조회 {str(p.get('fetched_at', ''))[:10]} · 작물코드 {p.get('crop_code')}"]
     if cert == "유기":
         notes.append("유기 갈래: N·P·K 는 목표 양분량 — 공시 유기질 비료·퇴비로 환산하는 규칙은 정본 없음(지식 미비, 자재 성분표로 사람이 환산)")
     return Envelope("판단함", "base_fertilization", sid, as_of, inputs=_anchor_inputs(subject, anchor) + [_prescription_input(p)],
@@ -327,7 +328,7 @@ def judge_replant(subject, today: date, observations: list[dict[str, Any]] | Non
                         result={"why": "출현 관찰이 없다 — 최종 심급은 농가 관찰", "summary": "난 상태를 한 줄 적어 주시면 판단합니다(결주 · 듬성 · 안 났다)"})
     dl = (a + timedelta(days=deadline)).isoformat()
     return Envelope("판단함", "replant", sid, as_of, inputs=_anchor_inputs(subject, anchor), grade=weakest(["관측", _grid_grade(unit)]),
-                    revisit_at=(today + timedelta(days=1)).isoformat(),
+                    revisit_at=(today + timedelta(days=1)).isoformat(), notes=[grid_schema.source_note(unit)],
                     result={"deadline": dl, "observations": [o.get("id") for o in seen],
                             "summary": f"결주 관찰 {len(seen)}건 — {dl} 까지 보식(2단계 다시 심기)"})
 
@@ -425,7 +426,7 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
                             "summary": f"{status} — 작업일 {work_date} · 마감 {dl} · 자재({cert}) {', '.join(m) or '없음'} · "
                                        + ("양 " + amount_note if p else ("양은 저장된 처방을 못 읽어 못 냅니다(다시 받으면 됩니다)" if unreadable else "양은 검정 처방이 오면 냅니다"))   # 농가 말(2026-09-29 전수)
                                        + (f" · 사유: {reason['reason'][:120]}" if reason else "")},
-                    notes=["양(kg/10a)은 지어내지 않는다 — 처방 정본이 없으면 비운다"])
+                    notes=[grid_schema.source_note(unit), "양(kg/10a)은 지어내지 않는다 — 처방 정본이 없으면 비운다"])
 
 
 def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | None = None, harvest: Envelope | None = None) -> Envelope:
@@ -457,7 +458,7 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
     caps = []
     if target > a + timedelta(days=deadline):
         caps.append({"name": "단기 저장 한계", "basis": f"칸 5 '출하 또는 단기 저장' 마감 {deadline}일({(a + timedelta(days=deadline)).isoformat()})을 계획일이 넘는다"})
-    notes = []
+    notes = [grid_schema.source_note(unit)]
     h_to = int(stage["window"]["to_day"])
     if deadline < h_to:
         # 격자 자체 모순(코드 평가 B6): 출하 마감이 수확 창 끝보다 앞이면 창 끝에 수확한 것은 출하 마감을 이미 넘긴다. 지식 결함이라 여기서
@@ -550,7 +551,7 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
     summary = "원인 후보: " + " · ".join(c["name"] for c in causes) + (f" — 먼저 {first}" if first else "") + " (좁히기이지 진단이 아니다)"
     return Envelope("판단함", did, sid, as_of, inputs=_anchor_inputs(subject, anchor), grade="추정", revisit_at=(today + timedelta(days=1)).isoformat(),
                     result={"candidates": causes, "first_check": first, "observations": seen_ids, "summary": summary},
-                    notes=["원인 후보는 좁히기이지 진단이 아니다 — 확인 하나로 갈린다(격자 symptom_rules · D-18)"])
+                    notes=[grid_schema.source_note(unit), "원인 후보는 좁히기이지 진단이 아니다 — 확인 하나로 갈린다(격자 symptom_rules · D-18)"])
 
 
 def _issued(iso: Any) -> str:
@@ -752,7 +753,7 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
             if (r.get("values") or {}).get("rn_day_mm") is not None and float(r["values"]["rn_day_mm"]) >= wet_mm]
     wet = [(w, src) for w, src in wet if w and since <= w <= today.isoformat()]
     inputs = _anchor_inputs(subject, anchor)
-    notes = ["관수 검토는 권고이지 양·방법이 아니다 — 임계는 격자 drought_rules(D-20 · 발행자 정본)",
+    notes = [grid_schema.source_note(unit), "관수 검토는 권고이지 양·방법이 아니다 — 임계는 격자 drought_rules(D-20 · 발행자 정본)",
              f"임계 {threshold}일 — 출처: {rules.get('source') or '적히지 않음'}"]      # [2026-09-30] 출처가 추론이면 그 표시가 답까지 간다(맞다가 눌려도 추론이 정본으로 승격되지 않게)
     if obs_rows:
         inputs.append(AxisUse("precip", str(obs_rows[0].get("fetched_at") or ""), str(obs_rows[0].get("source") or ""), str(obs_rows[0].get("resolution") or ""), "관측"))

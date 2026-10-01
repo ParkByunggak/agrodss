@@ -199,7 +199,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
                            "basis": f"수확 창({w['from_day']}~{w['to_day']}일)을 {day - w['to_day']}일 넘겼다", "axes": ["anchor"], "source": "격자"})
     inputs = [AxisUse("anchor", anchor, subject.get("source", "farmer"), "cultivation_unit", "관측")]
     grades = ["관측", GRID_GRADE.get(unit["unit"].get("confidence", "하"), "추정")]
-    notes = [f"격자 출처: {unit['unit'].get('source', '?')}", f"임계: {d.params['sources']}"]
+    notes = [grid_schema.source_note(unit), f"임계: {d.params['sources']}"]
     if forecast:
         f0 = forecast[0]
         inputs.append(AxisUse("forecast", f0.get("observed_at"), f0.get("source", "?"), f0.get("resolution", "?"), "관측"))

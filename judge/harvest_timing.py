@@ -79,7 +79,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     anchor_d = date.fromisoformat(anchor)
     inputs = [AxisUse("anchor", anchor, subject.get("source", "farmer"), "cultivation_unit", "관측")]
     grades = ["관측", GRID_GRADE.get(unit["unit"].get("confidence", "하"), "추정")]
-    notes = [f"격자 출처: {unit['unit'].get('source', '?')}"]
+    notes = [grid_schema.source_note(unit)]                      # 정본 하나(grid.schema.source_note · 2026-10-01 전수)
 
     # 6~8. 예측 불가 아님 · 선택지형 아님 · 사실 인용 아님 → 판단함
     start = anchor_d + timedelta(days=w["from_day"])

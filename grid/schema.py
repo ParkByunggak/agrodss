@@ -47,6 +47,14 @@ def load(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def source_note(unit: dict[str, Any]) -> str:
+    """판단 메모의 **격자 출처 한 줄** — 정본 하나. [2026-10-01 전수] 격자는 '추론 초안 · 발행자 검토 대기' 인데 그 사실을 답에 싣는 판정기가 셋(수확 시기 ·
+    계획 대 실제 · 위험 경보)뿐이었고 칸 결정 일곱(파종 창 · 밑거름 · 보식 · 웃거름 · 출하 · 증상 · 가뭄)은 안 실었다 — 발행자 규율(출처가 추론이면 그 표시가
+    답까지 간다 · D-20)을 같은 형태로 넓힌다. 화면은 words.plain 이 '격자' 를 사람 말로 바꾼다."""
+    u = unit.get("unit") or {}
+    return f"격자 출처: {u.get('source', '?')} · 확신 {u.get('confidence', '?')}"
+
+
 def dump_text(unit: dict[str, Any]) -> str:
     """격자 파일의 **정규 형식 하나** — 쓰는 곳(apply_grid_value · prewalk_grid · 사람)이 전부 이것을 쓴다. [2026-09-30 실측] 한 명령이 값 하나를 넣자
     파일 전체가 다른 배치로 다시 써져 수백 줄 diff 가 됐다(값이 어디 바뀌었는지 안 보인다). 검사가 모든 격자 파일이 이 형식인지 본다."""

@@ -204,6 +204,6 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
         result={"days_since_anchor": (today - anchor_d).days, "counts": counts, "rows": rows,
                 "ask_reason": ask, "prep_now": prep,
                 "events_used": len(evts) - 1, "videos_used": len(videos), "reasons_used": len(reasons)},
-        notes=[f"격자 출처: {unit['unit'].get('source', '?')}", f"작업↔사건 대응: {d.params['source']}",
+        notes=[grid_schema.source_note(unit), f"작업↔사건 대응: {d.params['source']}",
                "사건 원장·영상 원장은 축이 아니라 기록 — inputs 에 축으로 싣지 않는다"],
     )
