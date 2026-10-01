@@ -551,7 +551,8 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
     summary = "원인 후보: " + " · ".join(c["name"] for c in causes) + (f" — 먼저 {first}" if first else "") + " (좁히기이지 진단이 아니다)"
     return Envelope("판단함", did, sid, as_of, inputs=_anchor_inputs(subject, anchor), grade="추정", revisit_at=(today + timedelta(days=1)).isoformat(),
                     result={"candidates": causes, "first_check": first, "observations": seen_ids, "summary": summary},
-                    notes=[grid_schema.source_note(unit), "원인 후보는 좁히기이지 진단이 아니다 — 확인 하나로 갈린다(격자 symptom_rules · D-18)"])
+                    notes=[grid_schema.source_note(unit), "원인 후보는 좁히기이지 진단이 아니다 — 확인 하나로 갈린다(격자 symptom_rules · D-18)",
+                           *[f"감별 출처: {src}" for src in dict.fromkeys(str(r.get("source") or "").strip() for r, _ in hits) if src]])   # [2026-10-01] 규칙 자체의 출처도 답까지
 
 
 def _issued(iso: Any) -> str:

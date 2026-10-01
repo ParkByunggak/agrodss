@@ -27,7 +27,8 @@ RULES = [{"symptoms": ["노랗", "노란", "누렇"],
           "causes": [{"name": "양분 부족(웃거름 미이행)", "check": "아래 잎부터 전체적으로 연한가", "recoverable": True},
                      {"name": "과습 · 뿌리 상함", "check": "뽑아서 인경 밑이 물렁한가", "recoverable": False},
                      {"name": "고자리파리 유충", "check": "인경 밑에 구더기 · 냄새", "recoverable": False}],
-          "first_check": "증상 있는 포기를 몇 개 뽑아 인경 밑을 본다"}]
+          "first_check": "증상 있는 포기를 몇 개 뽑아 인경 밑을 본다",
+          "source": "검사용 합성 규칙(발행자 감별 넷의 형식 예) — 출처 없는 규칙은 검증을 못 지난다(2026-10-01)"}]
 
 
 def _subject():
@@ -154,7 +155,7 @@ def test_judge_page_shows_each_candidate_with_its_check(tmp_path, monkeypatch, s
 # ── [어휘 한 벌 2026-09-27] 라우팅 목록(chat.SYMPTOM_WORDS)과 격자 규칙 어휘가 두 벌이었다 ────────────────────────────────────────
 # 직렬 게이트의 **앞 문**: 발행자가 규칙에 라우팅 목록 밖의 말을 쓰면 규칙은 맞는데 채팅이 증상 물음으로 안 봐서 결정에 닿지 않는다.
 # 그리고 관찰에 증상은 있는데 규칙 어휘와 안 맞으면 "관찰이 없다" 로 나갔다 — 농가가 본 것을 부정하는 문면(조건 탈락과 같은 급).
-RULES_SYNTH = [{"symptoms": ["하얗", "하얘"], "causes": [{"name": "합성 원인 A", "check": "합성 확인 A", "recoverable": True}], "first_check": "합성 확인 A"}]
+RULES_SYNTH = [{"symptoms": ["하얗", "하얘"], "causes": [{"name": "합성 원인 A", "check": "합성 확인 A", "recoverable": True}], "first_check": "합성 확인 A", "source": "합성 검사용"}]
 Q_SYNTH = "잎 끝이 하얗게 되는데 왜 이런가"
 
 

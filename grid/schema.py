@@ -148,8 +148,8 @@ def _validate_drought_rules(rules: Any, tag: str, err) -> None:
     dd = rules.get("dry_days")
     if not (isinstance(dd, int) and not isinstance(dd, bool) and dd >= 1):
         err(f"{tag}: drought_rules.dry_days 는 1 이상 **정수**(무강수 임계 일수)")
-    if "source" in rules and not isinstance(rules["source"], str):
-        err(f"{tag}: drought_rules.source 는 str")
+    if not (isinstance(rules.get("source"), str) and rules["source"].strip()):
+        err(f"{tag}: drought_rules.source 가 없다 — 출처 없는 임계는 싣지 않는다(발행자 문장이든 추론이든 그대로 적는다 · 2026-10-01)")
     if "wet_mm" in rules and not (isinstance(rules["wet_mm"], (int, float)) and not isinstance(rules["wet_mm"], bool) and rules["wet_mm"] >= 0):
         err(f"{tag}: drought_rules.wet_mm 은 0 이상 수(비 온 날로 세는 일강수 mm — 없으면 기상청 강수일 정의 0.1)")   # [2026-09-29] 선택 — 발행자가 정하면 그것이 이긴다
 
@@ -183,6 +183,8 @@ def _validate_symptom_rules(rules: Any, tag: str, err) -> None:
         fc = r.get("first_check")
         if fc is not None and not (isinstance(fc, str) and fc.strip()):
             err(f"{rt}: first_check 는 str 또는 생략")
+        if not (isinstance(r.get("source"), str) and r["source"].strip()):
+            err(f"{rt}: source 가 없다 — 출처 없는 감별 규칙은 싣지 않는다(발행자 문장이든 추론이든 그대로 적는다 · 2026-10-01)")
 
 
 def validate(unit: dict[str, Any], canonical: set[str] | None = None) -> Report:
@@ -193,6 +195,8 @@ def validate(unit: dict[str, Any], canonical: set[str] | None = None) -> Report:
     for k in ("id", "crop", "kind", "anchor_kind", "source"):
         if not u.get(k):
             err(f"unit.{k} 없음")
+    if u.get("confidence") not in CONF:
+        err("unit.confidence 는 상/중/하 — 격자 출처 한 줄(source_note)과 등급이 이것을 읽는다(2026-10-01 · 없으면 답이 '확신 ?' 로 나간다)")
     if u.get("crop") and u["crop"] not in canonical:
         err(f"unit.crop {u['crop']!r} 는 정본명이 아니다(names/resolve)")
     if u.get("kind") not in ("season", "variety"):
