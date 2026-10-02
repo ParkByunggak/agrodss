@@ -19,6 +19,7 @@ from ingest import events as ev
 from ingest import media
 from judge import plan, registry, units
 from judge.envelope import AxisUse, Envelope, weakest
+from judge.need import need_anchor
 from judge.harvest_timing import GRID_GRADE
 
 DECISION_ID = "plan_vs_actual"
@@ -130,7 +131,7 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
     anchor = subject.get("anchor")
     if not anchor:
         return Envelope("판단 불가(데이터)", DECISION_ID, sid, as_of,
-                        missing=[{"axis": "anchor", "who_can_fill": "농가 — 파종일(사건 입력)"}], result={"why": "기준점이 없다"})
+                        missing=[need_anchor("계획표의 날짜는 심은 날에서 센다")], result={"why": "기준점이 없다", "summary": "심은 날을 알면 계획표를 셉니다"})
     anchor_d = date.fromisoformat(anchor)
     evts = evts if evts is not None else ev.list_records(sid, "event")
     videos = videos if videos is not None else media.list_records(sid)

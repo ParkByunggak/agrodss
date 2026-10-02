@@ -18,6 +18,7 @@ from grid import capture, schema as grid_schema
 from ingest import organic_materials as om, psis
 from judge import registry, units
 from judge.envelope import AxisUse, Envelope
+from judge.need import need, need_anchor
 from schema import records as sch
 
 DECISION_ID = "material_citation"
@@ -85,8 +86,11 @@ def _conventional(subject: dict[str, Any], stage: dict[str, Any], today: date, a
         return Envelope("해당 없음", DECISION_ID, sid, as_of, result={"why": f"칸 '{stage['name']}' 에 병해충 위험이 없다 — PSIS 인용 대상 없음"})
     if psis_search is None and not psis.key():
         return Envelope("판단 불가(데이터)", DECISION_ID, sid, as_of,
-                        missing=[{"axis": "cert", "who_can_fill": "발행자 — .env PSIS_API_KEY(psis.rda.go.kr 전용 활용신청)"}],
-                        result={"why": "PSIS 키가 없어 등록약제를 인용할 수 없다 — 범주명으로 메우지 않는다"})
+                        missing=[need("cert", "발행자", "농약 등록 조회 열쇠(농촌진흥청 농약안전정보 — 전용 활용신청)", "publisher",
+                                      "관행 재배의 등록 약제를 이름으로 인용하려면 그 조회가 있어야 한다",
+                                      detail=".env PSIS_API_KEY — psis.rda.go.kr 전용 활용신청")],
+                        result={"why": "PSIS 키가 없어 등록약제를 인용할 수 없다 — 범주명으로 메우지 않는다",
+                                "summary": "등록 약제를 조회할 열쇠가 발행자 PC 에 아직 없습니다 — 열쇠가 서면 약제 이름을 인용합니다"})
     crop = subject.get("crop", "")
     groups: list[dict[str, Any]] = []
     for risk, term in terms:
@@ -128,8 +132,8 @@ def judge(subject: dict[str, Any], today: date | None = None, psis_search=None) 
     cert = subject.get("cert")
     if not cert:
         return Envelope("판단 불가(데이터)", DECISION_ID, sid, as_of,
-                        missing=[{"axis": "cert", "who_can_fill": "농가 — 인증 유형(필지 고정 정보)"}],
-                        result={"why": "인증 유형이 없어 어느 자재 목록을 볼지 정할 수 없다"})
+                        missing=[need("cert", "농가", "인증 유형(유기 · 무농약 · 관행)", "subject", "어느 자재 목록(공시 자재 · 등록 약제)을 볼지 인증으로 가른다")],
+                        result={"why": "인증 유형이 없어 어느 자재 목록을 볼지 정할 수 없다", "summary": "인증 유형(유기 · 무농약 · 관행)이 있어야 자재 목록을 고릅니다"})
     if cert in CERT_RULES_MISSING:
         return Envelope("판단 불가(지식)", DECISION_ID, sid, as_of,
                         result={"why": f"'{cert}' 갈래의 자재 규칙 정본이 아직 없다 — 유기(공시) · 관행(PSIS) 두 갈래만 서 있다. "
@@ -144,7 +148,7 @@ def judge(subject: dict[str, Any], today: date | None = None, psis_search=None) 
         return units.envelope_for(miss, DECISION_ID, sid, as_of)
     if not anchor:
         return Envelope("판단 불가(데이터)", DECISION_ID, sid, as_of,
-                        missing=[{"axis": "anchor", "who_can_fill": "농가 — 파종일"}], result={"why": "기준점이 없다"})
+                        missing=[need_anchor("심은 날이 있어야 지금 칸의 병해충을 안다")], result={"why": "기준점이 없다", "summary": "심은 날을 알면 지금 칸의 자재를 인용합니다"})
     day = (today - date.fromisoformat(anchor)).days
     stage = capture.stage_for_day(unit, day)
     if stage is None:

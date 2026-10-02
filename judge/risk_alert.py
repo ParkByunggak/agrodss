@@ -17,14 +17,16 @@ from grid import capture, schema as grid_schema   # capture.is_open — '오늘 
 from judge import registry, units
 from judge.envelope import AxisUse, Envelope, weakest
 from judge.harvest_timing import GRID_GRADE
+from judge.need import need_anchor
 
 DECISION_ID = "risk_alert"
+DRAINAGE_NOTE_PREFIX = "배수"       # 배수 메모의 머리 — 칸 카드(stage_decisions._delegate_risk)가 과습 위험이 없는 칸에서 이 메모를 걷는다
 
 registry.register(registry.Decision(
     id=DECISION_ID,
     name="달력형 위험 경보",
     required_axes=("anchor",),
-    optional_axes=("forecast", "temp", "precip"),
+    optional_axes=("forecast", "temp", "precip", "soil_water"),   # soil_water — 필지의 배수 등급(parcel.drainage) [WO-ASK-01 결정 ① 「가」 2026-10-03]
     forbidden_axes=("humidity_air",),
     rule=("오늘이 속한 칸과 horizon 안에 시작하는 칸의 위험을 본다. 회복 불가 위험은 창이 열리면 달력만으로 '주의', "
           "예보 신호(서리·강우·습윤 연속)가 임계를 넘으면 '경보'. 회복 가능 위험은 신호가 임계를 넘을 때만 '경보'. "
@@ -126,6 +128,12 @@ def _risk_signal(risk: dict[str, Any], sig: dict[str, Any], params: dict[str, An
     return None
 
 
+def _is_wet_risk(risk: dict[str, Any]) -> bool:
+    """과습 쪽 위험 — soil_water 축을 선언했고 이름이 과습 · 부패 · 장마. 필지 배수 등급은 이 위험의 근거에만 붙는다."""
+    name = risk.get("name", "")
+    return "soil_water" in set(risk.get("axes", [])) and any(k in name for k in ("과습", "부패", "장마"))
+
+
 def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
           today: date | None = None, pest: list[dict[str, Any]] | None = None,
           evts: list[dict[str, Any]] | None = None) -> Envelope:
@@ -141,8 +149,8 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     anchor = subject.get("anchor")
     if not anchor:
         return Envelope("판단 불가(데이터)", DECISION_ID, sid, as_of,
-                        missing=[{"axis": "anchor", "who_can_fill": "농가 — 파종일(사건 입력)"}],
-                        result={"why": "기준점(파종일)이 없다"})
+                        missing=[need_anchor("심은 날부터 며칠째인지로 지금 어느 칸의 위험을 볼지 정한다")],
+                        result={"why": "기준점(파종일)이 없다", "summary": "심은 날을 알면 지금 칸의 위험을 봅니다"})
     anchor_d = date.fromisoformat(anchor)
     day = (today - anchor_d).days
     horizon = int(d.params["horizon_days"])
@@ -157,6 +165,11 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
             return Envelope("판단 불가(지식)", DECISION_ID, sid, as_of, result={"why": "결정과 칸의 축 선언이 어긋난다", "detail": errs})
 
     sig = _signals(forecast or [], today, d.params) if forecast else None
+    # [WO-ASK-01 결정 ① 「가」 · 발행자 2026-10-03 "결정은 필지 필드(parcel.drainage)로 받는 쪽 … 속성이 주, 관측이 보조"] 과습 위험(soil_water 축)의
+    # 근거에 필지의 배수 등급을 싣는다 — 전에는 예보 강수 합만 봤다(검토 §1). 등급 자체는 **안 바꾼다**: "나쁨이면 경보로 올린다" 는 임계 규칙이고
+    # 그 규칙은 격자 정본·발행자 몫이다(대리 규칙 금지). 값이 없으면 그 사실을 메모에 말한다 — §3 질문 생성이 여기서 출발한다(배선 뒤 질문 문면).
+    drainage = subject.get("drainage")
+    wet_seen = False
     alerts: list[dict[str, Any]] = []
     watched = 0
     watch: list[dict[str, Any]] = []                   # [발행자 2026-09-29] 열린 칸의 회복 가능 위험 중 신호가 없어 경보는 아닌 것 — "무엇을 봐야 하나" 에 이름은 말한다(판정은 안 바꾼다)
@@ -183,9 +196,17 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
                         watch.append({"risk": r["name"], "stage": f"{s['order']}. {s['name']}", "source": r.get("source", "")})   # [2026-10-02] 지켜볼 것에도 출처
                     continue                       # 회복 가능 — 신호 없으면 경보는 침묵(confident_only) · 이름만 '지켜볼 것' 으로
                 level = "경보"
-            alerts.append({"risk": r["name"], "stage": f"{s['order']}. {s['name']}", "level": level,
-                           "recoverable": not unrec, "policy": r.get("alert"), "basis": basis,
-                           "axes": r.get("axes", []), "source": r.get("source", "")})
+            alert = {"risk": r["name"], "stage": f"{s['order']}. {s['name']}", "level": level,
+                     "recoverable": not unrec, "policy": r.get("alert"), "basis": basis,
+                     "axes": r.get("axes", []), "source": r.get("source", "")}
+            if _is_wet_risk(r):
+                wet_seen = True
+                if drainage:
+                    alert["drainage"] = drainage
+                    alert["basis"] = f"{basis} · 배수 {drainage}(밭 정보 — 속성이 주, 관측이 보조)"
+                else:
+                    alert["needs"] = "배수 등급(밭 정보에 적으면 이 근거에 실린다)"
+            alerts.append(alert)
     # 수확 지연 — 창을 넘긴 뒤에도 경보(회복 불가). 단 수확 사건이 있거나 단위가 종료면 지연이 아니다(B1)
     harvested = any(e.get("type") == "수확" and (e.get("observed_at") or "")[:10] <= today.isoformat() for e in (evts or []))
     ended = subject.get("status") == "종료"
@@ -212,6 +233,12 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
             notes.append(f"예찰은 대리 작물 기준: {p0['proxy_reason']}")
     else:
         notes.append("예찰 없음 — 병해충 위험은 달력·예보만으로")
+    if wet_seen:
+        if drainage:
+            inputs.append(AxisUse("soil_water", None, "farmer", "parcel", "관측"))      # 필지 고정값 — 날짜 없는 속성(관측 기록이 생기면 그것이 보조)
+            notes.append(f"배수 {drainage} 는 밭 정보의 고정값 — 근거에 싣기만 한다(나쁨이면 경보로 올릴지는 발행자 규칙 대기 · 지어내지 않는다)")
+        else:
+            notes.append("배수 등급 없음 — 밭 정보(/me)에 배수를 적으면 과습 근거에 실린다")
     order = {"경보": 0, "주의": 1, "예고": 2}
     alerts.sort(key=lambda a: order.get(a["level"], 9))
     return Envelope(

@@ -27,7 +27,7 @@ def gather_pest(subject: dict[str, Any], today: date) -> tuple[list[dict[str, An
     if not crop:
         return None, "재배 단위에 작목이 없다"
     if not ncpms.api_key():
-        return None, "예찰 키 없음(.env NCPMS_API_KEY)"
+        return None, "예찰 조회 열쇠가 발행자 PC 설정에 없다 [설정: .env NCPMS_API_KEY]"     # [WO-ASK-01 §2] 열쇠 이름은 설정 꼬리에만 — 농가 줄은 judge.need.plain_reason 이 뗀다
     r = ncpms.fetch_forecast(crop, year=today.year)
     if r.get("status") != "success":
         return None, f"예찰 원천 {r.get('status')}: {r.get('message', '')}"
@@ -38,9 +38,9 @@ def gather_forecast(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | Non
     """좌표와 키가 있을 때만 단기예보를 가져온다. 없으면 (None, 이유)."""
     lat, lon = subject.get("lat"), subject.get("lon")
     if lat is None or lon is None:
-        return None, "재배 단위에 좌표가 없다(I-6 — 주소→좌표는 ingest.soil_exam 지오코딩)"
+        return None, "밭 좌표가 없다 — 밭 주소가 등록되면 좌표가 잡힌다 [설정: 주소→좌표는 ingest.soil_exam 지오코딩(I-6)]"
     if not kma.fcst_key():
-        return None, "단기예보 키 없음(.env KMA_FORECAST_API_KEY 또는 DATA_GO_KR_API_KEY)"
+        return None, "예보 조회 열쇠가 발행자 PC 설정에 없다 [설정: .env KMA_FORECAST_API_KEY 또는 DATA_GO_KR_API_KEY]"
     r = kma.fetch_vilage(float(lat), float(lon))
     if r.get("status") != "success":
         return None, f"예보 원천 {r.get('status')}: {r.get('message', '')}"
@@ -51,9 +51,9 @@ def gather_mid(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, st
     """[D-21 중기] 좌표·키·권역이 있을 때만 중기예보(D+3~D+10)를 가져온다. 없으면 (None, 이유) — 단기와 같은 꼴, 같은 키."""
     lat, lon = subject.get("lat"), subject.get("lon")
     if lat is None or lon is None:
-        return None, "재배 단위에 좌표가 없다(I-6 — 주소→좌표는 ingest.soil_exam 지오코딩)"
+        return None, "밭 좌표가 없다 — 밭 주소가 등록되면 좌표가 잡힌다 [설정: 주소→좌표는 ingest.soil_exam 지오코딩(I-6)]"
     if not kma.fcst_key():
-        return None, "중기예보 키 없음(.env KMA_FORECAST_API_KEY 또는 DATA_GO_KR_API_KEY)"
+        return None, "예보 조회 열쇠가 발행자 PC 설정에 없다 [설정: .env KMA_FORECAST_API_KEY 또는 DATA_GO_KR_API_KEY]"
     r = kma.fetch_mid(float(lat), float(lon))
     if r.get("status") != "success":
         return None, f"중기예보 원천 {r.get('status')}: {r.get('message', '')}"
@@ -83,9 +83,9 @@ def gather_obs_rain(subject: dict[str, Any], today: date) -> tuple[list[dict[str
         return None, "임계(격자 drought_rules.dry_days)가 없어 관측을 부르지 않는다 — 임계가 서면 그 날수만 부른다"   # [2026-09-30] 임계 없이는 판정기가 관측을 안 읽는다
     lat, lon = subject.get("lat"), subject.get("lon")
     if lat is None or lon is None:
-        return None, "재배 단위에 좌표가 없다(I-6 — 주소→좌표는 ingest.soil_exam 지오코딩)"
+        return None, "밭 좌표가 없다 — 밭 주소가 등록되면 좌표가 잡힌다 [설정: 주소→좌표는 ingest.soil_exam 지오코딩(I-6)]"
     if not kma.hub_key():
-        return None, "기상청 관측 키 없음(.env KMA_API_HUB_KEY — 지상 일자료)"
+        return None, "기상청 관측 조회 열쇠가 발행자 PC 설정에 없다 [설정: .env KMA_API_HUB_KEY — 지상 일자료]"
     stn = kma.nearest_station(float(lat), float(lon))
     if not stn:
         return None, "가까운 관측 지점을 못 찾았다"
@@ -105,7 +105,9 @@ def gather_outlook(today: date) -> tuple[list[dict[str, Any]] | None, str]:
         return live, tail.lstrip(" ·")
     if not recs:
         # [발행자 2026-09-29 "기상청에 장기예보가 없다는 것인가?"] 아니다 — 1·3개월 전망은 발표되지만 자동으로 받는 길(오픈 API)이 없다(VELA 실측 2026-08-05). 문장이 그것을 말해야 한다
-        return None, (f"등재된 장기 전망 없음 — 기상청 1·3개월 전망은 발표되지만 자동으로 받는 길(오픈 API)이 없어, 발표문 수치를 설정 → 장기 전망 등재(또는 {outlook.local_path().name})에 출처와 함께 넣어야 합니다(값은 발행자 몫)" + tail)
+        # [WO-ASK-01 §2 2026-10-03] 농가 줄에 '오픈 API' · 파일 이름이 가고 있었다(래칫이 잡음) — 받는 길 · 파일은 설정 꼬리로(need.plain_reason 이 뗀다)
+        return None, (f"등재된 장기 전망 없음 — 기상청 1·3개월 전망은 발표되지만 자동으로 받는 길이 없어, 발표문 수치를 설정 → 장기 전망 등재에 출처와 함께 넣어야 합니다(값은 발행자 몫)"
+                      f" [설정: 오픈 API 없음(VELA 실측 2026-08-05) · /me/outlook 또는 {outlook.local_path().name}]" + tail)
     return None, f"등재된 장기 전망 {len(recs)}건이 모두 지난 기간(마지막 {recs[-1]['period_to']})" + tail
 
 

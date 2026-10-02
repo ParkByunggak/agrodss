@@ -127,7 +127,7 @@ def load_unit(subject: dict[str, Any]) -> tuple[dict[str, Any] | None, UnitMiss 
             "unreadable", uid,
             f"격자 '{uid}' 정본이 **있는데 읽지 못했다** — 없는 것이 아니다. /changes 의 '읽다 버린 것' 에 사유가 있다",
             f"격자 '{uid}' 가 깨져 읽다 버렸다 — 고치면 판정이 열린다",
-            f"발행자 — data/grid/{p.name} 가 깨졌다(고치면 바뀐다)")
+            f"data/grid/{p.name} 가 깨졌다(고치면 바뀐다) · 사유는 /changes 의 '읽다 버린 것' 에")   # 누가·어디서·왜 지금은 judge.need 가 붙인다
     return unit, None
 
 

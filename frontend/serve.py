@@ -265,7 +265,8 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
                 out.append(f"<p><b>{_e(head)}</b>{proxy} — <span class=\"st st-보류\">{_e(g['status'])}</span> {_e(g.get('note') or '')}</p>")
         out.append(f"<p class=\"meta\">{_e(c['note'])}</p>")
     elif e["kind"] == "판단 불가(데이터)":
-        out.append("<ul>" + "".join(f'<li>없는 자료 <b title="{_e(m["axis"])}">{_e(words.axis(m["axis"]))}</b> — 채울 수 있는 사람: {_e(m["who_can_fill"])}</li>' for m in e["missing"]) + "</ul>")
+        # [WO-ASK-01 §2 2026-10-03] 농가 문장(who_can_fill — 누가 · 무엇 · 어디서 · 왜 지금)만 보이고, 정확한 명령·설정(detail)은 title 로 — words.plain 과 같은 가름
+        out.append("<ul>" + "".join(f'<li{" title=" + chr(34) + _e(m["detail"]) + chr(34) if m.get("detail") else ""}>없는 자료 <b title="{_e(m["axis"])}">{_e(words.axis(m["axis"]))}</b> — 채울 수 있는 사람: {_e(m["who_can_fill"])}</li>' for m in e["missing"]) + "</ul>")
     elif e["kind"] == "판단함" and r.get("summary"):
         # [2026-09-20 실측 — 표현 층 왜곡] M-10 단계 결정(웃거름 · 병해충 · 배수)의 '판단함' 봉투가 이 화면에서 배지와 입력 축 표만 보였다 —
         # 요약(상태 · 작업일 · 양 · 사유 · 경보)이 result 에 있는데 화면이 안 실었다. 발행자에게 "/judge 에서 양을 보라"고 해 놓고 화면엔 없었다

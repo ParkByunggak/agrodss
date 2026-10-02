@@ -180,8 +180,8 @@ def test_without_observed_rain_the_reason_travels_and_the_grid_can_override_wet_
     for n in ("AGRODSS_KMA_API_HUB_KEY", "KMA_API_HUB_KEY", "KMA__API_HUB_KEY", "EXTERNAL_API__KMA_API_HUB_KEY"):
         monkeypatch.delenv(n, raising=False)
     recs, why = judge_run.gather_obs_rain(dict(s, lat=36.75, lon=127.98), TODAY)
-    assert recs is None and "키 없음" in why
-    assert judge_run.gather_obs_rain(dict(s, lat=None, lon=None), TODAY)[1].startswith("재배 단위에 좌표가 없다")
+    assert recs is None and "열쇠가" in why and "KMA_API_HUB_KEY" in why     # [WO-ASK-01 §2] 열쇠 이름은 설정 꼬리([설정: …])에 — 농가 줄에는 안 간다
+    assert "좌표가 없다" in judge_run.gather_obs_rain(dict(s, lat=None, lon=None), TODAY)[1]
 
 
 def test_a_cell_whose_water_is_not_applicable_is_not_a_knowledge_gap(monkeypatch):

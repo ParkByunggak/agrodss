@@ -59,9 +59,11 @@ def test_the_decision_is_registered_as_a_citation_and_judged_with_the_others():
 
 
 def test_without_a_forecast_it_carries_the_reason_it_was_not_fetched():
-    e = SD.judge_forecast_citation(_subject(), TODAY, forecast=None, why="재배 단위에 좌표가 없다(I-6)")
-    assert e.kind == "판단 불가(데이터)" and e.missing[0]["axis"] == "forecast" and "좌표가 없다" in e.missing[0]["who_can_fill"]
-    assert "좌표가 없다" in e.result["summary"]
+    e = SD.judge_forecast_citation(_subject(), TODAY, forecast=None, why="밭 좌표가 없다 [설정: 주소→좌표는 ingest.soil_exam 지오코딩(I-6)]")
+    # [WO-ASK-01 §2 2026-10-03] 못 받은 이유는 요구 항목의 detail(정확한 것)에 — 농가 문장(who_can_fill)은 누가·무엇·어디서·왜 지금 · 요약은 설정 꼬리를 뗀 줄
+    assert e.kind == "판단 불가(데이터)" and e.missing[0]["axis"] == "forecast" and "좌표가 없다" in e.missing[0]["detail"]
+    assert "어디서:" in e.missing[0]["who_can_fill"] and "soil_exam" not in e.missing[0]["who_can_fill"]
+    assert "단기 — 밭 좌표가 없다\n" in e.result["summary"] and "soil_exam" not in e.result["summary"] and "soil_exam" in e.result["why"]
     e2 = SD.judge_forecast_citation(_subject(), TODAY, forecast=[_rec("2026-10-20", 1, 2, 0, 0)], why=None)   # 있어도 창 밖이면 없는 것
     assert e2.kind == "판단 불가(데이터)" and "3일" in e2.result["why"]
     # [중기] 이유가 둘 — 단기·중기 각각의 문장이 그대로(한쪽 이유로 다른 쪽을 덮지 않는다)

@@ -177,20 +177,28 @@ FIELD_LABELS: tuple[tuple[str, str], ...] = (        # 고르는 것이 아니�
     ("cert_legal", "인증 근거(인증서 번호 · 기관)"),
 )
 NUMERIC_FIELDS = ("area_m2",)
+# 필드의 **농가 말** — 요구 문장(judge.need)이 "읽는 판정이 없는 값을 묻지 않는다"(WO-ASK-01 §5-1)를 이 말로 잰다.
+FIELD_WORDS: dict[str, str] = {
+    "environment": "재배환경", "soil_texture": "토성", "slope": "경사", "drainage": "배수", "irrigation": "관수 시설",
+    "night_light": "야간 조명", "microclimate": "미기상", "area_m2": "면적", "use": "용도", "seed_source": "종구 출처",
+    "cert_legal": "인증 근거",
+}
 
 # [G1 전수 2026-09-21 — 처방 직후 그 자리에서 셌다] 입력 자리를 만들면서 **그 값을 읽는 쪽**을 전수로 셌다. 입력 대기 필드 중
-# 판정·수집이 실제로 값을 읽는 것은 **둘뿐**이다. 나머지는 등록부에 쌓이기만 한다 — 값이 흐르는데 소비자가 없는 G1 형태.
+# 판정·수집이 실제로 값을 읽는 것은 **둘뿐**이었다. 나머지는 등록부에 쌓이기만 한다 — 값이 흐르는데 소비자가 없는 G1 형태.
 #
 #   use          judge.stage_decisions.judge_ship_or_store  — '자가 · 시험' 이면 해당 없음(D-8)
 #   environment  ingest.fertilizer.crop_code                — 노지/시설로 작물코드가 갈린다
+#   drainage     judge.risk_alert — 과습 위험(soil_water 축)의 근거에 실린다 [WO-ASK-01 결정 ① 「가」 · 발행자 2026-10-03
+#                "속성이 주, 관측이 보조"] — 등급 자체는 안 바꾼다(나쁨이면 경보로 올릴지는 발행자 규칙 대기 · 대리 규칙 금지)
 #   microclimate **선언만 있다** — 격자 칸 3 required_axes 와 pest_alert optional_axes 에 이름이 있고
 #                docs/i4_axes_minimal.md 는 "병해충 칸 필지 보정 ②" 라고 적었는데, 값을 읽는 코드가 없다(실측 소비자 0).
-#   soil_texture · slope · drainage · irrigation · night_light · area_m2 · seed_source · cert_legal · soil_exam_ref  소비자 0
+#   soil_texture · slope · irrigation · night_light · area_m2 · seed_source · cert_legal · soil_exam_ref  소비자 0
 #
 # 그래서 화면은 이 사실을 **말한다** — "채우면 판정이 열린다" 고 하면 밭에 헛걸음을 시킨다(조건 없는 안내는 다른 사실이다).
 # 보정 규칙 자체는 여기서 짓지 않는다: 임계가 정본에 미채움이고(격자 '고자리파리 유충' = NCPMS 대조 대기 · M-15 ②)
 # 없는 임계를 지어내는 것이 대리값이다. 대장에 등재하고 정본이 도착하면 잇는다.
-FIELDS_READ_BY_JUDGMENT = ("use", "environment")
+FIELDS_READ_BY_JUDGMENT = ("use", "environment", "drainage")
 # [발행자 2026-09-21 — 절차를 장치로] *"새 입력 필드를 만들 때 그 값을 읽는 곳을 함께 세는 것. §7.5 전수와 같은 계열인데
 # 트리거가 다릅니다."* 맞다. 그래서 세는 일을 **사람의 성실성에 맡기지 않는다** — 화면이 받는 필드는 아래 둘 중 하나에
 # 반드시 들어가야 하고(검사가 분할을 고정한다), 새 필드를 넣으면 **어느 쪽인지 적기 전까지 관문이 빨갛다**.
@@ -199,7 +207,7 @@ FIELDS_READ_BY_JUDGMENT = ("use", "environment")
 # 아무도 import 안 한다 · 수집기는 있고 호출자가 없다)이고, 이번 것은 **양쪽이 다 지어졌는데 사이가 안 이어진 것**이다.
 # 축 등록도 있고 격자 칸 선언도 있고 문서도 "필지 보정 ②" 라고 적었고 이제 입력 폼까지 있는데 값이 판정으로 가는
 # 경로만 없다. **세 곳이 서로를 지지해서 문서로는 절대 안 보인다** — 전수로 세야 나온다.
-FIELDS_STORED_ONLY = ("soil_texture", "slope", "drainage", "irrigation", "night_light",
+FIELDS_STORED_ONLY = ("soil_texture", "slope", "irrigation", "night_light",
                       "microclimate", "area_m2", "seed_source", "cert_legal")
 
 

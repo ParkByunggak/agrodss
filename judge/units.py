@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from grid import schema as grid_schema
 from judge.envelope import Envelope
+from judge.need import need
 
 MISS_KIND: dict[str, str] = {
     "unlinked": "판단 불가(지식)",
@@ -29,6 +30,7 @@ assert set(MISS_KIND) == set(grid_schema.REASONS), f"격자 사유 갈래와 봉
 def envelope_for(miss: grid_schema.UnitMiss, decision_id: str, sid: str, as_of: str) -> Envelope:
     """격자를 못 읽었을 때 그 결정이 내는 봉투. **해당 없음을 내지 않는다** — 할 일이 아니었던 것이 아니다."""
     kind = MISS_KIND[miss.reason]
-    missing = [{"axis": "격자 정본", "who_can_fill": miss.fixer}] if kind == "판단 불가(데이터)" else []
+    missing = ([need("격자 정본", "발행자", f"깨진 재배 달력 파일 고치기 — {miss.fixer}", "publisher", "재배 달력이 읽혀야 이 판단이 선다")]
+               if kind == "판단 불가(데이터)" else [])
     return Envelope(kind, decision_id, sid, as_of, missing=missing,
                     result={"why": miss.why, "summary": miss.summary, "grid_unit_miss": miss.reason})

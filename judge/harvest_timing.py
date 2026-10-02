@@ -14,6 +14,7 @@ from typing import Any
 from grid import schema as grid_schema
 from judge import registry, units
 from judge.envelope import AxisUse, Envelope, weakest
+from judge.need import need_anchor
 
 DECISION_ID = "harvest_timing"
 GRID_GRADE = {"상": "관측", "중": "추정", "하": "추정"}   # 격자 출처 확신 → 등급. 추론 초안은 '추정'을 넘지 못한다
@@ -74,8 +75,8 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     anchor = subject.get("anchor")
     if not anchor:
         return Envelope("판단 불가(데이터)", DECISION_ID, sid, as_of,
-                        missing=[{"axis": "anchor", "who_can_fill": "농가 — 파종일(사건 입력)"}],
-                        result={"why": "기준점(파종일)이 없다"})
+                        missing=[need_anchor("심은 날부터 며칠째인지로 수확 창을 센다")],
+                        result={"why": "기준점(파종일)이 없다", "summary": "심은 날을 알면 수확 창을 냅니다"})
     anchor_d = date.fromisoformat(anchor)
     inputs = [AxisUse("anchor", anchor, subject.get("source", "farmer"), "cultivation_unit", "관측")]
     grades = ["관측", GRID_GRADE.get(unit["unit"].get("confidence", "하"), "추정")]
