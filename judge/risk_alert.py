@@ -180,7 +180,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
                 watched += 1
                 if not basis:
                     if stage_open:
-                        watch.append({"risk": r["name"], "stage": f"{s['order']}. {s['name']}"})
+                        watch.append({"risk": r["name"], "stage": f"{s['order']}. {s['name']}", "source": r.get("source", "")})   # [2026-10-02] 지켜볼 것에도 출처
                     continue                       # 회복 가능 — 신호 없으면 경보는 침묵(confident_only) · 이름만 '지켜볼 것' 으로
                 level = "경보"
             alerts.append({"risk": r["name"], "stage": f"{s['order']}. {s['name']}", "level": level,

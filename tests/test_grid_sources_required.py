@@ -41,12 +41,28 @@ def test_the_real_grid_carries_a_source_everywhere_and_validates():
     (lambda u: _stage(u, 3)["symptom_rules"][0].pop("source"), "source 가 없다 — 출처 없는 감별 규칙"),
     (lambda u: u["unit"].pop("confidence"), "unit.confidence 는 상/중/하"),
     (lambda u: u["unit"].__setitem__("confidence", "높음"), "unit.confidence 는 상/중/하"),
+    (lambda u: _stage(u, 3)["risks"][0].pop("source"), "source 가 없다 — 출처 없는 위험 트리거"),           # [2026-10-02] 위험 칸도 — 어제 '검증은 다음에' 로 미룬 것
+    (lambda u: _stage(u, 4)["risks"][0].__setitem__("source", ""), "source 가 없다 — 출처 없는 위험 트리거"),
 ])
 def test_a_rule_without_a_source_is_refused_with_the_reason(mutate, word):
     u = _unit()
     mutate(u)
     rep = schema.validate(u)
     assert not rep.ok and any(word in e for e in rep.errors), rep.errors
+
+
+def test_every_risk_in_the_real_grid_says_it_is_inference_and_the_alert_carries_it():
+    """실측 2026-10-02: 위험 10/10 의 출처가 전부 '추론 …' — 경보 항목(alerts)도 '지켜볼 것'(watch)도 그 출처를 그대로 싣는다(답의 result 에)."""
+    from judge import risk_alert
+    u = _unit()
+    risks = [r for s in u["stages"] for r in (s.get("risks") or []) if isinstance(r, dict)]
+    assert len(risks) >= 10 and all(str(r["source"]).startswith("추론") for r in risks)
+    s = media.load_subjects()[0]
+    e = risk_alert.judge(s, None, today=date.fromisoformat(s["anchor"]) + timedelta(days=36))
+    items = list(e.result.get("alerts") or []) + list(e.result.get("watch") or [])
+    assert items, "36일째(칸 4)에 경보도 지켜볼 것도 없다 — 재료가 바뀌었다"
+    for it in items:
+        assert str(it.get("source", "")).startswith("추론"), it                                      # 출처가 항목마다 붙어 있다
 
 
 def test_the_symptom_answer_carries_the_rules_own_source():

@@ -254,6 +254,8 @@ def validate(unit: dict[str, Any], canonical: set[str] | None = None) -> Report:
                     err(f"{rt}: 축 {a!r} 는 I-4 밖")
             if r.get("parcel_correction") and not (set(r.get("axes", [])) & PEST_AXES):
                 err(f"{rt}: parcel_correction 은 병해충·미기상 축이 있는 위험만")
+            if not (isinstance(r.get("source"), str) and r["source"].strip()):
+                err(f"{rt}: source 가 없다 — 출처 없는 위험 트리거는 싣지 않는다(경보가 출처 없이 나간다 · 2026-10-02)")
         for t in (s.get("tasks") or []) if s.get("tasks") != NA else []:
             tt = f"{tag} task {t.get('name')!r}"
             # [대리값 전수 2026-09-20 · 처방 직후 전수] 마감 키를 고친 자리에서 같은 형태를 셌다 — **문면은 키를 요구하는데 값을 안 보는**
