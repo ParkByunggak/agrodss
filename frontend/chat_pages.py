@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 from frontend import config, render, words
 from grid import capture as grid_capture
-from ingest import chat, events as ev, feedback as fb, media, parcels, profile, subjects
+from ingest import asks, chat, events as ev, feedback as fb, media, parcels, profile, subjects
 from judge import evolve, registry, run as judge_run
 
 BRAND = "AGRODSS"
@@ -615,6 +615,14 @@ def thread_panel(s: dict[str, Any], today: date) -> str:
     miss = parcels.missing_inputs(parcels.by_id(s.get("parcel", "")))
     if miss:
         out.append(f'<div class="card"><b>필지 입력 대기 {len(miss)}</b> <span style="color:var(--muted)">{_e(", ".join(miss[:6]))}{" …" if len(miss) > 6 else ""}</span></div>')
+    # [WO-ASK-01 §8 2026-10-03] 물은 것 — 묻기 원장(ingest.asks)을 그대로 보인다(축은 사람 말 · 정확한 축 이름은 title). 못 읽으면 이유 한 줄(U-21)
+    asked, asked_why = asks.summary_rows(s["id"])
+    if asked_why:
+        out.append(f'<div class="card err">물은 것을 못 읽었다 — {_e(asked_why)}</div>')
+    elif asked:
+        rows = " · ".join(f'<span title="{_e(r.get("axis"))}">{_e(words.axis(r.get("axis")))}</span> {int(r.get("count", 0))}번'
+                          f'{"(답 " + str(int(r.get("replies", 0))) + ")" if r.get("replies") else ""}' for r in asked[:6])
+        out.append(f'<div class="card"><b>물은 것 {len(asked)}</b> <span style="color:var(--muted)">{rows}{" …" if len(asked) > 6 else ""}</span></div>')
     out.append("<h2>판단 (종류가 먼저)</h2>")
     for e in judge_run.judgments_for(s["id"], today=today):
         out.append(_env_card(e))

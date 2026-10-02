@@ -21,7 +21,7 @@ from typing import Any
 
 from ingest import events as ev
 from ingest import feedback as fb
-from ingest import dropped, media, subjects
+from ingest import asks, dropped, media, subjects
 from schema import records as sch
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -640,7 +640,22 @@ def topic_of(text: str) -> str | None:
     return None
 
 
+def asked_in(e: Any) -> list[dict[str, Any]]:
+    """답에 실린 **요구 항목** — 판단 불가(데이터)의 missing 을 (축 · 문장 · 어느 판정) 로. 묻기 원장(ingest.asks)이 세는 단위.
+    [WO-ASK-01 §8 2026-10-03] 요구 문장이 농가에게 나가는 것은 **물은 것**이다 — 질문 생성(§3)이 서기 전에도 이것은 이미 묻고 있다."""
+    if e is None or e.kind != "판단 불가(데이터)":
+        return []
+    return [{"axis": str(m.get("axis") or ""), "who_can_fill": str(m.get("who_can_fill") or ""), "decision": e.decision_id}
+            for m in (e.missing or []) if m.get("axis")]
+
+
 def answer(subject: dict[str, Any], text: str, today: date) -> str:
+    """저장 없는 길 — 자기 점검 화면도 이것을 쓴다. 묻기 원장은 **여기 붙지 않는다**(send 에만 · 검토 §2-④)."""
+    return answer_with_asks(subject, text, today)[0]
+
+
+def answer_with_asks(subject: dict[str, Any], text: str, today: date) -> tuple[str, list[dict[str, Any]]]:
+    """(답 문장, 그 답이 물은 것). 물은 것은 send 가 원장에 센다 — answer 는 버린다."""
     from judge import run as judge_run   # 4층 화면과 같은 규율 — 3층 봉투만 받는다
     from frontend import words as _w     # 문면은 4층 정본(모듈 수준 import 는 층을 뒤집는다)
     dont_know = _w.said("판단 불가(지식)")
@@ -655,17 +670,17 @@ def answer(subject: dict[str, Any], text: str, today: date) -> str:
         said = [ev.said_observation(subject["id"], text, today.isoformat())]
         e = next((x for x in judge_run.judgments_for(subject["id"], today=today, said=said) if x.decision_id == "symptom_triage"), None)
         if e is None:
-            return f"{dont_know}. 이 목록은 아직 판정을 낼 재료(기준점·격자)가 없습니다. {can}."
+            return f"{dont_know}. 이 목록은 아직 판정을 낼 재료(기준점·격자)가 없습니다. {can}.", []
         # [D-18 반영 2026-09-28 실측] 봉투 줄 뒤에 마침표 없이 이어 붙어 "근거: 짐작 지어내지 않습니다" 로 읽혔다 — 문장 경계를 둔다
-        return f"{summarize_envelope(e).rstrip('.')}. 지어내지 않습니다. {can}."
+        return f"{summarize_envelope(e).rstrip('.')}. 지어내지 않습니다. {can}.", asked_in(e)
     did = topic_of(text)
     if not did:
-        return f"{dont_know}. 이 물음에 답하는 판단이 아직 등록되지 않았습니다. 지어내지 않습니다. {can}."
+        return f"{dont_know}. 이 물음에 답하는 판단이 아직 등록되지 않았습니다. 지어내지 않습니다. {can}.", []
     envs = judge_run.judgments_for(subject["id"], today=today)
     e = next((x for x in envs if x.decision_id == did), None)
     if e is None:
-        return "판단 불가(데이터) — 이 목록은 아직 판정을 낼 재료(기준점·격자)가 없다"
-    return summarize_envelope(e)
+        return "판단 불가(데이터) — 이 목록은 아직 판정을 낼 재료(기준점·격자)가 없다", []
+    return summarize_envelope(e), asked_in(e)
 
 
 def _with_stage(row: dict[str, Any]) -> str:
@@ -812,8 +827,17 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         rec["edit_of"] = edit_of
     if media_refs:
         rec["media_refs"] = [r.get("id") for r in media_refs]
+    # [WO-ASK-01 §9 2026-10-03] 직전 물음(pending)이 있고 이번 말이 물음이 아니면 — 그 물음 뒤 처음 온 말이다. 메시지에 어느 물음 뒤인지를 적고
+    # 원장의 pending 을 걷는다(답이 맞았는지는 모른다 — 축의 초안을 만드는 것은 다음 단계). 기록 실패는 답을 막지 않되 **보이게** 남긴다.
+    if not (drafts and drafts[0]["kind"] == "question"):
+        try:
+            pend = asks.mark_replied(subject_id, rec["id"], now=_now(now))
+            if pend:
+                rec["after_ask"] = {"axes": list(pend.get("axes") or []), "msg": pend.get("msg")}
+        except (OSError, ValueError) as e:
+            dropped.note(asks.DROP_WHERE, asks.path().name, f"{type(e).__name__}: {e}")
     msg = _append(rec)
-    media_line = ""
+    media_line, asked = "", []
     if media_refs:
         # [발행자 2026-09-23] 찍은 때가 **어디서 왔는지**를 함께 말한다 — 사다리 마지막 칸(올린 때)은
         # *"언제 찍었는지 모른다"* 는 뜻이라, 말하지 않으면 라벨 없는 대리값이 된다.
@@ -825,7 +849,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
     if media_refs and not drafts:
         reply_text = media_line + "무엇을 했는지 함께 적으시면 그것도 같이 적어 둡니다."
     elif drafts and drafts[0]["kind"] == "question":
-        reply_text = answer(s, text, today)
+        reply_text, asked = answer_with_asks(s, text, today)         # 물은 것은 아래에서 원장에 센다(send 에서만)
         if len(drafts) > 1:                  # 물음 안의 본 것 — 관찰 초안이 함께 섰다(확인은 사람)
             reply_text += f" {plain_why(drafts[1])}. '{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
     elif drafts:
@@ -853,6 +877,12 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
     reply = _append({"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": "system", "text": reply_text,
                      "observed_at": today.isoformat(), "recorded_at": ts, "source": "computed:chat", "resolution": RESOLUTION,
                      "drafts": [], "confirmed_refs": [], "reply_ref": msg["id"]})
+    if asked:
+        # [WO-ASK-01 §8 2026-10-03] 이 답이 물은 것(요구 항목)을 묻기 원장에 센다 — **send 에서만**(answer 는 저장 없는 길). 실패해도 답은 나갔다 · 사유는 보이게
+        try:
+            asks.record(subject_id, asked, reply["id"], now=_now(now))
+        except (OSError, ValueError) as e:
+            dropped.note(asks.DROP_WHERE, asks.path().name, f"{type(e).__name__}: {e}")
     return msg, reply
 
 

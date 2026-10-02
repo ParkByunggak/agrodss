@@ -30,6 +30,7 @@ export AGRODSS_ORGANIC_PATH="$W/organic_materials_public.json"
 export AGRODSS_NAMES_LOCAL_CSV="$W/crop_names_local.csv" AGRODSS_NAMES_BACKUP_CSV="$W/crop_names_backup.csv"
 export AGRODSS_OUTLOOK_PATH="$W/climate_outlook.json" AGRODSS_OUTLOOK_LOCAL_PATH="$W/climate_outlook_local.json"
 export AGRODSS_DECISIONS_LOCAL_PATH="$W/decisions_local.json"
+export AGRODSS_ASKS_PATH="$W/chat/asks.json"       # [WO-ASK-01 §8 2026-10-03] 묻기 원장 — conftest 와 같은 이름
 export AGRODSS_AUTO_PULL_SEC="0"
 cd "$ROOT"
 PYTHONDONTWRITEBYTECODE=1 python -B frontend/serve.py --no-browser > "$W/server.log" 2>&1 &

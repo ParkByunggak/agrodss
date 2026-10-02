@@ -194,9 +194,10 @@ def test_the_symptom_judgement_has_one_vocabulary_canon():
     assert "from ingest.chat import symptom_in" in body and "symptom_in(o.get" in body
     assert "SYMPTOM_WORDS = " not in src and "chat.SYMPTOM_WORDS" not in src and "import SYMPTOM_WORDS" not in src   # 목록을 복사하지도, 직접 읽지도 않는다(함수만 부른다)
     csrc = (grid_schema.ROOT / "ingest" / "chat.py").read_text(encoding="utf-8")
-    ans = csrc[csrc.index("def answer("):]
+    ans = csrc[csrc.index("def answer_with_asks("):]                           # [2026-10-03] 라우팅 본체 — answer 는 이것의 껍데기(묻기 원장 분리)
     ans = ans[:ans.index("\ndef ", 10)]
     assert "symptom_in(text, grid_symptom_words(subject))" in ans                # 라우팅이 격자 말을 덧붙여 쓴다
+    assert "return answer_with_asks(subject, text, today)[0]" in csrc            # 껍데기는 같은 본체를 부른다(두 벌 금지)
     assert "classify(text, today, subject=s)" in csrc                            # send 도 재배 단위를 넘긴다
 
 

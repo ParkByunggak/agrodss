@@ -157,7 +157,8 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
     # ── 1층 사실(농가 발화 — I-3 §3 "질의 자체가 관찰", M-13 채팅) ─────────────────────────
     _k("chat.message", "1층 사실",   # 채팅 한 줄. 분류(2층)는 drafts 에 제안으로만 — 확인(confirm)해야 원장에 들어간다
        ("id", "subject", "role", "text", "observed_at", "recorded_at", "source", "resolution"),
-       ("drafts", "confirmed_refs", "reply_ref", "retry_of", "edit_of", "request_ref", "input_mode", "media_refs"),
+       ("drafts", "confirmed_refs", "reply_ref", "retry_of", "edit_of", "request_ref", "input_mode", "media_refs",
+        "after_ask"),      # [WO-ASK-01 §9 2026-10-03] 직전 물음 뒤 처음 온 말 — {axes, msg}(어느 물음 뒤인지 · 답이 맞았는지는 다음 단계)
        sources=("farmer", "publisher", "computed:chat")),
     # ── 되먹임(J) ─────────────────────────────────────────────────────────────────────
     _k("feedback.request", "되먹임",     # 사용자 개선 요구 — 농가·발행자가 직접 말한 것(오탐일 수 없다, 다리 B)
