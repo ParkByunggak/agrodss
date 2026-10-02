@@ -69,7 +69,7 @@ def run(today: date, judge_html: str | None) -> dict[str, Any]:
     checks.append({"id": "⑤a", "name": f"날씨 물음 「{WEATHER_QUESTION}」", "expect": f"「{cited}」 와 단기·중기 줄",
                    "actual": _first_line(a), "ok": ok, "sec": _since(t0)})
     # [D-20 2026-09-29] 가뭄 물음 — 임계가 서면 판단함(마지막 비 온 날의 원천이 괄호에), 임계가 없으면 「기준이 없습니다」(아는 상태). 「마지막으로 비 온 날 …」 이면
-    # 비 온 날의 원천(기상청 관측 · 농가 기록)이 하나도 안 닿은 것 — 관측 키·좌표를 본다. 걸린 시간이 관측 호출(최대 30일)의 값이다
+    # 비 온 날의 원천(기상청 관측 · 농가 기록)이 하나도 안 닿은 것 — 관측 키·좌표를 본다. 걸린 시간이 관측 호출(임계 날수만 · 임계 없으면 0번 — 2026-09-30)의 값이다
     t0 = datetime.now()
     a = chat.answer(s, DROUGHT_QUESTION, today)
     no_knowledge = words.said("판단 불가(지식)")

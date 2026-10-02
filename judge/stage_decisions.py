@@ -731,6 +731,10 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
     key, lookback = d.params["rules_key"], int(d.params["lookback_days"])
     uid = _unit_id(subject, unit)
     water = stage.get("water")
+    if water == grid_schema.NA:
+        # [앞날 걷기 2026-10-02] 칸 6(수확 후 · 후작)의 water 는 N/A — '안 채운 것' 이 아니라 '해당 없다고 적은 것' 인데 판단 불가(지식)으로 나갔다(U-21 형태 · 없다≠못 읽었다)
+        return Envelope("해당 없음", did, sid, as_of, result={"why": f"격자 {uid} 칸 {stage.get('order')} 의 water 가 N/A — 수분 판단 대상이 아닌 칸",
+                                                           "summary": f"{stage.get('name')} 칸에는 가뭄 · 관수 판단이 없습니다"})
     if not isinstance(water, dict):
         return Envelope("판단 불가(지식)", did, sid, as_of, result={"why": f"격자 {uid} 칸 {stage.get('order')} 의 water 미채움 · 고칠 파일 {grid_schema.unit_file_name(uid)}",
                                                                      "summary": "이 칸의 수분 요구가 기준에 없어 가뭄을 판단할 수 없습니다"})

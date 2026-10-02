@@ -184,6 +184,18 @@ def test_without_observed_rain_the_reason_travels_and_the_grid_can_override_wet_
     assert judge_run.gather_obs_rain(dict(s, lat=None, lon=None), TODAY)[1].startswith("재배 단위에 좌표가 없다")
 
 
+def test_a_cell_whose_water_is_not_applicable_is_not_a_knowledge_gap(monkeypatch):
+    """[앞날 걷기 2026-10-02] 11-04(71일째 · 칸 6 수확 후)에 「이 칸의 수분 요구가 기준에 없어 …」(판단 불가(지식))가 나갔다 — 격자는 water=N/A 로 '해당 없다' 고
+    적어 둔 것이고 '안 채운 것' 이 아니다(U-21 · 없다 ≠ 못 읽었다). N/A → 해당 없음 · 키 자체가 없으면 그대로 판단 불가(지식)."""
+    s = _subject()
+    day = date.fromisoformat(s["anchor"]) + timedelta(days=75)
+    e = SD.judge_drought_alert(s, day, evts=[], observations=[])
+    assert e.kind == "해당 없음" and "N/A" in e.result["why"] and "판단이 없습니다" in e.result["summary"] and "수확 후" in e.result["summary"]
+    monkeypatch.setattr(SD.grid_capture, "stage_for_day", lambda unit, d: {"order": 9, "name": "합성 칸"})     # water 키 자체가 없다
+    e2 = SD.judge_drought_alert(s, day, evts=[], observations=[])
+    assert e2.kind == "판단 불가(지식)" and "미채움" in e2.result["why"]
+
+
 def test_rain_words_are_one_canon_in_layer_one():
     assert chat.rain_in("어제 비가 왔다") and chat.rain_in("소나기 지나감") and not chat.rain_in("비료 줬다") and not chat.rain_in("비닐 덮었다")
     src = (grid_schema.ROOT / "judge" / "stage_decisions.py").read_text(encoding="utf-8")
