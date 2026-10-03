@@ -206,5 +206,8 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
                 "ask_reason": ask, "prep_now": prep,
                 "events_used": len(evts) - 1, "videos_used": len(videos), "reasons_used": len(reasons)},
         notes=[grid_schema.source_note(unit), f"작업↔사건 대응: {d.params['source']}",
-               "사건 원장·영상 원장은 축이 아니라 기록 — inputs 에 축으로 싣지 않는다"],
+               "사건 원장·영상 원장은 축이 아니라 기록 — inputs 에 축으로 싣지 않는다",
+               # [종구 2026-10-03] 용도 기준이 없는 칸의 할 일은 계획표에 없다(plan.from_unit 이 걷는다) — 비어 있는 이유를 말한다(조용한 빈칸 금지)
+               *[f"용도 '{unit.get('_use')}' — 칸 {s.get('order')}({s.get('name')})의 할 일은 그 용도의 기준이 재배 달력에 없어 계획표에 두지 않는다(발행자 정본 by_use 대기)"
+                 for s in unit.get("stages", []) if grid_schema.use_gap(unit, s)]],
     )

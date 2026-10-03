@@ -171,7 +171,7 @@ FIELD_CHOICES: dict[str, tuple[str, ...]] = {
 }
 FIELD_LABELS: tuple[tuple[str, str], ...] = (        # 고르는 것이 아니라 적는 값 — 순서가 화면 순서다
     ("area_m2", "면적(㎡ — 지적 면적이나 걸음 측정)"),
-    ("use", "용도(자가 · 판매 · 몰 납품)"),
+    ("use", "용도(자가 · 판매 · 몰 납품 · 종구 생산)"),      # 종구 — [발행자 전달 2026-10-03] 이 말이 들어가면 재배 달력이 종구 기준으로 읽힌다(grid.schema.use_key)
     ("microclimate", "미기상 3문항 — 주변 개방도 · 안개 빈도 · 바람길(본 대로 짧게)"),
     ("seed_source", "종구 출처"),
     ("cert_legal", "인증 근거(인증서 번호 · 기관)"),

@@ -128,7 +128,69 @@ def load_unit(subject: dict[str, Any]) -> tuple[dict[str, Any] | None, UnitMiss 
             f"격자 '{uid}' 정본이 **있는데 읽지 못했다** — 없는 것이 아니다. /changes 의 '읽다 버린 것' 에 사유가 있다",
             f"격자 '{uid}' 가 깨져 읽다 버렸다 — 고치면 판정이 열린다",
             f"data/grid/{p.name} 가 깨졌다(고치면 바뀐다) · 사유는 /changes 의 '읽다 버린 것' 에")   # 누가·어디서·왜 지금은 judge.need 가 붙인다
-    return unit, None
+    return apply_use(unit, use_key(subject.get("use"))), None
+
+
+# ── 용도별 덮어쓰기 [발행자 전달 2026-10-03 "용도 = 종구 생산. 수확 칸 덮어쓰기 필요"] ──────────────────────────────────────────
+# 격자는 잎 수확 기준이다. 종구(씨알) 생산은 수확 창 · 위험 · 할 일이 다르다 — 잎 노화·도복은 종구에선 목표 상태인데 격자는 그것을 회복 불가 경보로 낸다.
+# 값(종구의 창 · 위험 · 할 일)은 지식이라 발행자 몫이고, 여기는 **자리**다: 칸의 `by_use: {"종구": {source, …덮어쓸 키…}}` 를 load_unit 이 용도에 맞게 합친다
+# (소비자는 전부 load_unit 하나를 지나므로 한 자리에서 끝난다 — §7.5 지점). 값이 오기 전까지는 **문**이 선다: 용도가 종구인데 수확 칸(수확 시기 결정이 선언된 칸)
+# 이후의 칸에 덮어쓰기가 없으면 그 칸의 수확 창 · 위험 · 할 일을 잎 기준으로 내지 않는다(use_gap — 판정기가 판단 불가(지식)/보류로 말한다). 틀린 경보보다 빈 자리가 낫다.
+BY_USE_KEY = "by_use"
+USE_KEYS: tuple[str, ...] = ("종구",)                 # 덮어쓰기를 받는 용도 이름 — 필지 use 문면에 이 말이 들어 있으면 그 용도(어휘는 ingest.parcels 의 라벨과 같다)
+OVERRIDABLE: frozenset[str] = frozenset({"name", "window", "confidence", "risks", "tasks", "water", "decisions", "capture", "symptom_rules", "drought_rules"})
+
+
+def use_key(use_text: Any) -> str | None:
+    """필지 용도 문면 → 덮어쓰기 용도 이름(없으면 None). 「종구 생산」 · 「종구용」 … 전부 '종구'."""
+    t = str(use_text or "")
+    return next((u for u in USE_KEYS if u in t), None)
+
+
+def harvest_order(unit: dict[str, Any]) -> int | None:
+    """수확 시기 결정이 선언된 칸의 order — 그 칸부터가 용도에 민감한 구간이다(수확 · 수확 후)."""
+    for s in unit.get("stages", []):
+        if "harvest_timing" in (s.get("decisions") or []):
+            return s.get("order")
+    return None
+
+
+def apply_use(unit: dict[str, Any], use: str | None) -> dict[str, Any]:
+    """용도에 맞는 격자 — 칸마다 by_use[use] 가 있으면 그 키들을 덮어쓴 **새 사전**. 원본은 건드리지 않는다. use 가 없으면 그대로(표지만 붙인다)."""
+    out = dict(unit)
+    out["_use"] = use
+    stages = []
+    overridden: list[int] = []
+    for s in unit.get("stages", []):
+        s2 = {k: v for k, v in s.items() if k != BY_USE_KEY}
+        ov = (s.get(BY_USE_KEY) or {}).get(use) if use and isinstance(s.get(BY_USE_KEY), dict) else None
+        if isinstance(ov, dict):
+            for k, v in ov.items():
+                if k in OVERRIDABLE:
+                    s2[k] = v
+            s2["_use_source"] = ov.get("source", "")
+            overridden.append(s.get("order"))
+        stages.append(s2)
+    out["stages"] = stages
+    out["_use_overridden"] = overridden
+    return out
+
+
+def use_gap(unit: dict[str, Any], stage: dict[str, Any]) -> bool:
+    """이 칸을 **용도 기준 없이** 읽으면 틀리는가 — 용도가 있고, 수확 칸 이후이고, 덮어쓰기가 없을 때. 판정기 · 계획표가 같은 함수를 부른다(두 벌 금지)."""
+    use = unit.get("_use")
+    if not use:
+        return False
+    ho = harvest_order(unit)
+    order = stage.get("order")
+    if ho is None or not isinstance(order, int) or order < ho:
+        return False
+    return order not in (unit.get("_use_overridden") or [])
+
+
+def use_gap_note(unit: dict[str, Any], stage: dict[str, Any]) -> str:
+    return (f"용도 '{unit.get('_use')}' 의 기준이 재배 달력 칸 {stage.get('order')}({stage.get('name')})에 없다(by_use 미채움) — 잎 수확 기준으로 답하지 않는다 · "
+            f"고칠 파일 {unit_file_name(str((unit.get('unit') or {}).get('id', '')))}")
 
 
 def _canonical_names() -> set[str]:
@@ -312,7 +374,39 @@ def validate(unit: dict[str, Any], canonical: set[str] | None = None) -> Report:
             _validate_drought_rules(s[DROUGHT_RULES_KEY], tag, err)
     if stages and not any_shoot:
         err("촬영 시점 칸(capture.shoot=true)이 하나도 없다 — 영상이 상세페이지다(몰-C)")
+    if not unit.get("_use_merged"):
+        _validate_by_use(unit, err, canonical)
     return rep
+
+
+def _validate_by_use(unit: dict[str, Any], err, canonical: set[str]) -> None:
+    """[종구 2026-10-03] 칸의 by_use 형태 — 용도 이름은 USE_KEYS · 덮어쓰기는 source 필수 · 키는 OVERRIDABLE 안. 그리고 **합친 격자가 그대로 검증을 지나야 한다**
+    (덮어쓴 창 · 위험 · 할 일도 같은 관문 — 합친 사전을 만들어 같은 validate 로 다시 돈다 · 재귀는 _use_merged 표지로 한 번)."""
+    seen_uses: set[str] = set()
+    for s in unit.get("stages", []):
+        bu = s.get(BY_USE_KEY)
+        if bu is None:
+            continue
+        tag = f"stage {s.get('order')}({s.get('name')}) by_use"
+        if not isinstance(bu, dict) or not bu:
+            err(f"{tag}: {{용도: {{source, …}}}} dict — 없으면 키를 뺀다")
+            continue
+        for use, ov in bu.items():
+            if use not in USE_KEYS:
+                err(f"{tag}: 모르는 용도 {use!r} — USE_KEYS {USE_KEYS}")
+                continue
+            if not isinstance(ov, dict) or not (isinstance(ov.get("source"), str) and ov["source"].strip()):
+                err(f"{tag}[{use}]: source 가 없다 — 출처 없는 덮어쓰기는 싣지 않는다(결정도 지식이다)")
+                continue
+            extra = set(ov) - OVERRIDABLE - {"source"}
+            if extra:
+                err(f"{tag}[{use}]: 덮어쓸 수 없는 키 {sorted(extra)} — 가능: {sorted(OVERRIDABLE)}")
+            seen_uses.add(use)
+    for use in sorted(seen_uses):
+        merged = apply_use(unit, use)
+        merged["_use_merged"] = True
+        for e in validate(merged, canonical).errors:
+            err(f"[by_use {use}] {e}")
 
 
 def load_all() -> dict[str, dict[str, Any]]:

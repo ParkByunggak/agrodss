@@ -59,6 +59,11 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     if stage is None:
         return Envelope("해당 없음", DECISION_ID, sid, as_of,
                         result={"why": "이 재배 단위에는 수확 시기 결정이 적용되는 격자 칸이 없다"})
+    if grid_schema.use_gap(unit, stage):
+        # [종구 2026-10-03 발행자 전달 "용도 = 종구 생산. 수확 칸 덮어쓰기 필요"] 잎 수확 기준의 창을 종구 재배에 내지 않는다 — 값이 오면 by_use 가 덮어쓴다(판단 불가(지식) · 고칠 파일)
+        return Envelope("판단 불가(지식)", DECISION_ID, sid, as_of,
+                        result={"why": grid_schema.use_gap_note(unit, stage),
+                                "summary": f"{unit.get('_use')} 재배의 수확 때는 재배 달력에 아직 없습니다 — 잎 수확 기준으로는 말하지 않습니다. 기준이 오면 수확 때를 냅니다"})
 
     # 4. 격자 칸이 채워졌는가 (지식) — 창이 없으면 데이터를 채워도 답이 안 나온다
     w = stage.get("window")

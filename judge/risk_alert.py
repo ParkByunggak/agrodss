@@ -173,7 +173,11 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     alerts: list[dict[str, Any]] = []
     watched = 0
     watch: list[dict[str, Any]] = []                   # [발행자 2026-09-29] 열린 칸의 회복 가능 위험 중 신호가 없어 경보는 아닌 것 — "무엇을 봐야 하나" 에 이름은 말한다(판정은 안 바꾼다)
+    gapped: list[str] = []                             # [종구 2026-10-03] 용도 기준이 없는 칸 — 잎 수확 기준의 위험을 종구 재배에 내지 않는다(메모가 말한다)
     for s in stages:
+        if grid_schema.use_gap(unit, s):
+            gapped.append(f"{s['order']}. {s['name']}")
+            continue
         risks = s.get("risks")
         if risks == grid_schema.NA or not risks:
             continue
@@ -215,6 +219,8 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         w = s.get("window")
         if harvested or ended:
             break
+        if grid_schema.use_gap(unit, s):
+            continue                                   # [종구] 잎 노화·도복은 종구 재배에선 목표 상태일 수 있다 — 기준이 오기 전엔 '수확 지연' 을 내지 않는다
         if isinstance(w, dict) and "harvest_timing" in (s.get("decisions") or []) and day > w["to_day"]:
             alerts.append({"risk": "수확 지연", "stage": f"{s['order']}. {s['name']}", "level": "경보",
                            "recoverable": False, "policy": "oversignal_ok",
@@ -222,6 +228,10 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     inputs = [AxisUse("anchor", anchor, subject.get("source", "farmer"), "cultivation_unit", "관측")]
     grades = ["관측", GRID_GRADE.get(unit["unit"].get("confidence", "하"), "추정")]
     notes = [grid_schema.source_note(unit), f"임계: {d.params['sources']}"]
+    if gapped:
+        notes.append(f"용도 '{unit.get('_use')}' — 칸 {' · '.join(gapped)} 의 위험은 그 용도의 기준이 재배 달력에 없어 내지 않는다(잎 수확 기준 아님 · 발행자 정본 by_use 대기)")
+    if unit.get("_use_overridden"):
+        notes.append(f"용도 '{unit.get('_use')}' 덮어쓰기 칸 {unit['_use_overridden']} — 출처는 그 칸의 by_use.source")
     if forecast:
         f0 = forecast[0]
         inputs.append(AxisUse("forecast", f0.get("observed_at"), f0.get("source", "?"), f0.get("resolution", "?"), "관측"))
@@ -246,7 +256,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         "판단함", DECISION_ID, sid, as_of, inputs=inputs,
         revisit_at=(today + timedelta(days=d.revisit_days)).isoformat(), grade=weakest(grades),
         result={"days_since_anchor": day, "horizon_days": horizon, "stages": [f"{s['order']}. {s['name']}" for s in stages],
-                "alerts": alerts, "watched_recoverable": watched, "watch": watch,
+                "alerts": alerts, "watched_recoverable": watched, "watch": watch, "use_gap_stages": gapped,
                 "signals": sig or {"note": "예보 없음"}},
         notes=notes,
     )

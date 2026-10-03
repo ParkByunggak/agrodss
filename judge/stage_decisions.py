@@ -20,7 +20,7 @@ from judge.need import need, need_anchor, plain_reason
 from judge.harvest_timing import GRID_GRADE
 
 FORB = ("humidity_air",)
-SELF_USE_WORDS = ("자가", "시험")
+SELF_USE_WORDS = ("자가", "시험", "종구")      # 종구 — [발행자 전달 2026-10-03] 종구 생산은 출하 대상이 아니다(씨알을 남긴다)
 REPLANT_WORDS = ("결주", "빈", "안 났", "안났", "드문", "듬성", "성글", "출현 불량", "안 올라")
 TOP_DRESSING_EVENT = "시비"
 

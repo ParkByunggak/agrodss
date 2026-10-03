@@ -71,6 +71,12 @@ def build(unit: dict) -> str:
                 out.append(f"- 가뭄 임계: 없음(이 칸에는 가뭄 판단을 두지 않는다 · N/A) · {dr.get('source') or '출처 미기재'}")
             else:
                 out.append(f"- 가뭄 임계: 무강수 {dr.get('dry_days', '—')}일 · {dr.get('source') or '출처 미기재'}")
+        bu = s.get(schema.BY_USE_KEY)
+        if isinstance(bu, dict):
+            # [종구 2026-10-03] 용도별 덮어쓰기 — 정본이 있는데 문서가 안 싣는 G1 을 미리 막는다(가뭄 임계와 같은 형태)
+            for use, ov in bu.items():
+                keys = " · ".join(sorted(k for k in ov if k != "source")) or "—"
+                out.append(f"- 용도 '{use}' 덮어쓰기: {keys} · {ov.get('source') or '출처 미기재'}")
         risks = s.get("risks")
         if risks == NA:
             out.append("- 위험: 해당없음")

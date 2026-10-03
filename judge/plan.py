@@ -14,6 +14,8 @@ def from_unit(unit: dict[str, Any], anchor: date, cert: str | None) -> list[dict
     """단위 전체 작업을 날짜로 펼친다. 자재는 인증 갈래만 싣는다(관행/유기 분리 — H)."""
     out = []
     for s in unit.get("stages", []):
+        if grid_schema.use_gap(unit, s):
+            continue                        # [종구 2026-10-03] 용도 기준이 재배 달력에 없는 칸 — 잎 수확 기준의 할 일을 종구 재배에 내지 않는다(plan_vs_actual 이 그 사실을 말한다)
         tasks = s.get("tasks")
         if tasks == grid_schema.NA or not tasks:
             continue
