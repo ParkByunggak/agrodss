@@ -206,6 +206,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
                     alert["basis"] = f"{basis} · 배수 {drainage}(밭 정보 — 속성이 주, 관측이 보조)"
                 else:
                     alert["needs"] = "배수 등급(밭 정보에 적으면 이 근거에 실린다)"
+                    alert["needs_field"] = "drainage"          # 질문 생성(ingest.questions)이 문장을 파싱하지 않고 이 이름으로 묻는다(§3 · 회복 불가 1순위)
             alerts.append(alert)
     # 수확 지연 — 창을 넘긴 뒤에도 경보(회복 불가). 단 수확 사건이 있거나 단위가 종료면 지연이 아니다(B1)
     harvested = any(e.get("type") == "수확" and (e.get("observed_at") or "")[:10] <= today.isoformat() for e in (evts or []))

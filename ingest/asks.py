@@ -110,6 +110,18 @@ def mark_replied(subject_id: str, msg_id: str, now: datetime | None = None) -> d
         return pend
 
 
+def mark_stopped(subject_id: str, axis: str, why: str, now: datetime | None = None) -> None:
+    """[§8 반복 상한] 질문 생성이 어느 축을 더 묻지 않기로 했으면 그 사실을 원장에 적는다 — 조용히 사라지는 질문은 없다. 행이 없으면 만들지 않는다."""
+    with sch.ledger_lock:
+        p = path()
+        doc = _read(p)
+        row = doc["asks"].get(_key(subject_id, axis))
+        if row is None:
+            return
+        row["stopped"] = {"at": _ts(now), "why": why}
+        _write(p, doc)
+
+
 def for_subject(subject_id: str) -> list[dict[str, Any]]:
     """그 재배 단위에 물은 것 — 마지막 물은 때 순(최근 먼저). 파일이 없으면 []. 깨졌으면 ValueError(화면이 이유를 말한다)."""
     rows = [r for r in _read()["asks"].values() if r.get("subject") == subject_id]

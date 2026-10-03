@@ -46,15 +46,16 @@ def test_asking_again_counts_up_in_one_row():
 # ── 물은 뒤 처음 온 말 ──
 def test_the_first_message_after_a_question_is_tied_to_it_and_clears_pending():
     _, r = chat.send(SID, Q, today=TODAY, now=NOW)
-    m2, _ = chat.send(SID, "어제 비가 왔다", today=TODAY, now=NOW)
+    m2, r2 = chat.send(SID, "어제 비가 왔다", today=TODAY, now=NOW)
     assert m2["after_ask"] == {"axes": ["precip"], "msg": r["id"]}
-    assert asks.pending(SID) is None
-    row = asks.for_subject(SID)[0]
+    row = next(x for x in asks.for_subject(SID) if x["axis"] == "precip")
     assert row["replies"] == 1 and row["replied_msg"] == m2["id"] and row["replied_to"] == r["id"]
     saved = next(x for x in chat.list_messages(SID) if x["id"] == m2["id"])     # 원장에도 남았다(화면이 읽는 것은 원장)
     assert saved.get("after_ask") == m2["after_ask"]
-    m3, _ = chat.send(SID, "풀 뽑았다", today=TODAY, now=NOW)                   # 그 다음 말은 어느 물음 뒤도 아니다
-    assert "after_ask" not in m3 and asks.for_subject(SID)[0]["replies"] == 1
+    # [§3 2026-10-03] 스스로 묻지 않은 답에는 질문 하나가 붙는다(ingest.questions) — 그래서 pending 은 비지 않고 **그 새 물음**으로 바뀐다
+    assert "하나 물을 것 — " in r2["text"] and asks.pending(SID)["msg"] == r2["id"] and asks.pending(SID)["axes"] == ["soil_water"]
+    m3, _ = chat.send(SID, "풀 뽑았다", today=TODAY, now=NOW)                   # 그 다음 말은 새 물음 뒤다 — precip 의 답 수는 그대로
+    assert m3["after_ask"]["msg"] == r2["id"] and row["replies"] == 1 == next(x for x in asks.for_subject(SID) if x["axis"] == "precip")["replies"]
 
 
 # ── answer 는 안 센다(자기 점검의 길) ──

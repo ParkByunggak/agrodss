@@ -874,6 +874,19 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         reply_text = f"{plain_why(d)}. '{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
     if media_refs and drafts:
         reply_text = media_line + reply_text
+    if not asked:
+        # [WO-ASK-01 §3 2026-10-03] 이 답이 스스로 묻지 않았으면 **하나** 묻는다 — 재료는 판정이 이미 말한 빈자리(위험 경보의 needs · 판단 불가의 요구)뿐이고
+        # 문장은 요구 문장 정본(judge.need)이 만든 것 그대로. 질문을 못 만든 것은 답을 막지 않되 보이게(검토 §3-ⓑ · dropped 「질문 생성」).
+        from ingest import questions                       # 함수 안에서 — questions 가 3층(judge.need)을 들므로 모듈 수준이면 층이 뒤집힌다
+        try:
+            from judge import run as judge_run             # answer() 와 같은 규율 — 3층 봉투만 받는다
+            q = questions.top(subject_id, judge_run.judgments_for(subject_id, today=today))
+        except Exception as e:                             # noqa: BLE001 — 질문 생성 실패는 답을 막지 않는다 · 사유는 변경 로그에
+            q = None
+            dropped.note(questions.DROP_WHERE, subject_id, f"{type(e).__name__}: {e}")
+        if q:
+            reply_text = f"{reply_text} {questions.line(q)}"
+            asked = [q]                                    # 물은 것으로 센다(아래 asks.record)
     reply = _append({"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": subject_id, "role": "system", "text": reply_text,
                      "observed_at": today.isoformat(), "recorded_at": ts, "source": "computed:chat", "resolution": RESOLUTION,
                      "drafts": [], "confirmed_refs": [], "reply_ref": msg["id"]})
