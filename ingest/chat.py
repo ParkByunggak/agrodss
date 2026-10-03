@@ -102,6 +102,7 @@ Q_WORDS = ("언제", "얼마나", "할까", "될까", "어떻게", "뭐 해야",
            # [발행자 2026-09-19 라이브 "쪽파를 현재 관리해야 할 항목들을 알려줘요" → 분류 안 됨] 물음표 없는 요청형 — 알려/가르쳐 + 존대 어미
            "알려", "가르쳐", "궁금", "설명해", "나요", "까요", "할지", "해야 하는", "해야 할 항목", "해야 할 일", "할 일이",
            "왜 ", "어디", "어느", "인가", "는가", "은가", "을까", "줘요", "주세요", "줄래", "추천해", "제안해",
+           "보여줘", "보여 줘", "보여주",      # [U-40 2026-10-03] 조회 요청형("방제 기록 보여줘") — '보여' 홀로는 관찰("노랗게 보여")이라 '…줘' 꼴만
            # 전수 측정(2026-09-19 · 40문장)에서 나온 것: "지금 뭘 해야 하죠" · "오늘 상태 어때" · "뭐부터 챙겨야 해". '몇 ' 은 뺐다 — "벌레 먹은 잎이 몇 개" 가 질문으로 샜다
            "뭘 ", "뭘까", "뭐부터", "뭐가 ", "뭐를", "어때", "어떠", "하죠", "이죠", "인지 ",
            # [발행자 2026-09-21 "시스템에서 어떻게 분류할 것인지를 확정해야 한다"의 다음 층] 종류를 **정하기는 하는데 틀리게** 정하던 자리.
@@ -634,7 +635,24 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
 
 
 # ── 질문 → 3층 봉투 ─────────────────────────────────────────────────────────────────
+# [U-40 · 발행자 실사용 2026-10-03 "이전에 관수를 일지에서 날짜별로 알려줘요" → 가뭄 판정] 조회는 판단이 아니다 — 기록을 보여 달라는 것. 명사(관수)가 먼저 걸려
+# 판정으로 갔다(「기상청 자료 → 예보」 와 같은 축 — 동사가 아니라 명사로 라우팅). 조회는 **동사·시제**로 간다: 일지/기록을 말하거나 「언제 … 했나」 꼴이면서 사건 종류가
+# 있을 때. 판정 어휘보다 **앞**에 선다(순서가 처방이다 — 뒤에 두면 명사가 또 먼저 걸린다).
+LOOKUP_ID = "diary_lookup"
+LOOKUP_WORDS = ("일지", "기록", "내역", "날짜별", "언제 했", "언제 줬", "언제 쳤", "언제 뿌렸", "언제 심", "몇 번 했", "몇 번 줬")
+LOOKUP_VERBS = ("알려", "보여", "언제", "몇 번", "날짜별", "내역", "기록")
+
+
+def lookup_of(text: str) -> str | None:
+    """조회 물음이면 **무엇을** 보여 달라는지(사건 종류 — 없으면 '전체'), 아니면 None."""
+    if not any(w in text for w in LOOKUP_WORDS) or not any(v in text for v in LOOKUP_VERBS):
+        return None
+    return _event_type(text) or "전체"
+
+
 def topic_of(text: str) -> str | None:
+    if lookup_of(text):
+        return LOOKUP_ID                     # 조회가 판정보다 앞 — 명사(관수 · 방제)가 가뭄·방제 판정으로 끌고 가지 않게
     for did, words in TOPIC:
         if any(w in text for w in words):
             return did
@@ -675,13 +693,21 @@ def answer_with_asks(subject: dict[str, Any], text: str, today: date) -> tuple[s
         # [D-18 반영 2026-09-28 실측] 봉투 줄 뒤에 마침표 없이 이어 붙어 "근거: 짐작 지어내지 않습니다" 로 읽혔다 — 문장 경계를 둔다
         return f"{summarize_envelope(e).rstrip('.')}. 지어내지 않습니다. {can}.", asked_in(e)
     did = topic_of(text)
+    if did == LOOKUP_ID:
+        return diary_lookup(subject["id"], lookup_of(text) or "전체"), []      # [U-40] 조회 — 판정이 아니라 기록 그대로(사실 인용)
     if not did:
         return f"{dont_know}. 이 물음에 답하는 판단이 아직 등록되지 않았습니다. 지어내지 않습니다. {can}.", []
     envs = judge_run.judgments_for(subject["id"], today=today)
     e = next((x for x in envs if x.decision_id == did), None)
     if e is None:
         return "판단 불가(데이터) — 이 목록은 아직 판정을 낼 재료(기준점·격자)가 없다", []
-    return summarize_envelope(e), asked_in(e)
+    out = summarize_envelope(e)
+    if did == "drought_alert":
+        # [U-40 둘째 2026-10-03 "오늘 관수가 반영 안 됐다 — 초안 미확인인지 배선인지"] 그 갈림을 답이 말한다: 일지에 넣지 않은 관수·비 기록이 있으면 판단은 그것을 못 읽는다
+        n = len(unconfirmed_of(subject["id"], "관수"))
+        if n:
+            out += f" · 아직 일지에 넣지 않은 관수 기록 {n}건이 있습니다 — '{CONFIRM_LABEL}' 를 누르면 판단이 읽습니다"
+    return out, asked_in(e)
 
 
 def _with_stage(row: dict[str, Any]) -> str:
@@ -1080,6 +1106,28 @@ def pending_drafts(subject_id: str) -> list[tuple[dict[str, Any], int, dict[str,
             if d["kind"] != "question" and not confirmed_ref(m, i):
                 out.append((m, i, d))
     return out
+
+
+# ── 일지 조회 [U-40 2026-10-03] — 판단이 아니라 기록 그대로(사실 인용 축) ──────────────────────────────
+def unconfirmed_of(subject_id: str, event_type: str) -> list[dict[str, Any]]:
+    """아직 일지에 넣지 않은(확인 안 된) 그 종류의 사건 초안 — 판단은 이것을 못 읽는다. 답이 그 사실을 말하는 데 쓴다."""
+    return [d for _, _, d in pending_drafts(subject_id) if d.get("kind") == "event" and d.get("type") == event_type]
+
+
+def diary_lookup(subject_id: str, event_type: str, limit: int = 12) -> str:
+    """「관수를 일지에서 날짜별로 알려줘」 — 그 종류의 사건을 최근 먼저 날짜순으로. 없으면 없다고 하고, 넣지 않은 것이 있으면 그것도 말한다(지어내지 않는다)."""
+    from frontend import words as _w                  # 문면은 4층 정본(모듈 수준 import 는 층을 뒤집는다)
+    head = f"[{_w.said('사실 인용')}]"
+    evts = [e for e in ev.list_records(subject_id, "event") if event_type == "전체" or e.get("type") == event_type]
+    evts.sort(key=lambda e: str(e.get("observed_at") or ""), reverse=True)
+    what = "한 일" if event_type == "전체" else event_type
+    lines = [f"{str(e.get('observed_at') or '')[:10]} {e.get('type', '')}" + (f" — {e['note']}" if e.get("note") else "") for e in evts[:limit]]
+    pend = unconfirmed_of(subject_id, event_type) if event_type != "전체" else [d for _, _, d in pending_drafts(subject_id) if d.get("kind") == "event"]
+    tail = f" · 아직 일지에 넣지 않은 {what} 기록 {len(pend)}건 — '{CONFIRM_LABEL}' 를 누르면 들어갑니다" if pend else ""
+    if not evts:
+        return f"{head} 일지에 {what} 기록이 없습니다{tail}. 판단이 아니라 기록을 그대로 찾은 것입니다."
+    more = f" (최근 {limit}건만 — 전체는 영농일지 화면)" if len(evts) > limit else ""
+    return f"{head} 일지의 {what} 기록 {len(evts)}건 — 최근 먼저{more}\n" + "\n".join(lines) + f"{tail}\n판단이 아니라 기록을 그대로 찾은 것입니다."
 
 
 # ── 영농일지 — 원장을 날짜로 펼친다 ─────────────────────────────────────────────────

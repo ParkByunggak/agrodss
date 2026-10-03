@@ -153,6 +153,13 @@ CORPUS = [
     ("오늘 날씨 어떄", "question", "forecast_citation"),
     ("오늘 날씨는", "question", "forecast_citation"),
     ("오늘 날씨가 좋다", "observation.note", None),                       # 서술어가 있으면 본 것 그대로
+    # [U-40 발행자 실사용 2026-10-03] 조회 — 판단이 아니라 기록 보여 주기. 명사(관수)가 가뭄 판정으로 끌고 갔다 → 동사·시제로 조회가 먼저
+    ("이전에 관수를 일지에서 날짜별로 알려줘요", "question", chat.LOOKUP_ID),   # 발행자 라이브 2026-10-03 — 가뭄 판정으로 갔던 문장
+    ("관수 언제 했나", "question", chat.LOOKUP_ID),                           # 발행자가 든 꼴 「언제 … 했나」
+    ("방제 기록 보여줘", "question", chat.LOOKUP_ID),                         # 보여줘 — 요청형(전에는 본 것으로 분류됐다)
+    ("일지에서 관수 날짜 알려줘", "question", chat.LOOKUP_ID),
+    ("가뭄이 심한데 물 줘야 하나요", "question", "drought_alert"),             # 반대편 — 판단을 묻는 관수 물음은 그대로 가뭄 판정
+    ("관수했다", "event", None),                                               # 반대편 — 한 일은 사건 그대로
 ]
 
 
