@@ -549,7 +549,7 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
                                            f"고칠 파일 {grid_schema.unit_file_name(uid)}",
                                     "summary": f"본 것이 기준이 아는 증상 말과 안 맞습니다 — 기준이 아는 말: {known}. 기준을 넓히면 원인 후보를 냅니다"})
         return Envelope("판단 불가(데이터)", did, sid, as_of,
-                        missing=[need("observation", "농가", "밭에서 본 것 한 줄(잎 색 · 시듦 · 무름 · 반점 …)", "field", "증상이 있어야 원인 후보를 가른다")],
+                        missing=[need("observation", "농가", "밭에서 본 것 한 줄(잎 색 · 시듦 · 무름 · 반점 …)", "field", "증상이 있어야 원인 후보를 가른다", ask=False)],   # 보이면 적는 것 — 묻지 않는다(2026-10-04)
                         result={"why": f"최근 {lookback}일 관찰에 증상 어휘가 없다 — 최종 심급은 농가 관찰", "summary": "본 것을 한 줄 적어 주시면 원인을 좁힙니다"})
     causes: list[dict[str, Any]] = []
     for r, _ in hits:

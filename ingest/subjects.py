@@ -200,3 +200,37 @@ def set_status(sid: str, status: str, ended_at: str | None = None) -> dict[str, 
     sch.validate(s, kind="subject")
     _upsert(s)
     return s
+
+
+# ── 농사(재배 단위) 값 — 채팅 선언과 묻기 전 원장 읽기가 보는 어휘 [거꾸로 세는 검사 전수 2026-10-04] ──────────────────────────────
+# 농가 몫 요구 축을 전수로 세니(심은 날 · 인증 · 납품 계획일 · 본 것 · 마지막 비/관수 · 배수 · 용도) 인증만 길이 없었다 — 「이 밭은 유기 인증을 받았다」 가 본 것으로 떨어지고
+# 자재 인용·시비 판단은 인증 유형을 계속 묻는다. 용도(parcels.USE_WORDS)와 같은 형태라 같은 길을 낸다: 선언 → 초안(subject.field) → 확인 → set_cert.
+CERT_WORDS: dict[str, tuple[str, ...]] = {"유기": ("유기 인증", "유기농", "유기 재배", "유기다", "유기이", "유기입", "유기 "), "무농약": ("무농약",), "관행": ("관행",)}
+CERT_DECLARE_WORDS = ("인증", "재배다", "재배이다", "재배입니다", "농법", "이다", "입니다", "받았", "받음")
+SUBJECT_FIELD_WORDS = {"cert": "인증", "anchor": "심은 날"}
+# 누가 읽는가(§12) — 인증: 자재 인용(공시 자재 · 등록 약제 갈래) · 밑거름(자재 갈래) / 심은 날: 날짜를 세는 판단 전부 가운데 농가가 바로 보는 셋
+SUBJECT_FIELD_CONSUMERS: dict[str, tuple[str, ...]] = {"cert": ("material_citation", "base_fertilization"), "anchor": ("harvest_timing", "risk_alert", "plan_vs_actual")}
+
+
+def cert_declared(text: str) -> str | None:
+    """채팅 한 줄이 인증 선언이면 그 인증(CERT_WORDS 의 키), 아니면 None. 둘 이상 걸리면 None(지어내지 않는다). 「유기질 비료」 같은 자재 말은 선언 표지가 없어 안 걸린다."""
+    t = text or ""
+    if not any(w in t for w in CERT_DECLARE_WORDS):
+        return None
+    hits = [k for k, ws in CERT_WORDS.items() if any(w in t for w in ws)]
+    return hits[0] if len(hits) == 1 else None
+
+
+def set_cert(sid: str, cert: str) -> dict[str, Any]:
+    """인증 유형을 넣는다 — 어휘는 CERT_WORDS 의 키(유기 · 무농약 · 관행). 채팅 확인이 부른다(화면 폼이 생기면 같은 자리)."""
+    cert = (cert or "").strip()
+    if cert not in CERT_WORDS:
+        raise SubjectError(f"인증은 {' · '.join(CERT_WORDS)} 중 하나: {cert!r}")
+    s = by_id(sid)
+    if s is None:
+        raise SubjectError(f"없는 재배 단위: {sid}")
+    s = dict(s)
+    s["cert"] = cert
+    sch.validate(s, kind="subject")
+    _upsert(s)
+    return s

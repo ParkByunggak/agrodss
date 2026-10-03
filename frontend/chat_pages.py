@@ -462,9 +462,10 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
         # 계획 작업명은 계획표에서 이은 값(작목 무관 — 그 재배 단위의 격자 줄). 사람이 고칠 수 있고, 계획일은 아래 날짜 칸이다
         parts.append(f'<input name="planned_task" value="{_e(d.get("planned_task") or "")}" placeholder="계획 작업명" size="18">')
     day = d.get("observed_at") or d.get("planned_day") or d.get("target_date") or ""
-    if k == "parcel.field":                        # [§9] 밭 정보 값 — 날짜가 아니라 값이 보인다(고르는 말 그대로)
-        parts.append(f'<span style="color:var(--muted)" title="{_e(d.get("field"))}">{_e(parcels.FIELD_WORDS.get(d.get("field"), d.get("field")))} → <b>{_e(d.get("value"))}</b></span> ')
-    if k not in ("feedback.request", "parcel.field"):
+    if k in ("parcel.field", "subject.field"):     # [§9] 밭 정보 값 · [2026-10-04] 농사 값(인증) — 날짜가 아니라 값이 보인다(고르는 말 그대로)
+        word = parcels.FIELD_WORDS.get(d.get("field")) or subjects.SUBJECT_FIELD_WORDS.get(d.get("field"), d.get("field"))
+        parts.append(f'<span style="color:var(--muted)" title="{_e(d.get("field"))}">{_e(word)} → <b>{_e(d.get("value"))}</b></span> ')
+    if k not in ("feedback.request", "parcel.field", "subject.field"):
         parts.append(f'<input name="day" value="{_e(day)}" placeholder="YYYY-MM-DD{" (필요)" if need else ""}" size="12">')
     parts.append(f'<button class="btn pri" type="submit">{_e(chat.CONFIRM_LABEL)}</button></form>')
     parts.append('<form method="post" action="/c/' + quote(m["subject"]) + '/choose" style="margin-top:4px"><input type="hidden" name="msg" value="' + _e(m["id"]) + f'"><span style="color:var(--muted)">{_e(chat.OTHER_KIND_LABEL)}</span>'

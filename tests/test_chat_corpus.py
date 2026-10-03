@@ -171,6 +171,11 @@ CORPUS = [
     ("이번 작기는 몰 납품용으로 심었다", "event", None),                           # 반대편 — 한 일의 표지가 있으면 사건이 이긴다
     ("종구가 썩은 것 같다", "observation.note", None),                           # 반대편 — 용도 말이 있어도 선언 표지 없는 상태 서술은 본 것
     ("잎이 왜 노랗나요", "question", None),                                        # 반대편 — 밭을 향한 「왜」 는 물음 그대로(증상 물음은 answer 가 증상 결정으로)
+    # [거꾸로 세는 검사 전수 2026-10-04] 인증 선언 — 농가 몫 요구 축 가운데 길이 없던 하나(용도와 같은 형태)
+    ("이 밭은 유기 인증을 받았다", "subject.field", None),
+    ("인증은 무농약이다", "subject.field", None),
+    ("관행 재배다", "subject.field", None),
+    ("유기질 비료를 줬다", "event", None),                                         # 반대편 — 자재 말은 선언이 아니다(한 일)
 ]
 
 
@@ -192,5 +197,5 @@ def test_corpus_is_append_only():
 def test_corpus_covers_every_kind_and_has_no_duplicates():
     kinds = {c[1] for c in CORPUS}
     assert kinds == {"question", "event", "observation.note", "plan.farmer", "plan.target_date", "feedback.request", "decision.noncompliance", "subject.end",
-                     "parcel.field"}   # [2026-10-04] 속성 선언 갈래(용도) — 아홉째
+                     "parcel.field", "subject.field"}   # [2026-10-04] 속성 선언 갈래(용도 · 인증) — 아홉째 · 열째
     assert len({c[0] for c in CORPUS}) == len(CORPUS)

@@ -124,6 +124,83 @@ def test_an_irrigation_event_in_the_ledger_is_the_last_wet_day_and_an_unconfirme
     assert "2026-10-03(관수)" in chat.answer(_s(), "가뭄이 심한데 물 줘야 하나요", T)       # 넣으면 그 날이다
 
 
+# ── 전수 — 농가 몫 요구 축마다 「넣으면 안 묻는가」 (발행자 "하나씩 고치면 다음 주에 넷째 다섯째가 또 나온다") ───────────────────────
+# 요구 문장 전수(judge/*.py 의 need(… "농가" …)): 심은 날(anchor) · 인증(cert) · 납품 계획일(plan.target_date) · 본 것(observation — 보식·증상) · 마지막 비/관수(precip) ·
+# 배수(drainage · 경보 needs) — 여기 전부. 용도는 묻지 않는 값(선언만)이라 위 표본으로. 각각: 비어서 묻는 것을 먼저 보고(기준선), 원장·속성에 넣은 뒤 그 축의 질문이 없음을 본다.
+import pytest
+from ingest import subjects
+
+
+def _axes(sid: str, s: dict, today: date) -> set[str]:
+    return {q["axis"] for q in questions.candidates(judge_run.judgments_for(sid, today=today), subject=s)}
+
+
+def _subject(sid: str) -> dict:
+    return parcels.enrich_subject(subjects.by_id(sid), parcels.by_id("p001"))
+
+
+def _new_subject(**kw) -> str:
+    """심은 날·인증이 없는 계획 재배 단위 — 같은 필지의 다른 작기(기본값 없음 · 지어내지 않는다)."""
+    return subjects.add("쪽파", "2027 가을", status="계획", parcel="p001", **kw)["id"]      # 가을 — 재배 달력이 있어야 심은 날을 묻는다(봄은 달력이 없어 지식 쪽으로 간다)
+
+
+@pytest.mark.parametrize("axis, put_in", [
+    ("anchor", lambda sid, T: (lambda m: chat.confirm(m["id"], 0, now=NOW))(chat.send(sid, "8월 25일에 심었다", today=T, now=NOW)[0])),
+    ("cert", lambda sid, T: (lambda m: chat.confirm(m["id"], 0, now=NOW))(chat.send(sid, "이 밭은 유기 인증을 받았다", today=T, now=NOW)[0])),
+])
+def test_a_planned_subject_stops_asking_an_axis_once_the_ledger_has_it(axis, put_in):
+    sid = _new_subject()
+    assert axis in _axes(sid, _subject(sid), T34), f"{axis}: 비어 있는데 묻지 않는다 — 기준선이 아니다"
+    rec = put_in(sid, T34)
+    assert rec.get("opens") and rec.get("opens_line", "").startswith("이것으로 ")                      # §12 — 넣은 직후 연 판단을 말한다
+    s2 = _subject(sid)
+    assert (s2.get("anchor") == "2026-08-25") if axis == "anchor" else (s2.get("cert") == "유기")
+    assert axis not in _axes(sid, s2, T34), f"{axis}: 원장에 있는데 묻는다"
+
+
+def test_target_date_observation_and_last_wet_day_stop_their_questions_once_in_the_ledger():
+    parcels.set_fields("p001", use="판매", mall_supply=True, overwrite=True)           # 출하 결정을 열어 납품 계획일을 묻게 한다
+    s = _s()
+    assert "plan.target_date" in _axes(SID, s, T34)
+    m, _ = chat.send(SID, "10월 30일 납품 예정", today=T34, now=NOW)
+    chat.confirm(m["id"], 0, now=NOW)
+    assert "plan.target_date" not in _axes(SID, _s(), T34)
+    T5 = date(2026, 8, 30)                                                              # 5일째 — 보식 창 · 난 상태를 묻는다
+    assert "observation" in _axes(SID, _s(), T5)
+    m, _ = chat.send(SID, "듬성듬성 났다", today=T5, now=NOW)
+    chat.confirm(m["id"], 0, now=NOW)
+    assert "observation" not in _axes(SID, _s(), T5)
+    # [전수에서 나온 것] 증상 결정은 증상 관찰이 없으면 「본 것을 한 줄 적어 주시면 원인을 좁힙니다」 를 요구 문장으로 냈고, 그것이 **아무 일도 없는 밭에** 질문으로 나갔다 —
+    # 보이면 적는 것이지 묻는 값이 아니다(§3 "판정이 못 실은 값" 이 아니다). 카드에는 남되 답 끝 질문은 되지 않는다(judge.need ask=False).
+    st = next(e for e in judge_run.judgments_for(SID, today=T5) if e.decision_id == "symptom_triage")
+    assert st.kind == "판단 불가(데이터)" and st.missing and st.missing[0].get("ask") is False
+    assert "observation" not in _axes(SID, _s(), T5)
+    parcels.set_fields("p001", drainage="좋음", overwrite=True)                          # 배수가 비면 그 질문이 먼저라 비·관수 물음이 가려진다
+    assert "precip" in _axes(SID, _s(), T34)
+    m, _ = chat.send(SID, "9월 26일에 물 줬다", today=T34, now=NOW)
+    chat.confirm(m["id"], 0, now=NOW)
+    assert "precip" not in _axes(SID, _s(), T34)
+
+
+def test_a_cert_declaration_in_the_diary_raises_a_subject_draft_and_confirming_opens_the_material_judgments():
+    sid = _new_subject()
+    assert "cert" in _axes(sid, _subject(sid), T34)                                     # 기준선 — 비어 있으면 묻는 후보다(답 끝에는 하나만 붙으므로 후보 목록으로 본다)
+    ev.add_observation(sid, "인증은 무농약이다", "2026-10-04")                             # 이미 관찰로 들어가 있다(용도와 같은 라이브 형태)
+    assert "cert" not in _axes(sid, _subject(sid), T34)                                 # 일지에 있다 — 묻지 않는다(주입 B 가 처음엔 안 잡혔다 — 답 끝 한 줄만 봐서)
+    m, r = chat.send(sid, "풀 뽑았다", today=T34, now=NOW)
+    prop = next(d for d in m["drafts"] if d["kind"] == "subject.field")
+    assert prop["field"] == "cert" and prop["value"] == "무농약" and prop["why_key"] == "from_diary" and prop["subject"] == sid
+    assert "인증" not in _question_in(r["text"])
+    rec = chat.confirm(m["id"], m["drafts"].index(prop), now=NOW)
+    assert rec["kind"] == "subject" and subjects.by_id(sid)["cert"] == "무농약" and rec["opens"] == ["material_citation", "base_fertilization"]
+    assert "자재 인용 · 밑거름" in rec["opens_line"] and "인증 값 '무농약' 을 읽습니다" in rec["opens_line"]
+    m2, r2 = chat.send(sid, "인증은 유기다", today=T34, now=NOW)                          # 선언은 처음부터 농사 값 초안
+    assert m2["drafts"][0]["kind"] == "subject.field" and m2["drafts"][0]["value"] == "유기" and "이 농사의 정보에 들어갑니다" in r2["text"]
+    with pytest.raises(subjects.SubjectError):
+        subjects.set_cert(sid, "GAP")                                                   # 어휘 밖은 등록부가 막는다
+    assert subjects.cert_declared("유기질 비료를 줬다") is None and subjects.cert_declared("유기 인증과 무농약 둘 다") is None
+
+
 # ── 래칫 — 정본 하나 · 질문은 그 앞을 지난다 · 쓰는 자리 0 ────────────────────────────
 def test_every_question_passes_the_known_gate_and_known_never_writes():
     qsrc = (ROOT / "ingest" / "questions.py").read_text(encoding="utf-8")

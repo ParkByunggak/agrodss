@@ -43,8 +43,10 @@ def _stored_only_words() -> dict[str, str]:
     return {f: parcels.FIELD_WORDS[f] for f in parcels.FIELDS_STORED_ONLY}
 
 
-def need(axis: str, who: str, what: str, where: str, why_now: str, detail: str | None = None) -> dict[str, Any]:
-    """`missing` 항목 하나 — {axis, who_can_fill, where, why_now[, detail]}. 틀린 문장은 만들지 않는다(ValueError)."""
+def need(axis: str, who: str, what: str, where: str, why_now: str, detail: str | None = None, ask: bool = True) -> dict[str, Any]:
+    """`missing` 항목 하나 — {axis, who_can_fill, where, why_now[, detail][, ask]}. 틀린 문장은 만들지 않는다(ValueError).
+    [2026-10-04 거꾸로 세는 검사 전수] `ask=False` 는 **보이면 적는 것**(증상) — 카드에는 요구로 남되 질문 생성이 답 끝에 묻지 않는다(§3 "판정이 못 실은 값" 이 아니다 —
+    아무 일도 없는 밭에 「밭에서 본 것 한 줄」 이 세 번 나가던 것)."""
     if who not in WHO:
         raise NeedError(f"누가 고칠 수 있는지는 {' / '.join(WHO)} 중 하나 — {who!r}")
     if where not in PLACES:
@@ -61,6 +63,8 @@ def need(axis: str, who: str, what: str, where: str, why_now: str, detail: str |
     out: dict[str, Any] = {"axis": axis, "who_can_fill": farmer_text, "where": PLACES[where], "why_now": why_now}
     if detail:
         out["detail"] = detail
+    if not ask:
+        out["ask"] = False
     return out
 
 

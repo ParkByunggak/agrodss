@@ -185,7 +185,8 @@ DAMAGE_WORDS: dict[str, tuple[str, ...]] = {
 }
 KIND_LABEL = {"event": "사건", "observation.note": "관찰", "plan.farmer": "계획", "plan.target_date": "납품 계획일",
               "feedback.request": "개선 요구", "decision.noncompliance": "불이행 사유", "subject.end": "작기 종료", "observation.video": "영상",
-              "question": "질문", "subject.new": "새 목록", "parcel.field": "필지 값"}      # parcel.field [WO-ASK-01 §9 2026-10-03] 물음에 대한 답 → 밭 정보 값(확인 뒤 등록부)
+              "question": "질문", "subject.new": "새 목록", "parcel.field": "필지 값",      # parcel.field [WO-ASK-01 §9 2026-10-03] 물음에 대한 답 → 밭 정보 값(확인 뒤 등록부)
+              "subject.field": "재배 단위 값"}                                            # subject.field [2026-10-04] 인증 선언 → 농사 값(확인 뒤 subjects.set_cert)
 
 # ── 사람이 읽는 말 ────────────────────────────────────────────────────────────────
 # [발행자 2026-09-21] 화면이 *"관찰 초안 — 서술문 — 사건·계획·질문 어휘가 없어 관찰 메모로 제안(원문 그대로 ·
@@ -196,7 +197,7 @@ KIND_LABEL = {"event": "사건", "observation.note": "관찰", "plan.farmer": "�
 # 정확한 사유는 **버리지 않는다** — 카드의 `title` 에 그대로 남겨 두고, 앞에 내세우지 않는다.
 KIND_PLAIN = {"event": "한 일", "observation.note": "본 것", "plan.farmer": "할 일", "plan.target_date": "납품 날짜",
               "feedback.request": "고쳐 달라는 말", "decision.noncompliance": "못 한 이유", "subject.end": "농사 끝",
-              "observation.video": "영상", "question": "물음", "subject.new": "새 목록", "parcel.field": "밭 정보"}
+              "observation.video": "영상", "question": "물음", "subject.new": "새 목록", "parcel.field": "밭 정보", "subject.field": "농사 정보"}
 assert set(KIND_PLAIN) == set(KIND_LABEL)      # 종류가 늘면 사람 말도 함께 는다 — 한쪽만 늘면 화면이 내부 이름을 낸다
 
 CONFIRM_LABEL = "일지에 넣기"            # 옛 문면 "확인 → 원장"
@@ -219,6 +220,7 @@ PLAIN_BY_KEY = {
     "symptom_alongside": "말씀 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
     "answers_ask": "방금 물었던 것에 대한 답으로 읽었습니다 — 넣기를 누르면 밭 정보에 들어가고 그 값을 판단이 읽습니다",   # [§9 2026-10-03] 어느 값인지는 초안 카드가 말한다
     "use_declared": "이 밭의 용도를 말씀하신 것으로 읽었습니다(본 것이 아닙니다) — 넣기를 누르면 밭 정보의 용도가 이 값으로 바뀝니다",   # [2026-10-04] 속성 선언 갈래
+    "cert_declared": "이 농사의 인증을 말씀하신 것으로 읽었습니다(본 것이 아닙니다) — 넣기를 누르면 인증이 이 값으로 들어가고 자재·시비 판단이 그 갈래를 봅니다",
     "from_diary": "일지에 이미 적힌 말에서 읽었습니다 — 묻지 않고 올립니다. 맞으면 넣기, 아니면 그냥 두시면 됩니다",                   # [2026-10-04] 묻기 전 원장 읽기
 }
 
@@ -540,6 +542,8 @@ def classify(text: str, today: date, subject: dict[str, Any] | None = None) -> l
     `subject` 를 주면 그 격자 규칙이 아는 증상 말도 증상으로 본다(어휘 한 벌) — 없으면 정본 목록만."""
     drafts = _classify(text, today)
     for d in drafts:
+        if d.get("kind") == "subject.field" and not d.get("subject") and subject is not None:
+            d["subject"] = subject.get("id")                   # 농사(재배 단위) 값 — 어느 목록인지는 재배 단위 자신
         if d.get("kind") == "parcel.field" and not d.get("parcel") and subject is not None:
             # [2026-10-04] 용도 선언은 어느 밭의 값인지가 있어야 초안이다 — 재배 단위의 필지로 채운다(send 는 늘 재배 단위를 넘긴다 · 재배 단위 없이 나누면 비워 둔다).
             # 재배 단위는 있는데 필지가 없으면 지어내지 않고 원문을 관찰 메모로(보이게)
@@ -643,6 +647,12 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
         # 밭 정보 초안으로 가는 길(§9 parcel.field)과 같은 형태 — 확인 뒤 parcels.set_fields · 어느 필지인지는 classify() 가 재배 단위에서 채운다.
         return [{"kind": "parcel.field", "field": "use", "value": use_v, "parcel": None, "text": t,
                  "why": f"용도 선언 → 밭 정보 용도 '{use_v}' (확인 뒤 parcels.set_fields · 종구면 재배 달력도 그 기준)", "why_key": "use_declared", "needs": []}]
+    cert_v = subjects.cert_declared(t)
+    if cert_v:
+        # [거꾸로 세는 검사 전수 2026-10-04] 농가 몫 요구 축을 전수로 세니 인증(cert)이 용도와 같은 형태였다 — 「이 밭은 유기 인증을 받았다」 가 본 것으로 떨어지고 자재
+        # 인용·시비 판단은 인증 유형을 계속 묻는다. 용도와 같은 길: 농사(재배 단위) 값 초안 → 확인 → subjects.set_cert.
+        return [{"kind": "subject.field", "field": "cert", "value": cert_v, "subject": None, "text": t,
+                 "why": f"인증 선언 → 농사 정보 인증 '{cert_v}' (확인 뒤 subjects.set_cert)", "why_key": "cert_declared", "needs": []}]
     if et:
         # 사건 어휘는 있는데 한 일의 표지가 없다("비료 상태가 안 좋다" · "웃거름 시기다") — 상태 서술이다. 사건이면 확인에서 '다른 종류'로 바꾼다
         return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
@@ -930,9 +940,9 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         # 같은 (값, 어휘) 초안이 아직 서 있으면 다시 안 올린다 · 등록부에는 쓰지 않는다(확인은 사람). 실패는 답을 막지 않되 보이게.
         from ingest import known, parcels
         try:
-            already = {(d.get("field"), d.get("value")) for _, _, d in pending_drafts(subject_id) if d.get("kind") == "parcel.field"}
-            already |= {(d.get("field"), d.get("value")) for d in drafts if d.get("kind") == "parcel.field"}
-            props = known.proposals(s, parcels.FIELDS_READ_BY_JUDGMENT, already)
+            already = {(d.get("field"), d.get("value")) for _, _, d in pending_drafts(subject_id) if d.get("kind") in ("parcel.field", "subject.field")}
+            already |= {(d.get("field"), d.get("value")) for d in drafts if d.get("kind") in ("parcel.field", "subject.field")}
+            props = known.proposals(s, parcels.FIELDS_READ_BY_JUDGMENT, already, subject_fields=tuple(subjects.SUBJECT_FIELD_CONSUMERS))
         except (OSError, ValueError) as e:
             props = []
             dropped.note(known.DROP_WHERE, subject_id, f"{type(e).__name__}: {e}")
@@ -955,13 +965,13 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         reply_text, asked = answer_with_asks(s, text, today)         # 물은 것은 아래에서 원장에 센다(send 에서만)
         if len(drafts) > 1:                  # 물음 안의 본 것 — 관찰 초안이 함께 섰다(확인은 사람)
             reply_text += f" {plain_why(drafts[1])}. '{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
-    elif drafts and drafts[0]["kind"] == "parcel.field":
-        # [§9 2026-10-03] 물음에 대한 답 — 어느 값을 어떻게 읽었는지 말하고, 넣기를 누르면 밭 정보(등록부)에 들어간다(영농일지가 아니다)
-        from ingest import parcels
+    elif drafts and drafts[0]["kind"] in ("parcel.field", "subject.field"):
+        # [§9 2026-10-03] 물음에 대한 답 — 어느 값을 어떻게 읽었는지 말하고, 넣기를 누르면 밭 정보(등록부)에 들어간다(영농일지가 아니다) · [2026-10-04] 농사 값(인증)도 같은 줄
         d = drafts[0]
         from frontend import words as _w
-        reply_text = (f"{plain_why(d)} — {parcels.FIELD_WORDS.get(d['field'], d['field'])}: {d['value']}. "
-                      f"'{CONFIRM_LABEL}' 를 누르면 밭 정보에 들어갑니다(밭 정보 화면에서 언제든 고칠 수 있습니다). "
+        word = parcels.FIELD_WORDS.get(d["field"]) or subjects.SUBJECT_FIELD_WORDS.get(d["field"], d["field"])
+        place = "밭 정보에 들어갑니다(밭 정보 화면에서 언제든 고칠 수 있습니다)" if d["kind"] == "parcel.field" else "이 농사의 정보에 들어갑니다"
+        reply_text = (f"{plain_why(d)} — {word}: {d['value']}. '{CONFIRM_LABEL}' 를 누르면 {place}. "
                       + _w.opened(d["field"], d["value"]))   # [§12] 이 답이 연 판단 — 문장은 words.opened 하나(폼 · 확인 줄과 같은 자리)
     elif drafts:
         d = drafts[0]
@@ -1102,6 +1112,8 @@ def _confirm_locked(msg_id: str, draft_index: int = 0, day: str | None = None, e
                 s = subjects.by_id(sid)
                 if s and not s.get("anchor"):
                     subjects.set_anchor(sid, rec["observed_at"], f"{et}(채팅 확인)")
+                    from frontend import words as _w
+                    rec = dict(rec, opens=list(subjects.SUBJECT_FIELD_CONSUMERS["anchor"]), opens_line=_w.opened("anchor", rec["observed_at"]))   # [§12] 심은 날이 연 판단
         elif k == "observation.note":
             rec = ev.add_observation(sid, d["text"], day or d.get("observed_at") or "", chat_ref=ref, now=now)
         elif k == "plan.farmer":
@@ -1128,6 +1140,17 @@ def _confirm_locked(msg_id: str, draft_index: int = 0, day: str | None = None, e
             rec = {"id": f"parcel:{d['parcel']}:{d['field']}", "kind": "parcel", "observed_at": m.get("observed_at"), "field": d["field"], "value": d["value"],
                    "opens": opens,                                                       # [WO-ASK-01 §12 2026-10-03] 답한 것이 무엇을 바꿨는지 — 연 판단의 이름
                    "opens_line": _w.opened(d["field"], d["value"])}
+        elif k == "subject.field":
+            # [2026-10-04 거꾸로 세는 검사 전수] 농사(재배 단위) 값 — 지금은 인증(cert) 하나. 어휘 관문은 subjects.set_cert 하나(화면이든 채팅이든 같은 자리)
+            from frontend import words as _w
+            if d["field"] != "cert":
+                raise ChatError(f"농사 정보로 넣을 수 없는 값: {d['field']}")
+            try:
+                subjects.set_cert(d.get("subject") or sid, d["value"])
+            except subjects.SubjectError as e:
+                raise ChatError(str(e))
+            rec = {"id": f"subject:{sid}:cert", "kind": "subject", "observed_at": m.get("observed_at"), "field": "cert", "value": d["value"],
+                   "opens": list(subjects.SUBJECT_FIELD_CONSUMERS["cert"]), "opens_line": _w.opened("cert", d["value"])}
         else:
             raise ChatError(f"확인할 수 없는 종류: {k}")
     except (ev.EventError, fb.FeedbackError, subjects.SubjectError) as e:

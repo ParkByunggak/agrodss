@@ -19,9 +19,10 @@ from __future__ import annotations
 from typing import Any
 
 from ingest import events as ev
-from ingest import parcels
+from ingest import parcels, subjects
 
 DROP_WHERE = "원장 읽기"
+SUBJECT_AXES = ("cert",)          # 요구 문장의 축 이름이 곧 농사(재배 단위) 값인 것 — 질문 생성이 여기 든 축은 known_subject_field 를 먼저 본다
 # 필지 값마다 일지에서 **언급**으로 보는 말(있으면 "일지에 그 말이 있다") 과 **값**으로 읽는 말(한 값만 걸릴 때만 값이다)
 FIELD_MENTIONS: dict[str, tuple[str, ...]] = {
     "drainage": ("배수", "물 빠짐", "물빠짐", "고랑에 물", "물이 고", "물이 빠", "물이 안 빠", "물이 잘 빠", "고랑 물"),
@@ -87,13 +88,36 @@ def known_use_differs(subject: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def proposals(subject: dict[str, Any], fields: tuple[str, ...] | list[str], already: set[tuple[str, str]] = frozenset()) -> list[dict[str, Any]]:
-    """일지에서 **값을 읽을 수 있는** 필지 값마다 밭 정보 초안 하나(parcel.field · why_key from_diary). 속성이 이미 있으면 안 올린다(용도는 다른 선언이면 올린다) ·
-    같은 (필드, 값) 초안이 이미 서 있으면 다시 안 올린다 · 등록부에는 쓰지 않는다."""
+def known_subject_field(subject: dict[str, Any], field: str) -> dict[str, Any] | None:
+    """농사(재배 단위) 값 — 지금은 인증(cert). 속성 → 관찰 원장의 선언(최근 먼저) → 없음. 심은 날은 파종 사건 확인이 바로 넣는다(chat.confirm) — 여기서 다시 읽지 않는다."""
+    if field != "cert":
+        return None
+    cur = subject.get("cert")
+    if cur:
+        return {"from": "attribute", "field": field, "value": cur}
+    obs = sorted(ev.list_records(subject.get("id"), "observation.note"), key=lambda o: (str(o.get("observed_at") or ""), str(o.get("recorded_at") or "")), reverse=True)
+    for o in obs:
+        text = str(o.get("text") or "")
+        v = subjects.cert_declared(text)
+        if v:
+            return {"from": "observation", "field": field, "value": v, "id": o.get("id"), "observed_at": str(o.get("observed_at") or "")[:10], "text": text}
+    return None
+
+
+def proposals(subject: dict[str, Any], fields: tuple[str, ...] | list[str], already: set[tuple[str, str]] = frozenset(),
+              subject_fields: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+    """일지에서 **값을 읽을 수 있는** 필지 값마다 밭 정보 초안 하나(parcel.field · why_key from_diary) · 농사 값(subject_fields — 인증)도 같은 길(subject.field).
+    속성이 이미 있으면 안 올린다(용도는 다른 선언이면 올린다) · 같은 (필드, 값) 초안이 이미 서 있으면 다시 안 올린다 · 등록부에는 쓰지 않는다."""
+    out: list[dict[str, Any]] = []
+    for f in subject_fields:
+        k = known_subject_field(subject, f)
+        if k and k["from"] == "observation" and k.get("value") and (f, k["value"]) not in already:
+            out.append({"kind": "subject.field", "subject": subject.get("id"), "field": f, "value": k["value"], "text": k["text"],
+                        "why": f"일지 {k['observed_at']} 관찰({k['id']})에서 읽은 {subjects.SUBJECT_FIELD_WORDS.get(f, f)} '{k['value']}' — 묻지 않고 초안으로(확인 뒤 subjects.set_cert)",
+                        "why_key": "from_diary", "source_ref": k["id"], "observed_at": k["observed_at"], "needs": []})
     pid = subject.get("parcel")
     if not pid:
-        return []
-    out: list[dict[str, Any]] = []
+        return out
     for f in fields:
         k = known_use_differs(subject) if f == "use" else known_field(subject, f)
         if not k or k["from"] != "observation" or not k.get("value"):

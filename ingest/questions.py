@@ -69,6 +69,13 @@ def candidates(envs: list[Any], subject: dict[str, Any] | None = None) -> list[d
         for m in e.missing or []:
             if not m.get("axis"):
                 continue
+            if m.get("ask") is False:
+                continue                                           # [2026-10-04 전수] 보이면 적는 것(증상)은 요구가 아니다 — 카드에는 남고 답 끝에 묻지 않는다(judge.need ask=False)
+            if subject is not None and m["axis"] in known.SUBJECT_AXES:
+                k = known.known_subject_field(subject, m["axis"])
+                if k and k["from"] == "observation" and k.get("value"):
+                    dropped.note(known.DROP_WHERE, f"{e.decision_id}/{m['axis']}", "일지에 그 값이 있어 묻지 않는다 — 초안으로 올린다(known)")
+                    continue                                       # [2026-10-04 전수] 농사 값(인증)도 묻기 전 원장 읽기 — 필지 값과 같은 자리
             q = dict(m)
             q["decision"] = e.decision_id
             q["priority"] = 2 if str(m.get("who_can_fill", "")).startswith("농가") else 3
