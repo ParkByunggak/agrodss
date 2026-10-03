@@ -163,6 +163,18 @@ KIND_CLASS = {"판단함": "완료", "선택지+대가": "진행", "사실 인�
 LEVEL_CLASS = {"경보": "폐기", "주의": "진행", "예고": "대기"}
 
 
+def _alert_table(alerts: list[dict]) -> str:
+    """위험 경보 표 — 한 자리(두 카드가 같은 표를 따로 그리고 있었다 · §7.5 지점). [WO-ASK-01 §10 2026-10-03] 추론값이면 누가 고칠 수 있는지를
+    사람 말로 — 농가 것만 「고칠 수 있다」(words.fixer). 정확한 갈래는 title 에."""
+    from grid import schema as grid_schema
+    rows = "".join(
+        f'<tr><td><span class="st st-{LEVEL_CLASS.get(a["level"], "대기")}">{_e(a["level"])}</span></td><td><b>{_e(a["risk"])}</b></td>'
+        f'<td>{_e(a["stage"])}</td><td>{"가능" if a.get("recoverable") else "불가"}</td><td>{_e(a["basis"])}</td>'
+        f'<td title="{_e(a.get("fixable_by") or "")}">{_e(words.fixer(a.get("fixable_by"), grid_schema.is_inference(a.get("source"))))}</td></tr>'
+        for a in alerts)
+    return f"<table><tr><th>수준</th><th>위험</th><th>칸</th><th>회복</th><th>근거</th><th>고칠 수 있나</th></tr>{rows}</table>"
+
+
 def _render_env(out: list[str], e: dict, title: str) -> None:
     # [U-26 2026-09-26] 발행자가 *"확인하실 곳은 /judge 의 계획 대 실제"* 라고 이 화면으로 갔다 — 들여다보는 화면이라고
     # 미뤄 둔 것이 틀렸다. 종류·등급·자료 이름은 사람 말로 내되 **정확한 이름은 title 에 남긴다**(채팅 카드와 같은 형태).
@@ -175,9 +187,7 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         out.append(f"<p>기준점 후 {r['days_since_anchor']}일 · 보는 칸: {_e(' / '.join(r['stages']))} · {r['horizon_days']}일 앞까지 · "
                    f"근거 <b>{_e(words.grade(e['grade']))}</b> · 재판정 {_e(e['revisit_at'])}</p>")
         if r["alerts"]:
-            out.append("<table><tr><th>수준</th><th>위험</th><th>칸</th><th>회복</th><th>근거</th></tr>" + "".join(
-                f'<tr><td><span class="st st-{LEVEL_CLASS.get(a["level"], "대기")}">{_e(a["level"])}</span></td><td><b>{_e(a["risk"])}</b></td>'
-                f'<td>{_e(a["stage"])}</td><td>{"가능" if a["recoverable"] else "불가"}</td><td>{_e(a["basis"])}</td></tr>' for a in r["alerts"]) + "</table>")
+            out.append(_alert_table(r["alerts"]))
         else:
             out.append("<p>지금 낼 경보가 없다.</p>")
         out.append(f"<p class=\"meta\">회복 가능 위험 {r['watched_recoverable']}건은 신호가 임계를 넘을 때만 나온다(확률 충분할 때만).</p>")
@@ -272,9 +282,7 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         # 요약(상태 · 작업일 · 양 · 사유 · 경보)이 result 에 있는데 화면이 안 실었다. 발행자에게 "/judge 에서 양을 보라"고 해 놓고 화면엔 없었다
         out.append(f"<p><b>{_e(r['summary'])}</b> · 근거 <b>{_e(words.grade(e['grade']))}</b> · 재판정 {_e(e['revisit_at'])}</p>")
         if r.get("alerts"):
-            out.append("<table><tr><th>수준</th><th>위험</th><th>칸</th><th>회복</th><th>근거</th></tr>" + "".join(
-                f'<tr><td><span class="st st-{LEVEL_CLASS.get(a["level"], "대기")}">{_e(a["level"])}</span></td><td><b>{_e(a["risk"])}</b></td>'
-                f'<td>{_e(a["stage"])}</td><td>{"가능" if a.get("recoverable") else "불가"}</td><td>{_e(a["basis"])}</td></tr>' for a in r["alerts"]) + "</table>")
+            out.append(_alert_table(r["alerts"]))
         if r.get("candidates"):
             # [D-18 직렬 게이트 2026-09-27] 증상 → 원인 좁히기의 판단함 — 한 줄 요약만 내면 후보마다 붙은 **확인**이 떨어진다(조건 탈락 형태).
             # 후보 · 그 후보를 가르는 확인 · 회복 가능 여부를 표로. 이름은 격자(발행자 정본)의 말이고, 판단은 여기 없다
@@ -722,7 +730,10 @@ class Handler(BaseHTTPRequestHandler):
                 rec = chat.confirm(form.get("msg", ""), int(form.get("i") or 0), day=form.get("day") or None, event_type=form.get("type") or None,
                                    risk=form.get("risk") or None, planned_task=form.get("planned_task") or None)
                 # [§7.5 전수 2026-09-21] 앞 회차 문면 고침이 **여기까지 닿지 않았다** — 확인 직후 화면에 뜨는 줄이다(가장 자주 보는 말)
-                status, body = chat_page(sid, message=f"{chat.SAVED_LABEL} · {chat.KIND_PLAIN.get(rec['kind'], rec['kind'])} {rec.get('observed_at', '')}")
+                saved = f"{chat.SAVED_LABEL} · {chat.KIND_PLAIN.get(rec['kind'], rec['kind'])} {rec.get('observed_at', '')}"
+                if rec.get("opens_line"):                                    # [WO-ASK-01 §12 2026-10-03] 밭 정보 값을 넣은 직후 — 그 답이 연 판단을 말한다
+                    saved = f"{saved} — {rec['opens_line']}"
+                status, body = chat_page(sid, message=saved)
             except (chat.ChatError, ValueError) as e:
                 status, body = chat_page(sid, error=str(e))
         elif p.startswith("/c/") and p.endswith("/choose"):

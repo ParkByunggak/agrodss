@@ -7,7 +7,8 @@
     "anchor_kind": "파종(종구)",
     "source": "추론 초안 2026-09-18 (농가 상식 수준). 농사로 쪽파 재배기술 정보와 대조 대기(M-15 ③). 발행자 검토 대기",
     "confidence": "중",
-    "note": "회복 불가 칸부터 채웠다(M-7 원칙). 시비량 등 수치 칸은 정본(토양검정 값 · 공공 처방 기준)이 도착하기 전에는 비워 둔다."
+    "note": "회복 불가 칸부터 채웠다(M-7 원칙). 시비량 등 수치 칸은 정본(토양검정 값 · 공공 처방 기준)이 도착하기 전에는 비워 둔다.",
+    "fixable_by": "정본"
   },
   "variety_correction": {
     "time_shift_days": "N/A",
@@ -36,7 +37,8 @@
             "forecast"
           ],
           "parcel_correction": false,
-          "source": "추론 — 적기 날짜의 정본은 농사로 대조 대기"
+          "source": "추론 — 적기 날짜의 정본은 농사로 대조 대기",
+          "fixable_by": "정본"
         },
         {
           "name": "종구 부패",
@@ -50,7 +52,8 @@
             "soil_water"
           ],
           "parcel_correction": false,
-          "source": "추론"
+          "source": "추론",
+          "fixable_by": "농가"
         }
       ],
       "tasks": [
@@ -77,7 +80,8 @@
             "possible": false,
             "deadline_day": 0
           },
-          "source": "추론 — 온탕 조건(온도·시간)은 미채움"
+          "source": "추론 — 온탕 조건(온도·시간)은 미채움",
+          "fixable_by": "정본"
         },
         {
           "name": "밑거름 · 두둑 · 파종",
@@ -103,7 +107,8 @@
             "possible": true,
             "deadline_day": 14
           },
-          "source": "추론 — 시비량은 soil_chem 도착 뒤 처방 정본에서"
+          "source": "추론 — 시비량은 soil_chem 도착 뒤 처방 정본에서",
+          "fixable_by": "정본"
         }
       ],
       "required_axes": [
@@ -155,7 +160,8 @@
             "precip"
           ],
           "parcel_correction": false,
-          "source": "추론"
+          "source": "추론",
+          "fixable_by": "농가"
         }
       ],
       "tasks": [
@@ -174,7 +180,8 @@
             "possible": true,
             "deadline_day": 10
           },
-          "source": "추론"
+          "source": "추론",
+          "fixable_by": "농가"
         },
         {
           "name": "보식",
@@ -196,7 +203,8 @@
             "possible": true,
             "deadline_day": 14
           },
-          "source": "추론"
+          "source": "추론",
+          "fixable_by": "농가"
         }
       ],
       "required_axes": [
@@ -245,7 +253,8 @@
             "microclimate"
           ],
           "parcel_correction": true,
-          "source": "추론 — 발생 예찰 임계는 NCPMS 대조 대기(M-15 ②)"
+          "source": "추론 — 발생 예찰 임계는 NCPMS 대조 대기(M-15 ②)",
+          "fixable_by": "정본"
         },
         {
           "name": "파총채벌레 · 파좀나방",
@@ -259,7 +268,8 @@
             "microclimate"
           ],
           "parcel_correction": true,
-          "source": "추론"
+          "source": "추론",
+          "fixable_by": "정본"
         },
         {
           "name": "노균병",
@@ -274,7 +284,8 @@
             "microclimate"
           ],
           "parcel_correction": true,
-          "source": "추론 — 잎 젖음 축은 I-4 에 없다(대기 습도는 금지·후보) — 미채움으로 남긴다"
+          "source": "추론 — 잎 젖음 축은 I-4 에 없다(대기 습도는 금지·후보) — 미채움으로 남긴다",
+          "fixable_by": "정본"
         }
       ],
       "tasks": [
@@ -303,7 +314,8 @@
             "possible": true,
             "deadline_day": 30
           },
-          "source": "추론 — organic_control_map 계열 지식과 같은 결(상품 아님)"
+          "source": "추론 — organic_control_map 계열 지식과 같은 결(상품 아님)",
+          "fixable_by": "정본"
         },
         {
           "name": "웃거름 1회",
@@ -325,7 +337,8 @@
             "possible": true,
             "deadline_day": 30
           },
-          "source": "추론 — 양은 미채움"
+          "source": "추론 — 양은 미채움",
+          "fixable_by": "정본"
         },
         {
           "name": "제초",
@@ -342,7 +355,8 @@
             "possible": true,
             "deadline_day": 40
           },
-          "source": "추론"
+          "source": "추론",
+          "fixable_by": "농가"
         }
       ],
       "required_axes": [
@@ -410,7 +424,8 @@
       ],
       "drought_rules": {
         "dry_days": 7,
-        "source": "발행자 측 추론 2026-09-30 — 표준 아님(잎채소 · 건조 민감 · 뿌리 얕음 · 4단계는 과습이 회복 불가 위험이라 배수가 먼저) · 농진청 정본이 오면 바꾼다"
+        "source": "발행자 측 추론 2026-09-30 — 표준 아님(잎채소 · 건조 민감 · 뿌리 얕음 · 4단계는 과습이 회복 불가 위험이라 배수가 먼저) · 농진청 정본이 오면 바꾼다",
+        "fixable_by": "정본"
       }
     },
     {
@@ -434,7 +449,8 @@
             "soil_water"
           ],
           "parcel_correction": false,
-          "source": "추론 — 배수 등급은 필지 고정 정보(I-3)"
+          "source": "추론 — 배수 등급은 필지 고정 정보(I-3)",
+          "fixable_by": "정본"
         },
         {
           "name": "녹병 · 잎마름병",
@@ -448,7 +464,8 @@
             "microclimate"
           ],
           "parcel_correction": true,
-          "source": "추론"
+          "source": "추론",
+          "fixable_by": "정본"
         }
       ],
       "tasks": [
@@ -467,7 +484,8 @@
             "possible": true,
             "deadline_day": 50
           },
-          "source": "추론"
+          "source": "추론",
+          "fixable_by": "농가"
         },
         {
           "name": "웃거름 2회(필요 시)",
@@ -489,7 +507,8 @@
             "possible": true,
             "deadline_day": 50
           },
-          "source": "추론 — 필요 여부 판정 규칙 미채움"
+          "source": "추론 — 필요 여부 판정 규칙 미채움",
+          "fixable_by": "정본"
         }
       ],
       "required_axes": [
@@ -521,7 +540,8 @@
       ],
       "drought_rules": {
         "dry_days": 7,
-        "source": "발행자 측 추론 2026-09-30 — 표준 아님(잎채소 · 건조 민감 · 뿌리 얕음 · 4단계는 과습이 회복 불가 위험이라 배수가 먼저) · 농진청 정본이 오면 바꾼다"
+        "source": "발행자 측 추론 2026-09-30 — 표준 아님(잎채소 · 건조 민감 · 뿌리 얕음 · 4단계는 과습이 회복 불가 위험이라 배수가 먼저) · 농진청 정본이 오면 바꾼다",
+        "fixable_by": "정본"
       }
     },
     {
@@ -544,7 +564,8 @@
             "temp"
           ],
           "parcel_correction": false,
-          "source": "추론 — 쪽파 내한성 한계 온도는 미채움(정본 대조)"
+          "source": "추론 — 쪽파 내한성 한계 온도는 미채움(정본 대조)",
+          "fixable_by": "정본"
         },
         {
           "name": "수확 지연 — 잎 노화 · 도복",
@@ -557,7 +578,8 @@
             "temp"
           ],
           "parcel_correction": false,
-          "source": "추론"
+          "source": "추론",
+          "fixable_by": "농가"
         }
       ],
       "tasks": [
@@ -578,7 +600,8 @@
             "possible": false,
             "deadline_day": 70
           },
-          "source": "추론 — 잎 길이 기준(30~40cm)은 농가 관찰이 최종 심급"
+          "source": "추론 — 잎 길이 기준(30~40cm)은 농가 관찰이 최종 심급",
+          "fixable_by": "농가"
         },
         {
           "name": "출하 또는 단기 저장",
@@ -652,7 +675,8 @@
             "possible": true,
             "deadline_day": 90
           },
-          "source": "추론 — 월동시켜 봄 수확하는 경우는 별개 단위(jjokpa-spring)"
+          "source": "추론 — 월동시켜 봄 수확하는 경우는 별개 단위(jjokpa-spring)",
+          "fixable_by": "농가"
         }
       ],
       "required_axes": [

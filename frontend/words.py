@@ -87,6 +87,40 @@ def grade(g: str | None) -> str:
     return GRADE_SAID.get(g or "", g or "")
 
 
+# [WO-ASK-01 §10 2026-10-03] 추론값의 **누가 고칠 수 있는가**(grid.schema.FIXABLE_BY) → 사람 말. 농가 것만 "고칠 수 있다" 고 말한다 —
+# 농가가 알 수 없는 것(임계 · 내한 한계)에 고침 요청이 매번 뜨면 ⑦이 깨진다(§10). 어휘는 격자 정본의 것이고 여기서는 말만 바꾼다.
+FIXER_SAID = {"농가": "밭에서 보신 것으로 고칠 수 있습니다", "정본": "기준 자료가 와야 바뀝니다", "실측": "재야 바뀝니다"}
+
+
+def fixer(fixable_by: str | None, inference: bool = True) -> str:
+    if not inference:
+        return "—"
+    return FIXER_SAID.get(fixable_by or "", "검토 전 추론")
+
+
+def fix_offer(names: list[str]) -> str:
+    """위험 경보 답 끝에 붙는 한 줄 — 농가가 고칠 수 있는 추론값만 이름을 부른다(§10 '쓰이는 그 자리에서'). 고침은 '고쳐 달라는 말' 로 들어간다."""
+    return (f"「{' · '.join(names)}」 은 검토 전 추론이고 밭에서 보시는 분이 고칠 수 있는 것입니다 — 다르면 채팅에 "
+            f"'고쳐 주세요: 무엇이 다른지' 한 줄로 적어 주시면 고쳐 달라는 말로 들어갑니다.")
+
+
+# [WO-ASK-01 §12 2026-10-03] "답했는데 아무것도 안 바뀌면 더 안 쓴다" — 답을 받은 직후 **그 답이 연 판단**을 말한다. 판단 이름은 사람 말 정본에서.
+DECISION_SAID = {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용", "plan_vs_actual": "계획 대 실제"}
+
+
+def decision(decision_id: str) -> str:
+    if decision_id in DECISION_SAID:
+        return DECISION_SAID[decision_id]
+    from judge import registry, stage_decisions  # noqa: F401 — M-10 등록분은 등록부 이름(stage_decisions 가 적재 때 등록한다) — 함수 안에서(모듈 수준이면 4층이 3층을 든다)
+    d = registry.all_decisions().get(decision_id)
+    return d.name if d is not None else decision_id
+
+
+def opened(field_word: str, value: str, decision_ids: list[str]) -> str:
+    names = " · ".join(decision(d) for d in decision_ids)
+    return f"이것으로 {names} 판단이 {field_word} 값 '{value}' 을 읽습니다 — 다음 답부터 그 근거에 실립니다."
+
+
 def plain(text: str) -> str:
     """시스템이 만든 문장을 사람 말로. **농가가 쓴 글에는 쓰지 않는다.**"""
     out = _ID_TAG.sub("", text or "")

@@ -21,6 +21,11 @@ def clone(tmp_path):
     """본체의 임시 클론 — 이 도구는 본체에 쓰는 것이 일이라(격자 = 커밋 정본) 검사는 클론에서 한다."""
     c = tmp_path / "clone"
     subprocess.run(["git", "clone", "-q", "--shared", str(ROOT), str(c)], check=True, capture_output=True)
+    # [§10 2026-10-03 실측] 클론은 HEAD 다 — 격자와 검증기가 **같은 회차에** 바뀌면(fixable_by) 이 프로세스의 새 검증기가 HEAD 격자를 거부해 도구가 아무것도
+    # 안 쓴다. 도구의 검사는 커밋 상태가 아니라 **지금 격자**에 대한 것이라 격자 파일만 작업 트리 것으로 덮는다(검증기 · 문서 생성기도 이 프로세스 것이다).
+    for p in (ROOT / "data" / "grid").glob("*.json"):
+        (c / "data" / "grid" / p.name).write_bytes(p.read_bytes())
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-a", "--allow-empty", "-m", "working grid"], cwd=c, check=True, capture_output=True)
     return c
 
 
@@ -51,6 +56,7 @@ def test_it_writes_nothing_when_the_prewalk_leaves_more_than_one(clone, monkeypa
 
 def test_it_writes_the_grid_and_the_doc_and_reports_what_is_left(clone, monkeypatch):
     monkeypatch.setattr(pw, "walk", lambda *a, **k: _pre(["tests/test_drought_slot.py::test_with_the_real_grid_it_says_which_cell_is_empty_and_what_the_water_values_are"]))
+    head = subprocess.run(["git", "log", "--oneline", "-1"], cwd=clone, capture_output=True, text=True).stdout     # 클론의 HEAD(작업 트리 격자를 덮은 커밋)
     r = ag.apply("jjokpa_autumn", [3, 4], "drought_rules", VALUE, tests=[], root=clone)
     assert r["applied"] and r["doc_mentions_value"]
     unit = json.loads((clone / "data" / "grid" / "jjokpa_autumn.json").read_text(encoding="utf-8"))
@@ -62,7 +68,6 @@ def test_it_writes_the_grid_and_the_doc_and_reports_what_is_left(clone, monkeypa
     rep = ag.report(r)
     assert "넣었다" in rep and "남은 것 1" in rep and "커밋은 이 명령이 하지 않는다" in rep
     log = subprocess.run(["git", "log", "--oneline", "-1"], cwd=clone, capture_output=True, text=True).stdout
-    head = subprocess.run(["git", "log", "--oneline", "-1"], cwd=ROOT, capture_output=True, text=True).stdout
     assert log == head                                                                    # 커밋하지 않았다
     assert not (ROOT / "data" / "grid" / "jjokpa_autumn.json").read_text(encoding="utf-8").count("검사용 출처")   # 본체는 그대로
 

@@ -197,12 +197,14 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
                 watched += 1
                 if not basis:
                     if stage_open:
-                        watch.append({"risk": r["name"], "stage": f"{s['order']}. {s['name']}", "source": r.get("source", "")})   # [2026-10-02] 지켜볼 것에도 출처
+                        watch.append({"risk": r["name"], "stage": f"{s['order']}. {s['name']}", "source": r.get("source", ""),
+                                      "fixable_by": r.get(grid_schema.FIXABLE_BY_KEY)})   # [2026-10-02] 지켜볼 것에도 출처 · [§10] 누가 고칠 수 있는가
                     continue                       # 회복 가능 — 신호 없으면 경보는 침묵(confident_only) · 이름만 '지켜볼 것' 으로
                 level = "경보"
             alert = {"risk": r["name"], "stage": f"{s['order']}. {s['name']}", "level": level,
                      "recoverable": not unrec, "policy": r.get("alert"), "basis": basis,
-                     "axes": r.get("axes", []), "source": r.get("source", "")}
+                     "axes": r.get("axes", []), "source": r.get("source", ""),
+                     "fixable_by": r.get(grid_schema.FIXABLE_BY_KEY)}       # [WO-ASK-01 §10 2026-10-03] 추론값이면 누가 고칠 수 있는가 — 농가 것만 화면이 「고칠 수 있다」 고 말한다
             if _is_wet_risk(r):
                 wet_seen = True
                 if drainage:

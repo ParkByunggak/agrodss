@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -198,6 +199,64 @@ def _canonical_names() -> set[str]:
     return set(R.load().canonical)
 
 
+# ── 추론값 — 누가 고칠 수 있는가 [WO-ASK-01 §10 · §14 의 5 · 2026-10-03] ───────────────────────────────────────────────────────
+# §10: "추론값은 쓰이는 그 자리에서 고칠 수 있다 — 대상은 추론값 중 **농가가 알 수 있는 것(P1)만**. 농가가 알 수 없는 것(병해충 임계 · 내한 한계 — P2/P4)은
+# 제외 — 답할 수 없는 요청이 매번 뜨면 ⑦이 깨진다. 침묵은 동의가 아니다. 승격은 셋 중 하나로만 — 농가가 명시적으로 고침 · 외부 정본 대조 · 실측."
+# 그래서 출처가 추론인 값마다 **누가 고칠 수 있는가**(fixable_by)를 적는다 — 출처 규율(source 필수)의 다음 칸이고 같은 형태로 검증한다.
+# 갈래는 세션이 판정했고(표는 docs/grid_*.md 의 §10 표 — 발행자가 한 번에 보고 뒤집는다) 값은 지식이라 여기 없다.
+FIXABLE_BY_KEY = "fixable_by"
+FIXABLE_BY: tuple[str, ...] = ("농가", "정본", "실측")       # §10 승격 경로 셋 — 농가가 명시적으로 고침 · 외부 정본 대조 · 실측
+INFERENCE_PREFIXES: tuple[str, ...] = ("추론", "발행자 측 추론")   # 이 머리로 시작하는 출처가 추론값이다(「발행자 결정 …」 은 결정이지 추론이 아니다)
+CONFIRMED_PREFIX = "농가 확인"                                  # §10 "고치면 출처가 '농가 확인' 이 된다" — 언제 확인했는지 날짜가 붙어야 출처다
+_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def is_inference(source: Any) -> bool:
+    return str(source or "").strip().startswith(INFERENCE_PREFIXES)
+
+
+def sourced_values(unit: dict[str, Any]) -> list[dict[str, Any]]:
+    """출처(source)를 지닌 값 전부 — 한 자리에서 센다(검증기 · 문서 · 검사가 같은 목록을 본다 · 두 벌 금지).
+    항목: {stage, stage_name, kind, name, source, fixable_by, inference}"""
+    out: list[dict[str, Any]] = []
+
+    def add(stage, kind, name, obj):
+        if not isinstance(obj, dict) or "source" not in obj:
+            return
+        out.append({"stage": stage.get("order") if stage else 0, "stage_name": stage.get("name", "") if stage else "격자 전체",
+                    "kind": kind, "name": name, "source": str(obj.get("source") or ""), "fixable_by": obj.get(FIXABLE_BY_KEY),
+                    "inference": is_inference(obj.get("source"))})
+
+    add(None, "unit", str((unit.get("unit") or {}).get("id", "")), unit.get("unit"))
+    for s in unit.get("stages", []):
+        for kind in ("risks", "tasks"):
+            v = s.get(kind)
+            if isinstance(v, list):
+                for r in v:
+                    add(s, kind, str(r.get("name", "")) if isinstance(r, dict) else "", r)
+        if isinstance(s.get(SYMPTOM_RULES_KEY), list):
+            for i, r in enumerate(s[SYMPTOM_RULES_KEY]):
+                add(s, SYMPTOM_RULES_KEY, " · ".join(str(x) for x in (r.get("symptoms") or [])[:2]) if isinstance(r, dict) else str(i), r)
+        add(s, DROUGHT_RULES_KEY, "dry_days", s.get(DROUGHT_RULES_KEY))
+        if isinstance(s.get(BY_USE_KEY), dict):
+            for use, ov in s[BY_USE_KEY].items():
+                add(s, BY_USE_KEY, str(use), ov)
+    return out
+
+
+def _validate_fixable_by(unit: dict[str, Any], err) -> None:
+    """[§10] 추론값마다 fixable_by ∈ FIXABLE_BY · 추론이 아니어도 적혀 있으면 어휘 안 · '농가 확인' 출처는 날짜가 있어야 한다(언제 확인했는지가 출처다)."""
+    for v in sourced_values(unit):
+        tag = f"stage {v['stage']}({v['stage_name']}) {v['kind']} {v['name']!r}" if v["stage"] else f"unit {v['name']!r}"
+        fb = v["fixable_by"]
+        if v["inference"] and fb is None:
+            err(f"{tag}: {FIXABLE_BY_KEY} 가 없다 — 추론값은 누가 고칠 수 있는지({' · '.join(FIXABLE_BY)})를 적는다(§10 — 없으면 농가에게 답할 수 없는 고침 요청이 간다)")
+        elif fb is not None and fb not in FIXABLE_BY:
+            err(f"{tag}: {FIXABLE_BY_KEY} {fb!r} 는 어휘 밖 — {' | '.join(FIXABLE_BY)}")
+        if v["source"].strip().startswith(CONFIRMED_PREFIX) and not _DATE.search(v["source"]):
+            err(f"{tag}: '{CONFIRMED_PREFIX}' 출처에 날짜(YYYY-MM-DD)가 없다 — 언제 확인했는지가 출처다(§10 승격은 명시적 고침뿐)")
+
+
 SYMPTOM_RULES_KEY = "symptom_rules"     # 칸의 증상 → 원인 좁히기 규칙(D-18) — 판정기 등록부(stage_decisions)가 같은 이름을 쓴다
 DROUGHT_RULES_KEY = "drought_rules"     # 칸의 가뭄 임계(D-20) — {dry_days: 무강수 임계 일수, source}. 값은 발행자 지식 · 여기서는 형태만
 
@@ -374,6 +433,7 @@ def validate(unit: dict[str, Any], canonical: set[str] | None = None) -> Report:
             _validate_drought_rules(s[DROUGHT_RULES_KEY], tag, err)
     if stages and not any_shoot:
         err("촬영 시점 칸(capture.shoot=true)이 하나도 없다 — 영상이 상세페이지다(몰-C)")
+    _validate_fixable_by(unit, err)                                         # [§10 2026-10-03] 출처 규율의 다음 칸 — 추론값마다 누가 고칠 수 있는가
     if not unit.get("_use_merged"):
         _validate_by_use(unit, err, canonical)
     return rep
@@ -398,7 +458,7 @@ def _validate_by_use(unit: dict[str, Any], err, canonical: set[str]) -> None:
             if not isinstance(ov, dict) or not (isinstance(ov.get("source"), str) and ov["source"].strip()):
                 err(f"{tag}[{use}]: source 가 없다 — 출처 없는 덮어쓰기는 싣지 않는다(결정도 지식이다)")
                 continue
-            extra = set(ov) - OVERRIDABLE - {"source"}
+            extra = set(ov) - OVERRIDABLE - {"source", FIXABLE_BY_KEY}
             if extra:
                 err(f"{tag}[{use}]: 덮어쓸 수 없는 키 {sorted(extra)} — 가능: {sorted(OVERRIDABLE)}")
             seen_uses.add(use)

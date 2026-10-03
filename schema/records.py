@@ -146,6 +146,7 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
     _k("plan.task", "1층 계획",
        ("source", "resolution", "stage", "task", "work_day", "work_date", "prep_date_own", "prep_date_rental", "tools",
         "materials", "retry_possible", "deadline_day", "deadline_date", "source_note"),
+       ("fixable_by",),            # [WO-ASK-01 §10 2026-10-03] 격자 작업이 추론값이면 누가 고칠 수 있는가(grid.schema.FIXABLE_BY) — 계획 행이 그 표지를 든다
        sources=("computed:grid",), layer3_input=True, subject_bound=False),
     _k("plan.capture", "1층 계획",
        ("source", "resolution", "stage", "task", "work_day", "work_date", "prep_date_own", "prep_date_rental", "tools",

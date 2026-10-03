@@ -36,6 +36,7 @@ def from_unit(unit: dict[str, Any], anchor: date, cert: str | None) -> list[dict
                 "deadline_day": rt.get("deadline_day"),
                 "deadline_date": (anchor + timedelta(days=int(rt["deadline_day"]))).isoformat() if rt.get("deadline_day") is not None else None,
                 "source_note": t.get("source", ""),
+                "fixable_by": t.get(grid_schema.FIXABLE_BY_KEY),            # [WO-ASK-01 §10 2026-10-03] 추론값이면 누가 고칠 수 있는가
             })
         cap = s.get("capture")
         if isinstance(cap, dict) and cap.get("shoot"):

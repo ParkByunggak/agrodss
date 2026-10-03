@@ -199,6 +199,15 @@ FIELD_WORDS: dict[str, str] = {
 # 보정 규칙 자체는 여기서 짓지 않는다: 임계가 정본에 미채움이고(격자 '고자리파리 유충' = NCPMS 대조 대기 · M-15 ②)
 # 없는 임계를 지어내는 것이 대리값이다. 대장에 등재하고 정본이 도착하면 잇는다.
 FIELDS_READ_BY_JUDGMENT = ("use", "environment", "drainage")
+# [WO-ASK-01 §12 2026-10-03] "답을 받은 직후 그 답이 연 판정을 말한다 — '이제 과습 판정이 섭니다'. 연 것이 없으면 그 질문은 애초에 하지 말았어야 한다(§5-1)."
+# 그래서 읽는 판정이 있는 필드마다 **누가 읽는가**를 이름으로 적는다 — 위 전수 주석을 코드로 옮긴 것이고, 검사가 (키 = FIELDS_READ_BY_JUDGMENT · 전부 비지 않음 ·
+# 이름이 실제 결정 id) 를 고정한다. 답을 넣은 화면이 이 이름을 사람 말로 부른다(frontend.words.opened).
+FIELD_CONSUMERS: dict[str, tuple[str, ...]] = {
+    "use": ("ship_or_store",),                 # judge.stage_decisions.judge_ship_or_store — 자가·시험·종구면 해당 없음 · 종구는 grid.schema.use_key 로 재배 달력까지
+    "environment": ("base_fertilization",),    # ingest.fertilizer.crop_code(노지/시설) → 처방 수집 → judge.stage_decisions.judge_base_fertilization
+    "drainage": ("risk_alert",),               # judge.risk_alert — 과습 위험의 근거(WO-ASK-01 결정 ① 「가」)
+}
+assert tuple(FIELD_CONSUMERS) == FIELDS_READ_BY_JUDGMENT and all(FIELD_CONSUMERS.values())    # 읽는 판정이 있다고 선언한 필드는 누가 읽는지도 적는다(§12 · §5-1 한 쌍)
 # [발행자 2026-09-21 — 절차를 장치로] *"새 입력 필드를 만들 때 그 값을 읽는 곳을 함께 세는 것. §7.5 전수와 같은 계열인데
 # 트리거가 다릅니다."* 맞다. 그래서 세는 일을 **사람의 성실성에 맡기지 않는다** — 화면이 받는 필드는 아래 둘 중 하나에
 # 반드시 들어가야 하고(검사가 분할을 고정한다), 새 필드를 넣으면 **어느 쪽인지 적기 전까지 관문이 빨갛다**.

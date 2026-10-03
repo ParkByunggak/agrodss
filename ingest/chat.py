@@ -787,7 +787,13 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
         watch = r.get("watch") or []
         if watch:
             body += " / 신호 없이 지켜볼 것: " + " · ".join(f"{w.get('risk')}({w.get('stage')})" for w in watch)
-        return f"{head} {body} · 등급 {e.grade} · 재판정 {e.revisit_at}"
+        line = f"{head} {body} · 등급 {e.grade} · 재판정 {e.revisit_at}"
+        # [WO-ASK-01 §10 2026-10-03] 쓰이는 그 자리에서 — 이 답에 실린 위험 가운데 추론값이고 **농가가 고칠 수 있는 것**만 이름을 불러 고칠 수 있다고 말한다.
+        # 정본·실측 몫(임계 · 내한 한계)은 부르지 않는다(답할 수 없는 요청이 매번 뜨면 §10 ⑦이 깨진다). 고르기는 3층(judge.inference) · 문장은 4층(words).
+        from frontend import words as _w
+        from judge import inference
+        names = inference.farmer_fixable(list(al) + list(watch))
+        return f"{line} {_w.fix_offer(names)}" if names else line
     if e.decision_id == "forecast_citation":                       # [D-21] 예보 그대로 — summary 가 이미 원천 · 발표 시각을 품는다
         return f"{head}\n{r.get('summary', '')}\n해석·권고 없음"   # [발행자 2026-09-29 "가독성"] 머리·꼬리도 제 줄에 — 요약이 여러 줄이라 이어 붙이면 마지막 날 뒤에 붙는다
     if e.decision_id == "material_citation":
@@ -910,8 +916,10 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         # [§9 2026-10-03] 물음에 대한 답 — 어느 값을 어떻게 읽었는지 말하고, 넣기를 누르면 밭 정보(등록부)에 들어간다(영농일지가 아니다)
         from ingest import parcels
         d = drafts[0]
+        from frontend import words as _w
         reply_text = (f"{plain_why(d)} — {parcels.FIELD_WORDS.get(d['field'], d['field'])}: {d['value']}. "
-                      f"'{CONFIRM_LABEL}' 를 누르면 밭 정보에 들어갑니다(밭 정보 화면에서 언제든 고칠 수 있습니다).")
+                      f"'{CONFIRM_LABEL}' 를 누르면 밭 정보에 들어갑니다(밭 정보 화면에서 언제든 고칠 수 있습니다). "
+                      + _w.opened(parcels.FIELD_WORDS.get(d["field"], d["field"]), d["value"], list(parcels.FIELD_CONSUMERS.get(d["field"], ()))))   # [§12] 이 답이 연 판단
     elif drafts:
         d = drafts[0]
         need = d.get("needs") or []
@@ -1072,7 +1080,11 @@ def _confirm_locked(msg_id: str, draft_index: int = 0, day: str | None = None, e
                 parcels.set_fields(d["parcel"], overwrite=True, **{d["field"]: d["value"]})
             except parcels.ParcelError as e:
                 raise ChatError(str(e))
-            rec = {"id": f"parcel:{d['parcel']}:{d['field']}", "kind": "parcel", "observed_at": m.get("observed_at"), "field": d["field"], "value": d["value"]}
+            from frontend import words as _w
+            opens = list(parcels.FIELD_CONSUMERS.get(d["field"], ()))
+            rec = {"id": f"parcel:{d['parcel']}:{d['field']}", "kind": "parcel", "observed_at": m.get("observed_at"), "field": d["field"], "value": d["value"],
+                   "opens": opens,                                                       # [WO-ASK-01 §12 2026-10-03] 답한 것이 무엇을 바꿨는지 — 연 판단의 이름
+                   "opens_line": _w.opened(parcels.FIELD_WORDS.get(d["field"], d["field"]), d["value"], opens)}
         else:
             raise ChatError(f"확인할 수 없는 종류: {k}")
     except (ev.EventError, fb.FeedbackError, subjects.SubjectError) as e:

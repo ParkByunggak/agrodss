@@ -34,6 +34,14 @@ def build(unit: dict) -> str:
         for r in (s.get("risks") or []) if s.get("risks") != NA else []:
             if r.get("recoverable") is False:
                 out.append(f"| {s['order']} {s['name']} | **{r['name']}** | {r.get('trigger', '')} | {' '.join(r.get('axes', []))} |")
+    # [WO-ASK-01 §10 2026-10-03] 추론값마다 누가 고칠 수 있는가 — 갈래는 세션 판정이라 **표 전체를 발행자가 한 번에 본다**(WO-PB-01 표와 같은 길 · 뒤집을 행은 이름과 갈래만)
+    vals = [v for v in schema.sourced_values(unit) if v["inference"]]
+    out.append(f"\n## 추론값 — 누가 고칠 수 있는가 (§10 · {len(vals)}건 · 세션 갈래 판정 — 뒤집을 행은 이름과 갈래만 주시면 된다)\n")
+    out.append("농가 = 밭에서 보고 아는 것(관찰·경험이 최종 심급 — 화면이 「고칠 수 있다」 고 말한다) · 정본 = 외부 기준(임계 · 적기 · 양 · 조건 — 농가에게 묻지 않는다) · 실측 = 재야 아는 것. "
+               "침묵은 동의가 아니다 — 고치면 출처가 「농가 확인 YYYY-MM-DD」 가 된다.\n")
+    out.append("| 단계 | 종류 | 이름 | 고칠 수 있는 이 | 출처 |\n|---|---|---|---|---|")
+    for v in vals:
+        out.append(f"| {v['stage']} {v['stage_name']} | {v['kind']} | {v['name']} | **{v['fixable_by'] or '—'}** | {v['source']} |")
     out.append("\n## 단계별 칸\n")
     for s in unit["stages"]:
         w = s.get("window")
