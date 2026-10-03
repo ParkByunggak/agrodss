@@ -116,9 +116,20 @@ def decision(decision_id: str) -> str:
     return d.name if d is not None else decision_id
 
 
-def opened(field_word: str, value: str, decision_ids: list[str]) -> str:
-    names = " · ".join(decision(d) for d in decision_ids)
-    return f"이것으로 {names} 판단이 {field_word} 값 '{value}' 을 읽습니다 — 다음 답부터 그 근거에 실립니다."
+def opened(field: str, value: str) -> str:
+    """밭 정보 값 하나를 넣은 직후의 한 줄 — 그 값을 읽는 판단의 이름(parcels.FIELD_CONSUMERS). 읽는 판단이 없으면 빈 문자열(열렸다고 말하지 않는다 · §5-1 한 쌍).
+    [§7.5 지점 2026-10-03] 답을 넣는 자리가 셋(채팅 초안 줄 · 확인 직후 줄 · 밭 정보 폼)이라 문장은 여기 하나다."""
+    from grid import schema as grid_schema
+    from ingest import parcels
+    ids = parcels.FIELD_CONSUMERS.get(field) or ()
+    if not ids:
+        return ""
+    names = " · ".join(decision(d) for d in ids)
+    word = parcels.FIELD_WORDS.get(field, field)
+    line = f"이것으로 {names} 판단이 {word} 값 '{value}' 을 읽습니다 — 다음 답부터 그 근거에 실립니다."
+    if field == "use" and grid_schema.use_key(value):      # [종구 2026-10-03] 용도에 「종구」 — 재배 달력 자체가 종구 기준으로 읽힌다(grid.schema.use_key → apply_use · use_gap)
+        line += " 용도에 「종구」 가 있어 재배 달력도 종구 기준으로 읽습니다 — 수확 단계부터는 종구 값이 올 때까지 잎 기준 경보를 내지 않습니다."
+    return line
 
 
 def plain(text: str) -> str:

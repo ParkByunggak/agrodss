@@ -919,7 +919,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         from frontend import words as _w
         reply_text = (f"{plain_why(d)} — {parcels.FIELD_WORDS.get(d['field'], d['field'])}: {d['value']}. "
                       f"'{CONFIRM_LABEL}' 를 누르면 밭 정보에 들어갑니다(밭 정보 화면에서 언제든 고칠 수 있습니다). "
-                      + _w.opened(parcels.FIELD_WORDS.get(d["field"], d["field"]), d["value"], list(parcels.FIELD_CONSUMERS.get(d["field"], ()))))   # [§12] 이 답이 연 판단
+                      + _w.opened(d["field"], d["value"]))   # [§12] 이 답이 연 판단 — 문장은 words.opened 하나(폼 · 확인 줄과 같은 자리)
     elif drafts:
         d = drafts[0]
         need = d.get("needs") or []
@@ -1084,7 +1084,7 @@ def _confirm_locked(msg_id: str, draft_index: int = 0, day: str | None = None, e
             opens = list(parcels.FIELD_CONSUMERS.get(d["field"], ()))
             rec = {"id": f"parcel:{d['parcel']}:{d['field']}", "kind": "parcel", "observed_at": m.get("observed_at"), "field": d["field"], "value": d["value"],
                    "opens": opens,                                                       # [WO-ASK-01 §12 2026-10-03] 답한 것이 무엇을 바꿨는지 — 연 판단의 이름
-                   "opens_line": _w.opened(parcels.FIELD_WORDS.get(d["field"], d["field"]), d["value"], opens)}
+                   "opens_line": _w.opened(d["field"], d["value"])}
         else:
             raise ChatError(f"확인할 수 없는 종류: {k}")
     except (ev.EventError, fb.FeedbackError, subjects.SubjectError) as e:

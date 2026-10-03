@@ -811,9 +811,12 @@ def handle_parcel_form(form: dict[str, str]) -> str:
         raise parcels.ParcelError("채운 칸이 없다 — 빈 폼은 아무것도 바꾸지 않는다")
     rec = parcels.set_fields(pid, overwrite=True, **filled)
     left = parcels.missing_inputs(rec)
-    reads = [k for k in filled if k in parcels.FIELDS_READ_BY_JUDGMENT]
-    tail = f" · 판정이 읽는 값 {', '.join(reads)}" if reads else " · 판정이 읽는 값은 없다(등록부에 남는다)"
-    return f"필지 {pid} 저장 — {', '.join(sorted(filled))}{tail} · 입력 대기 {len(left)}"
+    # [WO-ASK-01 §12 · §7.5 지점 2026-10-03] 답을 넣는 자리 셋 가운데 이 폼만 「판정이 읽는 값 drainage」 라고 키 이름을 냈고 **무엇이 열렸는지** 는 말하지 않았다 —
+    # 발행자가 10-14 전에 여기서 「종구 생산」 을 넣는다. 문장은 words.opened 하나(채팅 초안 줄 · 확인 줄과 같은 자리) · 칸 이름은 농가 말(FIELD_WORDS).
+    opened = [words.opened(k, v) for k, v in filled.items() if words.opened(k, v)]
+    tail = " · " + " ".join(opened) if opened else " · 지금 판단이 읽는 값은 없습니다(밭 정보에 남습니다)"
+    names = ", ".join(parcels.FIELD_WORDS.get(k, k) for k in sorted(filled))
+    return f"필지 {pid} 저장 — {names}{tail} · 입력 대기 {len(left)}"
 
 
 def run_cycle(today: date, head: str) -> dict[str, Any]:
