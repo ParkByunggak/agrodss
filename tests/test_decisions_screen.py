@@ -54,8 +54,10 @@ def test_every_item_is_a_p1_judgment_and_every_p1_decision_is_on_the_screen():
     on_screen = set(dc.IDS)
     grouped = {i for i in on_screen if i.startswith("H-후보")}                      # 측정은 후보 셋을 한 행(H-후보 · n=3)으로 — 화면은 셋으로 편다
     assert grouped == {"H-후보㉠", "H-후보㉡", "H-후보㉢", "H-후보㉣"} and "H-후보" in p1 and judged["H-후보"].n == len(grouped)   # 측정 행의 문항 수 = 화면의 후보 수
-    for i in on_screen - grouped:
+    for i in on_screen - grouped - set(dc.DECIDED):                                   # 답이 선 카드는 화면에 남고(지우기는 발행자 몫) 측정에서는 닫힌 행이다
         assert i in p1, f"{i}: 측정에서 P1 이 아닌 것이 맞다/다르다 화면에 있다 — 외부 정본(P2)·내부 논리(P3)는 답을 사람에게 묻지 않는다"
+    for i in dc.DECIDED:
+        assert i in on_screen and i not in judged, f"{i}: 결정된 항목은 화면에 남되 측정(열린 행)에서는 빠진다"
     missing = p1 - (on_screen - grouped) - P1_NOT_A_DECISION
     assert missing == set(), f"P1 인데 화면에도 손 목록에도 없다: {sorted(missing)}"
     assert P1_NOT_A_DECISION <= p1
@@ -142,7 +144,7 @@ def test_the_screen_flow_get_answer_refuse_delete_and_the_ledger_stays_untouched
     assert status == 200 and "결정 — 한 화면에서 답하기" in body
     pos = [body.index(f"{i} · ") for i in dc.IDS]
     assert pos == sorted(pos) and body.count('class="card dec"') == len(dc.IDS)                  # 전부 · 화면 순서 = 항목 순서(맨 위 D-2)
-    assert body.count('value="모르겠다"') == len(dc.IDS) and "아직 답이 없다" in body
+    assert body.count('value="모르겠다"') == len(dc.IDS) - len(dc.DECIDED) and "아직 답이 없다" in body     # 결정된 카드에는 폼이 없다(답한 카드로만 남는다)
     status, body = _post(srv, "/me/decisions", {"id": "D-2", "verdict": "맞다", "note": ""})
     assert status == 200 and "적었다 — D-2 맞다" in body and "답: 맞다" in body
     status, body = _post(srv, "/me/decisions", {"id": "D-3", "verdict": "다르다", "note": ""})

@@ -82,6 +82,16 @@ def test_the_question_text_is_the_canonical_requirement_sentence():
         assert t not in tail
 
 
+# ── 반복 상한 — 발행자 값 3(추론 표시) ──
+def test_the_default_cap_is_the_publishers_three_and_is_marked_as_inference():
+    """[발행자 2026-10-03 "반복 상한 3 … 전부 추론 표시로"] 값은 하나(REPEAT_CAP) · 출처에 추론이 적혀 있고 그 출처가 멈춤 기록까지 간다."""
+    assert questions.REPEAT_CAP == 3 and questions.REPEAT_CAP_SOURCE.startswith("발행자 2026-10-03 — 추론")      # 표지는 머리에(뒤의 설명 문장과 겹치지 않게 — §7.1 4번)
+    for _ in range(4):
+        chat.send(SID, "풀 뽑았다", today=T34, now=NOW)
+    by = {x["axis"]: x for x in asks.for_subject(SID)}
+    assert by["soil_water"]["count"] == 3 and "추론" in by["soil_water"]["stopped"]["why"] and by["precip"]["count"] == 1
+
+
 # ── 반복 상한(값이 오면) ──
 def test_without_a_cap_the_same_question_repeats_and_only_counts(monkeypatch):
     monkeypatch.setattr(questions, "REPEAT_CAP", None)

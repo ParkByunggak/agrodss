@@ -61,8 +61,15 @@ ITEMS: tuple[dict[str, Any], ...] = (
     # [발행자 2026-10-03 "수확 칸(10/15~) 임계 물음은 없어도 되는 쪽입니다 … 제 추론이니 결정 화면에 그렇게 표시된 채로 두시면 됩니다"] — 추론 표시 그대로
     {"id": "D-22", "ask": "수확 칸(10/14~11/3)에도 가뭄 임계(비 안 온 지 7일)를 둘 것인가", "default": "두지 않는다 — 수확 칸은 수분 요구 낮음 · 결핍 민감 낮음이라 가뭄 답을 「이 칸에는 가뭄 판단이 없다」 로 닫는다",
      "basis": BASIS_INFERRED, "basis_from": "수확 칸(10/15~) 임계 물음은 없어도 되는 쪽", "unblocks": "10-15 부터의 가뭄 답(지금은 「기준이 없습니다」) — 맞다 한 번이면 재배 달력 수확 칸에 N/A 로 적는다"},
+    # [발행자 2026-10-03 "배수 나쁨 규칙 — 지식입니다. 다만 이건 결정 화면에서 답할 수 있는 형태로 보입니다 … 제 의견은 전자입니다"] 전자 = 배수 나쁨 + 연속 강우 예보면 경보
+    {"id": "D-23", "ask": "배수가 「나쁨」 이면 과습 위험을 경보로 올릴 것인가 — 어떤 조건에서", "default": "배수 나쁨 + 연속 강우 예보(지금 경보 임계 그대로 — 강수확률 70% 3일 연속 또는 7일 강수 합 50mm)면 경보 · 배수 나쁨만으로는 주의 그대로(비가 안 오면 과습이 아니다)",
+     "basis": BASIS_INFERRED, "basis_from": "제 의견은 전자입니다", "unblocks": "위험 경보의 과습 등급 규칙 한 줄(risk_alert — 지금은 배수를 근거에 싣기만 한다)"},
 )
 IDS = tuple(i["id"] for i in ITEMS)
+# 답이 선 항목 — 화면에는 **답한 카드로 남고**(지우기는 발행자 몫) 측정(열린 대장 행)에서는 빠진다. 값은 어디서 어떻게 답했는지.
+DECIDED: dict[str, str] = {
+    "D-22": "맞다 — 발행자 2026-10-03(세션에 직접: \"추론 표시 그대로 올라갔으니 맞다 한 번입니다\") · 재배 달력 수확 칸 drought_rules N/A 로 반영",
+}
 
 
 def local_path() -> Path:
@@ -147,8 +154,17 @@ def summary(answers: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """답 수 · 모르겠다 목록(= P4 신호 — 갈래 판정을 사후에 교정하는 유일한 경로)."""
     mine = {k: v for k, v in answers.items() if k in IDS}
     counts = {v: sum(1 for a in mine.values() if a.get("verdict") == v) for v in VERDICTS}
+    # [발행자 2026-10-03 "상한에 닿은 항목이 '모르겠다'로 떨어지는 것과 같은 자리에 가도록"] 묻기 원장에서 반복 상한에 닿아 멈춘 물음도 같은 신호다 —
+    # 농가 몫이 아니라 아직 어디에도 없는 값이었다는 것. 원장을 못 읽으면 0 이 아니라 이유를 함께 낸다(조용한 0 금지).
+    from ingest import asks
+    try:
+        stopped = asks.stopped_rows()
+        stopped_why = None
+    except (OSError, ValueError) as e:
+        stopped, stopped_why = [], f"{type(e).__name__}: {e}"
     return {"answered": len(mine), "total": len(IDS), "counts": counts,
-            "unknown_ids": [i for i in IDS if mine.get(i, {}).get("verdict") == UNKNOWN]}
+            "unknown_ids": [i for i in IDS if mine.get(i, {}).get("verdict") == UNKNOWN],
+            "stopped_asks": stopped, "stopped_asks_why": stopped_why}
 
 
 def to_session_text(answers: dict[str, dict[str, Any]]) -> str:

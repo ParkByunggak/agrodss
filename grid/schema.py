@@ -146,8 +146,10 @@ def _validate_drought_rules(rules: Any, tag: str, err) -> None:
         err(f"{tag}: drought_rules 는 {{dry_days, source}} dict — 없으면 키를 뺀다")
         return
     dd = rules.get("dry_days")
-    if not (isinstance(dd, int) and not isinstance(dd, bool) and dd >= 1):
-        err(f"{tag}: drought_rules.dry_days 는 1 이상 **정수**(무강수 임계 일수)")
+    # [D-22 발행자 맞다 2026-10-03] dry_days 가 "N/A" 면 **그 칸에는 가뭄 판단을 두지 않는다**는 결정(수확 칸 — 수분 요구 낮음). 비운 것(판단 불가(지식))과 다르다.
+    # 결정도 지식이라 source 는 그대로 필수 — 출처 없는 N/A 는 싣지 않는다.
+    if dd != NA and not (isinstance(dd, int) and not isinstance(dd, bool) and dd >= 1):
+        err(f"{tag}: drought_rules.dry_days 는 1 이상 **정수**(무강수 임계 일수) 또는 \"{NA}\"(이 칸은 가뭄 판단 없음 — 결정 · 출처 필수)")
     if not (isinstance(rules.get("source"), str) and rules["source"].strip()):
         err(f"{tag}: drought_rules.source 가 없다 — 출처 없는 임계는 싣지 않는다(발행자 문장이든 추론이든 그대로 적는다 · 2026-10-01)")
     if "wet_mm" in rules and not (isinstance(rules["wet_mm"], (int, float)) and not isinstance(rules["wet_mm"], bool) and rules["wet_mm"] >= 0):

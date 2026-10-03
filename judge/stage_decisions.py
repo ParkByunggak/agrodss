@@ -755,6 +755,11 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
                                                                      "summary": "이 칸의 수분 요구가 기준에 없어 가뭄을 판단할 수 없습니다"})
     water_txt = f"수분 요구 {water.get('demand')} · 결핍 민감 {water.get('deficit_sensitivity')} · 과습 민감 {water.get('excess_sensitivity')}"   # [2026-09-30] 과습도 함께 — 4단계는 과습이 회복 불가라 관수 검토 줄에 그 경계가 보여야 한다
     rules = stage.get(key)
+    if isinstance(rules, dict) and rules.get("dry_days") == grid_schema.NA:
+        # [D-22 발행자 맞다 2026-10-03] 이 칸에는 가뭄 판단을 **두지 않기로 한 것** — 비운 것(아래 판단 불가(지식))과 다르다. 출처(결정)는 why 에, 답은 해당 없음
+        return Envelope("해당 없음", did, sid, as_of,
+                        result={"why": f"격자 {uid} 칸 {stage.get('order')} 의 {key}.dry_days 가 N/A — 이 칸에는 가뭄 판단을 두지 않는다 · 출처: {rules.get('source') or '적히지 않음'} · {water_txt}",
+                                "summary": f"{stage.get('name')} 칸에는 가뭄 · 관수 판단을 두지 않습니다 — {water_txt}"})
     if not (isinstance(rules, dict) and isinstance(rules.get("dry_days"), int)):
         return Envelope("판단 불가(지식)", did, sid, as_of,
                         result={"why": f"격자 {uid} 칸 {stage.get('order')} 의 {key}(무강수 임계 일수) 미채움 — D-20 · 고칠 파일 {grid_schema.unit_file_name(uid)} · 지금 칸 {water_txt}",

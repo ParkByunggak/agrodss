@@ -122,6 +122,11 @@ def mark_stopped(subject_id: str, axis: str, why: str, now: datetime | None = No
         _write(p, doc)
 
 
+def stopped_rows() -> list[dict[str, Any]]:
+    """반복 상한에 닿아 멈춘 물음 전부(모든 재배 단위) — 결정 화면이 「모르겠다」 와 같은 자리에 보인다(발행자 2026-10-03). 파일이 없으면 []."""
+    return sorted((r for r in _read()["asks"].values() if r.get("stopped")), key=lambda r: r["stopped"].get("at", ""), reverse=True)
+
+
 def for_subject(subject_id: str) -> list[dict[str, Any]]:
     """그 재배 단위에 물은 것 — 마지막 물은 때 순(최근 먼저). 파일이 없으면 []. 깨졌으면 ValueError(화면이 이유를 말한다)."""
     rows = [r for r in _read()["asks"].values() if r.get("subject") == subject_id]

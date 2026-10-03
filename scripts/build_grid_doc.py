@@ -67,7 +67,10 @@ def build(unit: dict) -> str:
         dr = s.get(schema.DROUGHT_RULES_KEY)
         if isinstance(dr, dict):
             # [D-20 자리 2026-09-28] 가뭄 임계도 문서에 — 증상 규칙과 같은 형태(정본이 있는데 문서가 안 싣는 G1 을 미리 막는다)
-            out.append(f"- 가뭄 임계: 무강수 {dr.get('dry_days', '—')}일 · {dr.get('source') or '출처 미기재'}")
+            if dr.get("dry_days") == schema.NA:          # [D-22 2026-10-03] 이 칸은 가뭄 판단을 두지 않는다(결정) — 비운 것과 다르게 적는다
+                out.append(f"- 가뭄 임계: 없음(이 칸에는 가뭄 판단을 두지 않는다 · N/A) · {dr.get('source') or '출처 미기재'}")
+            else:
+                out.append(f"- 가뭄 임계: 무강수 {dr.get('dry_days', '—')}일 · {dr.get('source') or '출처 미기재'}")
         risks = s.get("risks")
         if risks == NA:
             out.append("- 위험: 해당없음")

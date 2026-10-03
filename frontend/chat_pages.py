@@ -355,13 +355,22 @@ def decisions_main(message: str = "", error: str = "", form: dict[str, str] | No
     if sm["unknown_ids"]:
         out.append(f'<p class="meta">모르겠다 {len(sm["unknown_ids"])}건({_e(" · ".join(sm["unknown_ids"]))}) — 모르겠다가 쌓이면 그 항목은 발행자만 답할 수 있는 것이 아니라 '
                    '아직 어디에도 없는 값이었다는 신호다(첫 시즌 실측을 기다린다). 세션이 그 갈래를 고친다.</p>')
+    # [발행자 2026-10-03 "상한에 닿은 항목이 '모르겠다'로 떨어지는 것과 같은 자리에 가도록"] 묻기 원장에서 반복 상한에 닿아 멈춘 물음 — 같은 신호, 같은 자리
+    if sm.get("stopped_asks_why"):
+        out.append(f'<p class="err">물은 것 기록을 못 읽었다 — {_e(sm["stopped_asks_why"])}</p>')
+    elif sm.get("stopped_asks"):
+        rows = " · ".join(f'<span title="{_e(r.get("axis"))}">{_e(words.axis(r.get("axis")))}</span> {int(r.get("count", 0))}번' for r in sm["stopped_asks"])
+        out.append(f'<p class="meta">더 묻지 않는 것 {len(sm["stopped_asks"])}건({rows}) — 같은 것을 상한만큼 물었는데 답이 안 왔다. 모르겠다와 같은 신호다: '
+                   '농가 몫이 아니라 아직 어디에도 없는 값일 수 있다(상한 값은 발행자 추론 · 밭 정보 화면에 적으면 풀린다).</p>')
     for it in dc.ITEMS:
         a = answers.get(it["id"])
         out.append(f'<div class="card dec"><b>{_e(it["id"])} · {_e(it["ask"])}</b>'
                    f'<div style="margin-top:4px">제안: {_e(it["default"])} <span class="st">{_e(it["basis"])}</span></div>'
                    f'<div class="meta">{_e(dc.BASIS_SAID[it["basis"]])}</div>'
                    f'<div class="meta">풀리는 것: {_e(it["unblocks"])}</div>')
-        if a:
+        if it["id"] in dc.DECIDED:
+            out.append(f'<div class="ok">결정됨: {_e(dc.DECIDED[it["id"]])}</div>')     # 답한 카드로 남는다 — 지우기는 발행자 몫(세션 커밋)
+        elif a:
             out.append(f'<div class="ok">답: {_e(a.get("verdict", ""))}{(" — " + _e(a["note"])) if a.get("note") else ""} <span class="meta">{_e(render.local_time(a.get("at")))}</span></div>'     # 시각은 local_time 으로만(C16 — [:10] 은 UTC 날짜를 잘라 저녁 답이 어제로 뜬다)
                        f'<form method="post" action="/me/decisions/delete" style="margin-top:4px"><input type="hidden" name="id" value="{_e(it["id"])}"><button class="btn" type="submit">이 답 지우기</button></form>')
         else:
