@@ -207,9 +207,12 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
             out.append("<p class=\"err\"><b>창을 넘긴 작업</b> — 안 한 이유가 조언보다 값지다. <a href=\"/events\">사건 화면</a>에서 사유를 적는다: " +
                        " · ".join(f"{_e(a['task'])}({_e(a['work_date'])})" for a in r["ask_reason"]) + "</p>")
         st_cls = {"이행": "완료", "예정": "대기", "미이행": "진행", "놓침": "폐기", "사유 기록됨": "보류"}
-        out.append("<table><tr><th>상태</th><th>칸</th><th>작업</th><th>작업일</th><th>마감</th><th>근거</th></tr>" + "".join(
+        from grid import schema as grid_schema
+        out.append("<table><tr><th>상태</th><th>칸</th><th>작업</th><th>작업일</th><th>마감</th><th>근거</th><th>고칠 수 있나</th></tr>" + "".join(
             f'<tr><td><span class="st st-{st_cls.get(x["status"], "대기")}">{_e(x["status"])}</span></td><td>{_e(x["stage"])}</td><td>{_e(x["task"])}</td>'
-            f'<td>{_e(x["work_date"])}</td><td>{_e(x.get("deadline_date") or "")}</td><td>{_e(x.get("evidence") or "")}</td></tr>' for x in r["rows"]) + "</table>")
+            f'<td>{_e(x["work_date"])}</td><td>{_e(x.get("deadline_date") or "")}</td><td>{_e(x.get("evidence") or "")}</td>'
+            f'<td title="{_e(x.get("fixable_by") or "")}">{_e(words.fixer(x.get("fixable_by"), grid_schema.is_inference(x.get("source_note"))))}</td></tr>'   # [§10 지점] 할 일도
+            for x in r["rows"]) + "</table>")
     elif e["kind"] == "사실 인용" and e["decision_id"] == "forecast_citation":
         # [D-21 2026-09-28] 날씨 인용 — 자재 인용과 result 모양이 다르다(citation · days). 이 갈래가 없으면 아래 자재 갈래가 KeyError 로 /judge 전체를 죽인다
         c = r["citation"]

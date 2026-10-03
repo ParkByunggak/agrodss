@@ -196,7 +196,8 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
                 ask.append({"task": p["task"], "work_date": p["work_date"], "stage": p["stage"]})
         counts[status] += 1
         rows.append({"stage": p["stage"], "task": p["task"], "work_date": p["work_date"], "deadline_date": p.get("deadline_date"),
-                     "status": status, "evidence": evidence, "materials": p.get("materials"), "kind": p["kind"]})
+                     "status": status, "evidence": evidence, "materials": p.get("materials"), "kind": p["kind"],
+                     "source_note": p.get("source_note", ""), "fixable_by": p.get("fixable_by")})   # [WO-ASK-01 §10 지점 2026-10-03] 할 일도 추론값 — 누가 고칠 수 있는가를 답까지
     inputs = [AxisUse("anchor", anchor, subject.get("source", "farmer"), "cultivation_unit", "관측")]
     grades = ["관측", GRID_GRADE.get(unit["unit"].get("confidence", "하"), "추정")]
     return Envelope(

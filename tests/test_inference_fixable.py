@@ -116,6 +116,31 @@ def test_the_chat_answer_offers_the_fix_only_when_a_farmer_fixable_inference_is_
     assert chat.classify("고쳐 주세요: 잎이 노화한 것이 아니라 종구용이라 그대로 둔 것입니다", ANCHOR)[0]["kind"] == "feedback.request"
 
 
+def test_plan_rows_carry_the_fixer_and_the_plan_answer_offers_only_farmer_tasks():
+    """[§10 지점 전수 — 처방 직후] 위험 경보만 고쳤었다. 추론값 24 중 농가 몫 9 가운데 6 이 **할 일**(관수 · 보식 · 제초 · 배수 관리 · 수확 작업 · 잔사)이라
+    계획표가 '쓰이는 그 자리' 다 — 같은 결함 · 같은 처방이라 전 지점으로 넓힌다(계획 행 표지 · 같은 고르기 함수 · 채팅 답 · /judge 표)."""
+    from judge import plan_vs_actual
+    env = plan_vs_actual.judge(dict(SUBJ), today=ANCHOR + timedelta(days=24))             # 칸 3 — 예찰(정본) · 웃거름(정본) · 제초(농가)
+    rows = env.result["rows"]
+    assert rows and all("fixable_by" in x and "source_note" in x for x in rows)
+    by = {x["task"]: x["fixable_by"] for x in rows}
+    assert by["제초"] == "농가" and by["예찰(트랩 · 육안)"] == "정본" and by["웃거름 1회"] == "정본"
+    assert "제초" in inference.farmer_fixable(rows) and "예찰(트랩 · 육안)" not in inference.farmer_fixable(rows)
+    assert inference.farmer_fixable([{"task": "x", "source": "computed:grid", "source_note": "추론", "fixable_by": "농가"}]) == ["x"]    # 계획 행은 source_note 가 출처
+    assert inference.farmer_fixable([{"task": "x", "source": "추론", "source_note": "격자", "fixable_by": "농가"}]) == []                 # source_note 가 있으면 그것만 본다
+    a = chat.answer(dict(SUBJ), "지금 할 일 뭐 있나", ANCHOR + timedelta(days=24))
+    assert "검토 전 추론이고 밭에서 보시는 분이 고칠 수 있는 것입니다" in a and "제초" in a.split("「")[1] and "예찰" not in a.split("「")[1].split("」")[0]
+
+
+def test_the_judge_page_plan_table_also_says_who_can_fix(srv):
+    st, html = _get(srv, "/judge")
+    assert st == 200
+    src = (ROOT / "frontend" / "serve.py").read_text(encoding="utf-8")
+    assert src.count("<th>고칠 수 있나</th>") == 2                                        # 경보 표 · 계획 표 — 쓰이는 두 자리
+    seen = _visible(html)
+    assert seen.count("고칠 수 있나") >= 2 and "밭에서 보신 것으로 고칠 수 있습니다" in seen   # 09-19(25일째) 계획표에 제초(농가)가 있다
+
+
 def test_the_offer_and_the_fixer_words_are_farmer_words():
     for text in (words.fix_offer(["수확 지연 — 잎 노화 · 도복"]), *(words.fixer(k) for k in schema.FIXABLE_BY), words.fixer(None), words.fixer("농가", inference=False)):
         assert words.plain(text) == text, text                                              # 낱말 표가 바꿀 것이 없다 — 이미 사람 말

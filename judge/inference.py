@@ -22,7 +22,10 @@ def farmer_fixable(items: list[dict[str, Any]]) -> list[str]:
     """추론값이고 농가가 고칠 수 있는 항목의 이름 — 순서 그대로 · 같은 이름 한 번. 정본·실측 몫은 **부르지 않는다**(§10 제외)."""
     out: list[str] = []
     for it in items or []:
-        if not isinstance(it, dict) or not grid_schema.is_inference(it.get("source")):
+        if not isinstance(it, dict):
+            continue
+        src = it.get("source_note") if "source_note" in it else it.get("source")     # 계획 행은 source=computed:grid 이고 격자 출처는 source_note 에(plan.from_unit)
+        if not grid_schema.is_inference(src):
             continue
         if it.get(grid_schema.FIXABLE_BY_KEY) != FARMER:
             continue

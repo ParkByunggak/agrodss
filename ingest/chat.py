@@ -812,7 +812,12 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
         ask = r.get("ask_reason") or []
         if by["놓침"]:
             parts.append(f"놓침 {len(by['놓침'])}" + (f" — 사유를 묻는다: {', '.join(_with_stage(a) for a in ask)}" if ask else ""))
-        return f"{head} " + (" / ".join(parts) or "밀린 것 없음 · 다음 예정 없음")
+        line = f"{head} " + (" / ".join(parts) or "밀린 것 없음 · 다음 예정 없음")
+        # [WO-ASK-01 §10 지점 2026-10-03] 할 일도 추론값 — 이 답에 실린 것(지금 할 것 · 다음 예정) 가운데 농가가 고칠 수 있는 것만 이름을 부른다(위험 경보와 같은 자리 · 같은 함수)
+        from frontend import words as _w
+        from judge import inference
+        names = inference.farmer_fixable(by["미이행"] + by["예정"][:3])
+        return f"{line} {_w.fix_offer(names)}" if names else line
     return f"{head} {json.dumps(r, ensure_ascii=False)[:300]}"
 
 
