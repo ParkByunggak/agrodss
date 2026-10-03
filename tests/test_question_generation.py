@@ -66,7 +66,7 @@ def test_a_reply_that_did_not_ask_gets_one_question_and_the_ledger_counts_it():
     assert r["text"].count("하나 물을 것 — ") == 1 and "배수(좋음 · 보통 · 나쁨 중 하나)" in r["text"]
     rows = asks.for_subject(SID)
     assert [x["axis"] for x in rows] == ["soil_water"] and rows[0]["decision"] == "risk_alert" and rows[0]["count"] == 1
-    assert asks.pending(SID) == {"axes": ["soil_water"], "msg": r["id"], "at": rows[0]["last_at"]}
+    assert asks.pending(SID) == {"axes": ["soil_water"], "msg": r["id"], "at": rows[0]["last_at"], "fields": ["drainage"]}   # fields — §9 답 묶기가 읽는다
 
 
 def test_a_reply_that_already_asked_does_not_get_a_second_question():

@@ -182,7 +182,7 @@ DAMAGE_WORDS: dict[str, tuple[str, ...]] = {
 }
 KIND_LABEL = {"event": "사건", "observation.note": "관찰", "plan.farmer": "계획", "plan.target_date": "납품 계획일",
               "feedback.request": "개선 요구", "decision.noncompliance": "불이행 사유", "subject.end": "작기 종료", "observation.video": "영상",
-              "question": "질문", "subject.new": "새 목록"}
+              "question": "질문", "subject.new": "새 목록", "parcel.field": "필지 값"}      # parcel.field [WO-ASK-01 §9 2026-10-03] 물음에 대한 답 → 밭 정보 값(확인 뒤 등록부)
 
 # ── 사람이 읽는 말 ────────────────────────────────────────────────────────────────
 # [발행자 2026-09-21] 화면이 *"관찰 초안 — 서술문 — 사건·계획·질문 어휘가 없어 관찰 메모로 제안(원문 그대로 ·
@@ -193,7 +193,7 @@ KIND_LABEL = {"event": "사건", "observation.note": "관찰", "plan.farmer": "�
 # 정확한 사유는 **버리지 않는다** — 카드의 `title` 에 그대로 남겨 두고, 앞에 내세우지 않는다.
 KIND_PLAIN = {"event": "한 일", "observation.note": "본 것", "plan.farmer": "할 일", "plan.target_date": "납품 날짜",
               "feedback.request": "고쳐 달라는 말", "decision.noncompliance": "못 한 이유", "subject.end": "농사 끝",
-              "observation.video": "영상", "question": "물음", "subject.new": "새 목록"}
+              "observation.video": "영상", "question": "물음", "subject.new": "새 목록", "parcel.field": "밭 정보"}
 assert set(KIND_PLAIN) == set(KIND_LABEL)      # 종류가 늘면 사람 말도 함께 는다 — 한쪽만 늘면 화면이 내부 이름을 낸다
 
 CONFIRM_LABEL = "일지에 넣기"            # 옛 문면 "확인 → 원장"
@@ -214,6 +214,7 @@ PLAIN_BY_KEY = {
     "undecided": "무엇으로 적을지 정하지 못해 우선 본 것으로 두었습니다",
     "asked_about_symptom": "물으신 말 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
     "symptom_alongside": "말씀 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
+    "answers_ask": "방금 물었던 것에 대한 답으로 읽었습니다 — 넣기를 누르면 밭 정보에 들어가고 그 값을 판단이 읽습니다",   # [§9 2026-10-03] 어느 값인지는 초안 카드가 말한다
 }
 
 
@@ -787,6 +788,27 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
 INPUT_MODES = ("text", "voice", "file")
 
 
+def _parcel_drafts_from_answer(subject: dict[str, Any], text: str, fields: list[str]) -> list[dict[str, Any]]:
+    """[WO-ASK-01 §9] 물음이 겨냥한 필지 값(fields)마다 이 말에서 **등록부 어휘** 하나를 찾아 초안으로. 어휘가 둘 이상이거나 없으면 그 값은 초안을 안 짓는다(지어내지 않는다).
+    읽는 판정이 없는 값(§5-1)은 물음이 못 만들지만 여기서도 한 번 더 막는다(관문의 입력)."""
+    from ingest import parcels
+    out = []
+    pid = subject.get("parcel")
+    if not pid:
+        return out
+    for f in fields:
+        if f not in parcels.FIELDS_READ_BY_JUDGMENT:
+            dropped.note(asks.DROP_WHERE, f"{subject.get('id')}/{f}", "읽는 판정이 없는 필지 값의 답 — 초안을 짓지 않는다(§5-1)")
+            continue
+        opts = parcels.FIELD_CHOICES.get(f) or ()
+        hit = [o for o in opts if o in text]
+        if len(hit) != 1:
+            continue
+        out.append({"kind": "parcel.field", "parcel": pid, "field": f, "value": hit[0], "text": text,
+                    "why": f"직전 물음({parcels.FIELD_WORDS.get(f, f)})에 대한 답 — 등록부 어휘 '{hit[0]}' 를 읽었다 · 확인 뒤 parcels.set_fields", "why_key": "answers_ask", "needs": []})
+    return out
+
+
 def send(subject_id: str, text: str, today: date | None = None, now: datetime | None = None,
          role: str = "farmer", retry_of: str | None = None, edit_of: str | None = None,
          input_mode: str = "text", media_refs: list[dict[str, Any]] | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
@@ -834,6 +856,12 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
             pend = asks.mark_replied(subject_id, rec["id"], now=_now(now))
             if pend:
                 rec["after_ask"] = {"axes": list(pend.get("axes") or []), "msg": pend.get("msg")}
+                # [WO-ASK-01 §9 2026-10-03] 답이 올 때 그 축의 초안 — 물음이 필지 값(배수)을 겨냥했고 이 말에 등록부 어휘(좋음 · 보통 · 나쁨)가 있으면
+                # **필지 초안**을 맨 앞에 둔다. 등록부에 바로 쓰지 않는다(다른 초안과 같은 길 — 확인 뒤 confirm 이 parcels.set_fields). 어휘가 없으면 초안을 안 짓는다(지어내지 않는다).
+                bound = _parcel_drafts_from_answer(s, text, pend.get("fields") or [])
+                if bound:
+                    drafts = bound + [d for d in drafts if d.get("kind") != "observation.note" or d.get("why_key") != "statement"]   # 답 한 토막이 '본 것'으로도 서던 것은 걷는다
+                    rec["drafts"] = drafts
         except (OSError, ValueError) as e:
             dropped.note(asks.DROP_WHERE, asks.path().name, f"{type(e).__name__}: {e}")
     msg = _append(rec)
@@ -852,6 +880,12 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         reply_text, asked = answer_with_asks(s, text, today)         # 물은 것은 아래에서 원장에 센다(send 에서만)
         if len(drafts) > 1:                  # 물음 안의 본 것 — 관찰 초안이 함께 섰다(확인은 사람)
             reply_text += f" {plain_why(drafts[1])}. '{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
+    elif drafts and drafts[0]["kind"] == "parcel.field":
+        # [§9 2026-10-03] 물음에 대한 답 — 어느 값을 어떻게 읽었는지 말하고, 넣기를 누르면 밭 정보(등록부)에 들어간다(영농일지가 아니다)
+        from ingest import parcels
+        d = drafts[0]
+        reply_text = (f"{plain_why(d)} — {parcels.FIELD_WORDS.get(d['field'], d['field'])}: {d['value']}. "
+                      f"'{CONFIRM_LABEL}' 를 누르면 밭 정보에 들어갑니다(밭 정보 화면에서 언제든 고칠 수 있습니다).")
     elif drafts:
         d = drafts[0]
         need = d.get("needs") or []
@@ -1005,6 +1039,14 @@ def _confirm_locked(msg_id: str, draft_index: int = 0, day: str | None = None, e
         elif k == "subject.end":
             s = subjects.set_status(sid, "종료", ended_at=day or d.get("ended_at") or "")
             rec = {"id": s["id"], "kind": "subject", "observed_at": s["ended_at"], "status": s["status"]}   # 등록부 갱신 — 원장 레코드가 아니라 상태
+        elif k == "parcel.field":
+            # [WO-ASK-01 §9 2026-10-03] 물음에 대한 답 → 밭 정보(필지 등록부) — 어휘·형 관문은 set_fields 하나(화면이든 채팅이든 같은 자리)
+            from ingest import parcels
+            try:
+                parcels.set_fields(d["parcel"], overwrite=True, **{d["field"]: d["value"]})
+            except parcels.ParcelError as e:
+                raise ChatError(str(e))
+            rec = {"id": f"parcel:{d['parcel']}:{d['field']}", "kind": "parcel", "observed_at": m.get("observed_at"), "field": d["field"], "value": d["value"]}
         else:
             raise ChatError(f"확인할 수 없는 종류: {k}")
     except (ev.EventError, fb.FeedbackError, subjects.SubjectError) as e:

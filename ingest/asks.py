@@ -81,7 +81,8 @@ def record(subject_id: str, asks: list[dict[str, Any]], msg_id: str, now: dateti
             row["who_can_fill"] = str(a.get("who_can_fill") or "")
             doc["asks"][k] = row
             rows.append(dict(row))
-        doc["pending"][subject_id] = {"axes": axes, "msg": msg_id, "at": ts}
+        fields = list(dict.fromkeys(str(a["field"]) for a in asks if a.get("field")))     # [§9] 필지 값을 묻는 물음 — 답을 그 값의 초안으로 묶을 때 쓴다
+        doc["pending"][subject_id] = {"axes": axes, "msg": msg_id, "at": ts, "fields": fields}
         _write(p, doc)
     return rows
 

@@ -32,7 +32,7 @@ def test_a_sent_question_that_asks_is_counted_and_becomes_the_pending_ask():
     rows = asks.for_subject(SID)
     assert [x["axis"] for x in rows] == ["precip"] and rows[0]["count"] == 1 and rows[0]["decision"] == "drought_alert"
     assert rows[0]["last_msg"] == r["id"] and rows[0]["first_at"] == rows[0]["last_at"] and "어디서:" in rows[0]["who_can_fill"]
-    assert asks.pending(SID) == {"axes": ["precip"], "msg": r["id"], "at": rows[0]["last_at"]}
+    assert asks.pending(SID) == {"axes": ["precip"], "msg": r["id"], "at": rows[0]["last_at"], "fields": []}     # fields — 필지 값을 겨냥한 물음만(§9)
     assert "after_ask" not in m                                              # 물음 자체는 답이 아니다
 
 
