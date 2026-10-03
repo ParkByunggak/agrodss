@@ -160,6 +160,17 @@ CORPUS = [
     ("일지에서 관수 날짜 알려줘", "question", chat.LOOKUP_ID),
     ("가뭄이 심한데 물 줘야 하나요", "question", "drought_alert"),             # 반대편 — 판단을 묻는 관수 물음은 그대로 가뭄 판정
     ("관수했다", "event", None),                                               # 반대편 — 한 일은 사건 그대로
+    # [발행자 실사용 2026-10-04] 용도 선언은 관찰이 아니라 밭 정보 값(속성 선언 갈래) · 시스템을 향한 항의는 교정 요구
+    ("이 쪽파는 종구생산을 위한 목적이다", "parcel.field", None),                 # 발행자 라이브 2026-10-04 — 본 것으로 떨어졌던 문장
+    ("자가 소비용이다", "parcel.field", None),
+    ("이번 작기는 팔 것이다", "parcel.field", None),
+    ("이 밭은 몰 납품 목적이다", "parcel.field", None),
+    ("이 밭은 몰 납품용으로 쓸 생각", "plan.target_date", None),                       # 반대편 — 납품 + 계획 어휘는 납품 계획 그대로(앞 갈래가 이긴다)
+    ("고르신 종류(처음 제안과 다릅니다) · obs_93e9b4b67856 이미 있는데 왜 되묻는가?", "feedback.request", None),   # 발행자 라이브 2026-10-04 — 항의가 본 것/물음으로
+    ("왜 또 묻나요", "feedback.request", None),
+    ("이번 작기는 몰 납품용으로 심었다", "event", None),                           # 반대편 — 한 일의 표지가 있으면 사건이 이긴다
+    ("종구가 썩은 것 같다", "observation.note", None),                           # 반대편 — 용도 말이 있어도 선언 표지 없는 상태 서술은 본 것
+    ("잎이 왜 노랗나요", "question", None),                                        # 반대편 — 밭을 향한 「왜」 는 물음 그대로(증상 물음은 answer 가 증상 결정으로)
 ]
 
 
@@ -180,5 +191,6 @@ def test_corpus_is_append_only():
 
 def test_corpus_covers_every_kind_and_has_no_duplicates():
     kinds = {c[1] for c in CORPUS}
-    assert kinds == {"question", "event", "observation.note", "plan.farmer", "plan.target_date", "feedback.request", "decision.noncompliance", "subject.end"}
+    assert kinds == {"question", "event", "observation.note", "plan.farmer", "plan.target_date", "feedback.request", "decision.noncompliance", "subject.end",
+                     "parcel.field"}   # [2026-10-04] 속성 선언 갈래(용도) — 아홉째
     assert len({c[0] for c in CORPUS}) == len(CORPUS)

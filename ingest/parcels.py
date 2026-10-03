@@ -177,6 +177,25 @@ FIELD_LABELS: tuple[tuple[str, str], ...] = (        # 고르는 것이 아니�
     ("cert_legal", "인증 근거(인증서 번호 · 기관)"),
 )
 NUMERIC_FIELDS = ("area_m2",)
+# [발행자 실사용 2026-10-04 "이 쪽파는 종구생산을 위한 목적이다" → 본 것] 용도는 자유 글이지만 **채팅으로 들어오는 용도 선언**은 이 네 말 중 하나로 읽는다(라벨의 어휘와
+# 같다 · 「종구」 는 grid.schema.use_key 가 읽는 그 말). 말이 둘 이상 걸리면 고르지 않는다(지어내지 않는다 — 배수 답 묶기와 같은 규율).
+USE_WORDS: dict[str, tuple[str, ...]] = {
+    "종구 생산": ("종구",),
+    "자가": ("자가", "자급", "집에서 먹"),
+    "판매": ("판매", "팔 ", "팔것", "팔려"),
+    "몰 납품": ("몰 납품", "몰에 납품", "납품용"),
+}
+# 선언의 표지 — 사건(심었다) · 계획(납품 예정) 어휘가 먼저 걸리면 그 갈래가 이긴다(순서는 ingest.chat._classify). 상태 서술이 아니라 **용도를 정하는 말**만.
+USE_DECLARE_WORDS = ("용도", "목적", "위한", "위해", "용이다", "용입니다", "용으로", "용임", "것이다", "것입니다", "할 생각", "하려고 한다")
+
+
+def use_declared(text: str) -> str | None:
+    """채팅 한 줄이 재배 용도 선언이면 그 용도(USE_WORDS 의 키), 아니면 None. 둘 이상 걸리면 None."""
+    t = text or ""
+    if not any(w in t for w in USE_DECLARE_WORDS):
+        return None
+    hits = [k for k, ws in USE_WORDS.items() if any(w in t for w in ws)]
+    return hits[0] if len(hits) == 1 else None
 # 필드의 **농가 말** — 요구 문장(judge.need)이 "읽는 판정이 없는 값을 묻지 않는다"(WO-ASK-01 §5-1)를 이 말로 잰다.
 FIELD_WORDS: dict[str, str] = {
     "environment": "재배환경", "soil_texture": "토성", "slope": "경사", "drainage": "배수", "irrigation": "관수 시설",

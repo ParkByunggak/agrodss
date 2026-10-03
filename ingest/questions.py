@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from ingest import asks, dropped, parcels
+from ingest import asks, dropped, known, parcels
 from judge.need import NeedError, need
 
 DROP_WHERE = "질문 생성"
@@ -25,11 +25,19 @@ REPEAT_CAP_SOURCE = "발행자 2026-10-03 — 추론(지시서 §8 의 '세 번'
 UNRECOVERABLE_FIRST = True        # §3 — 회복 불가 위험의 빈 값이 먼저
 
 
-def _parcel_question(field: str, alert: dict[str, Any]) -> dict[str, Any]:
-    """필지 값 하나를 묻는 문장 — 고를 말은 등록부 어휘(parcels.FIELD_CHOICES) 그대로(지어내지 않는다) · 자리는 밭 정보 화면."""
+def _parcel_question(field: str, alert: dict[str, Any], subject: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """필지 값 하나를 묻는 문장 — 고를 말은 등록부 어휘(parcels.FIELD_CHOICES) 그대로(지어내지 않는다) · 자리는 밭 정보 화면.
+    [발행자 2026-10-04 "묻기 전에 원장을 먼저 읽는다"] 재배 단위를 주면 먼저 known 을 본다 — 일지에서 값을 읽을 수 있으면 **묻지 않는다**(None · 초안은 send 가 올린다) ·
+    값은 못 읽고 언급만 있으면 그 일지 줄을 들고 묻는다(처음 묻는 것처럼 되묻지 않는다)."""
     word = parcels.FIELD_WORDS.get(field, field)
     opts = parcels.FIELD_CHOICES.get(field)
     what = f"{word}({' · '.join(opts)} 중 하나)" if opts else word
+    if subject is not None:
+        k = known.known_field(subject, field)
+        if k and k["from"] == "observation":
+            if k.get("value"):
+                return None
+            what += f" — 일지 {k['observed_at']} 「{k['text'][:30]}」 를 봤습니다, 어느 쪽인지"
     why = f"{alert.get('risk', '위험')}(회복 불가 · {alert.get('stage', '지금 칸')})의 근거에 실린다"
     q = need("soil_water" if field == "drainage" else field, "농가", what, "parcel", why)
     q["decision"] = "risk_alert"
@@ -38,8 +46,8 @@ def _parcel_question(field: str, alert: dict[str, Any]) -> dict[str, Any]:
     return q
 
 
-def candidates(envs: list[Any]) -> list[dict[str, Any]]:
-    """물을 수 있는 것 전부 — 우선순위 순(회복 불가 위험의 빈 값 → 농가 몫 요구 → 발행자 몫 요구). 같은 축은 한 번."""
+def candidates(envs: list[Any], subject: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """물을 수 있는 것 전부 — 우선순위 순(회복 불가 위험의 빈 값 → 농가 몫 요구 → 발행자 몫 요구). 같은 축은 한 번. 묻기 전 원장 읽기는 _parcel_question 안(known)."""
     out: list[dict[str, Any]] = []
     for e in envs:
         if e.decision_id == "risk_alert" and e.kind == "판단함":
@@ -48,7 +56,11 @@ def candidates(envs: list[Any]) -> list[dict[str, Any]]:
                 if not f:
                     continue
                 try:
-                    out.append(_parcel_question(str(f), a))
+                    q = _parcel_question(str(f), a, subject)
+                    if q is None:
+                        dropped.note(known.DROP_WHERE, f"risk_alert/{f}", "일지에 그 값이 있어 묻지 않는다 — 초안으로 올린다(known)")
+                        continue
+                    out.append(q)
                 except NeedError as err:                           # 읽는 판정이 없는 값 등 — 묻지 않고 그 사실을 남긴다(§5-1 은 여기서도 선다)
                     dropped.note(DROP_WHERE, f"risk_alert/{f}", str(err))
     for e in envs:
@@ -71,9 +83,9 @@ def candidates(envs: list[Any]) -> list[dict[str, Any]]:
     return ordered
 
 
-def top(subject_id: str, envs: list[Any]) -> dict[str, Any] | None:
+def top(subject_id: str, envs: list[Any], subject: dict[str, Any] | None = None) -> dict[str, Any] | None:
     """지금 물을 하나. 묻기 원장의 횟수가 REPEAT_CAP 을 넘은 축은 건너뛰고 원장에 멈춤을 적는다(값이 없으면 건너뛰지 않는다)."""
-    cands = candidates(envs)
+    cands = candidates(envs, subject)
     if not cands:
         return None
     if REPEAT_CAP is None:

@@ -421,6 +421,22 @@ def me_main(message: str = "", error: str = "", form: dict[str, str] | None = No
     return "".join(out)
 
 
+def chosen_reply(farmer: dict[str, Any] | None) -> str | None:
+    """[발행자 실사용 2026-10-04 "고르신 종류 … 이미 있는데 왜 되묻는가?"] 종류를 고른 뒤에도 처음 답("… 본 것으로 적었습니다 · 아니면 아래에서 다르게 고르시면 됩니다")이
+    그대로 보여 **되묻는 것**으로 읽혔다 — 고르는 동작이 아무것도 안 바꾸는 것처럼 보이면 사람이 고르기를 멈춘다. 기록(답 메시지)은 보낸 때의 것이라 고쳐 쓰지 않고,
+    **화면**이 그 자리에 선택 확인을 낸다(원문은 title 에). 고른 초안이 없으면 None."""
+    if not farmer:
+        return None
+    for i, d in enumerate(farmer.get("drafts") or []):
+        if d.get("why") != chat.CHOSEN_WHY:
+            continue
+        k = chat.KIND_PLAIN.get(d["kind"], d["kind"])
+        if chat.confirmed_ref(farmer, i):
+            return f"고르신 종류({k})로 넣었습니다 — 처음 제안은 지웠습니다."
+        return f"종류를 고르셨습니다 — {k}. 처음 제안은 지웠습니다. '{chat.CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
+    return None
+
+
 def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
     k = d["kind"]
     if k == "question":
@@ -434,7 +450,8 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
     need = d.get("needs") or []
     # [발행자 2026-09-21] 앞에 서는 것은 **사람 말**이고, 개발자 사유(`why`)는 버리지 않고 `title` 로 내린다 —
     # 정확함을 잃지 않으면서 읽는 사람을 막지 않는다. 옛 판은 `why` 를 그대로 카드 첫 줄에 냈다.
-    parts = [f'<div class="draft" title="{_e(d.get("why", ""))}"><b>{_e(chat.KIND_PLAIN.get(k, k))}</b> — {_e(chat.plain_why(d))}']
+    why_line = "고르신 종류입니다 — 처음 제안은 지웠습니다" if d.get("why") == chat.CHOSEN_WHY else chat.plain_why(d)   # [2026-10-04] 고른 뒤엔 선택 확인
+    parts = [f'<div class="draft" title="{_e(d.get("why", ""))}"><b>{_e(chat.KIND_PLAIN.get(k, k))}</b> — {_e(why_line)}']
     parts.append(f'<form method="post" action="/c/{quote(m["subject"])}/confirm"><input type="hidden" name="msg" value="{_e(m["id"])}"><input type="hidden" name="i" value="{i}">')
     if k == "event":
         opts = "".join(f'<option value="{_e(t)}"{" selected" if t == d.get("type") else ""}>{_e(t)}</option>' for t in ev.EVENT_TYPES)
@@ -472,11 +489,15 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
     msgs = chat.list_messages(s["id"])
     if not msgs:
         out.append('<div class="msg sys"><div class="av">a</div><div class="bub">여기에 그날 밭에서 있었던 일을 그냥 적으시면 됩니다 — <b>한 일</b>(오늘 물 줬다) · <b>본 것</b>(잎이 누렇다) · <b>할 일</b>(내일 웃거름) · 못 한 이유 · 고쳐 달라는 말 · 물음. 읽어서 어디에 적을지 <b>먼저 골라 보여 드립니다</b>. <b>넣기를 누르셔야</b> 영농일지에 들어갑니다 — 저절로 적히지 않습니다.</div></div>')
+    by_id = {m["id"]: m for m in msgs}
     for m in msgs:
         if m.get("role") == "system":
-            out.append(f'<div class="msg sys"><div class="av">a</div><div><div class="bub" id="t-{_e(m["id"])}">{_e(m["text"])}</div>'
+            alt = chosen_reply(by_id.get(m.get("reply_ref") or ""))       # [2026-10-04] 종류를 고른 발화의 답은 선택 확인으로 — 원문은 title 에
+            shown = alt or m["text"]
+            title = f' title="{_e(m["text"])}"' if alt else ""
+            out.append(f'<div class="msg sys"><div class="av">a</div><div><div class="bub" id="t-{_e(m["id"])}"{title}>{_e(shown)}</div>'
                        f'<div class="ts">{_e(render.local_time(m.get("recorded_at")))}{" · 고쳐 달라는 말 " + _e(m["request_ref"]) if m.get("request_ref") else ""}</div>'
-                       f'{_answer_actions(m)}</div></div>')
+                       f'{_answer_actions(dict(m, text=shown))}</div></div>')          # 고쳐 달라는 말 칸의 인용도 보이는 글(원장은 그대로)
         else:
             tags = []
             if m.get("input_mode") == "voice":

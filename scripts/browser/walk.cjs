@@ -73,6 +73,21 @@ const say = (k, v) => console.log(`${k}: ${typeof v === "string" ? v : JSON.stri
   await Promise.all([page.waitForNavigation(), symptomDraft.locator('button[type="submit"]').first().click()]);
   say("symptom_saved", (await page.locator("p.ok").allTextContents()).join(" | "));
 
+  // [발행자 진단 2026-10-04 "묻기 전에 원장을 먼저 읽는다" — 끝에서 끝까지] 일지에 배수 관찰을 넣고 다음 말을 보내면 배수를 **묻지 않고** 밭 정보 초안(배수 → 좋음)이 선다.
+  // 원장에 넣은 것이 답에 나오는가 — 파일끼리가 아니라 밭과 맞는지를 이 걷기가 본다(U-17 의 형태).
+  await page.fill("#text", "밭에 나가 확인하니 고랑 물 빠짐이 잘 되고 있다");
+  await Promise.all([page.waitForNavigation(), page.keyboard.press("Enter")]);
+  const drainDraft = page.locator(".draft").last();
+  if (!((await drainDraft.textContent()) || "").includes("본 것")) bad++;
+  await Promise.all([page.waitForNavigation(), drainDraft.locator('button[type="submit"]').first().click()]);
+  await page.fill("#text", "트랩 확인했다");
+  await Promise.all([page.waitForNavigation(), page.keyboard.press("Enter")]);
+  const afterDiary = (await page.locator(".msg.sys .bub").allTextContents()).pop() || "";
+  const proposal = (await page.locator(".draft").allTextContents()).join(" | ");
+  say("known_reply", afterDiary.slice(0, 160));
+  say("known_proposal", proposal.includes("밭 정보") && proposal.includes("좋음") ? "밭 정보 → 좋음 초안 있음" : proposal.slice(-120));
+  if (afterDiary.includes("배수(좋음 · 보통 · 나쁨 중 하나)") || !proposal.includes("밭 정보") || !proposal.includes("좋음")) bad++;
+
   say("errors", errors);
   if (errors.length) bad++;
   say("result", bad ? `문제 ${bad}` : "ok");

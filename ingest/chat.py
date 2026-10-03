@@ -21,7 +21,7 @@ from typing import Any
 
 from ingest import events as ev
 from ingest import feedback as fb
-from ingest import asks, dropped, media, subjects
+from ingest import asks, dropped, media, parcels, subjects
 from schema import records as sch
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -89,7 +89,9 @@ _PLAN_RE = re.compile(r"(려고|려 한다|려한다|할 예정|예정|계획|�
 # 한 일은 받침 ㅆ(줬다 · 했다)로 끝난다. 이 꼴은 계획 어휘(려고 · 예정)가 없어 관찰 메모로 떨어졌고, "오늘 급수 1시간 한다" 는 '오늘' 이 한 일 표지로 읽혀
 # **사건**이 됐다(할 일이 한 일로 — 계획 대 실제가 이행으로 센다). 문장 끝만 본다(받침 ㅆ 과거가 있으면 위 규칙대로 한 일이 이긴다).
 _PLAN_TAIL_RE = re.compile(r"(한다|합니다|할 거다|할거다|할 거야|할거야|할 겁니다|할겁니다|할 거예요|할거예요)\s*[.!]?\s*$")
-REQ_WORDS = ("틀렸", "틀린", "틀려", "잘못", "고쳐", "바꿔", "개선", "불편", "너무 넓", "너무 좁", "안 맞", "맞지 않", "원한다", "해 줬으면", "해줬으면")
+REQ_WORDS = ("틀렸", "틀린", "틀려", "잘못", "고쳐", "바꿔", "개선", "불편", "너무 넓", "너무 좁", "안 맞", "맞지 않", "원한다", "해 줬으면", "해줬으면",
+             # [발행자 실사용 2026-10-04 "… 이미 있는데 왜 되묻는가?"] 시스템을 향한 항의 — 「왜 … 는가」 꼴이 어휘에 없어 본 것(또는 물음)으로 떨어졌다
+             "되묻", "왜 또", "왜 다시", "이미 있는데")
 # '이상하' 는 뺐다 — "잎이 이상하다" 는 작물 상태 서술(관찰)이지 시스템 교정 요구가 아니다 (발행자 2026-09-19 "내부 로직으로 분류")
 # [칸 3 재측정 2026-09-20 · C15] 순서 주석은 처음부터 "교정 요구(**시스템을 향한** 동사)"라고 적고 있었는데, 구현은 어휘가 있기만
 # 하면 걸었다 — 뜻은 맞고 범위가 넓었다. 그래서 밭일 서술이 개선 요구로 샜다(실측: "잘못 심어서 다시 심었다" · "종구를 잘못 심어서
@@ -97,7 +99,7 @@ REQ_WORDS = ("틀렸", "틀린", "틀려", "잘못", "고쳐", "바꿔", "개선
 # 가르는 표지: **시스템 지시어**가 있으면 교정 요구가 맞다("예찰 기록이 잘못됐다" · "수확 창이 너무 넓다"). 없고, 작업 어휘 +
 # 한 일의 표지가 있으면 밭일 서술이다 — 아래 갈래로 흘려보낸다(사건 · 관찰). 종류는 확인에서 사람이 바꿀 수 있다.
 SYS_WORDS = ("판정", "분류", "기록", "날짜", "화면", "앱", "시스템", "알림", "경보", "추천", "계획표", "결과",
-             "대장", "목록", "카드", "표기", "수확 창", "창이", "답변", "메시지", "일지")
+             "대장", "목록", "카드", "표기", "수확 창", "창이", "답변", "메시지", "일지", "되묻", "종류", "제안")
 Q_WORDS = ("언제", "얼마나", "할까", "될까", "어떻게", "뭐 해야", "무엇을", "해야 하나", "해야 할까", "괜찮나", "괜찮을까", "되나",
            # [발행자 2026-09-19 라이브 "쪽파를 현재 관리해야 할 항목들을 알려줘요" → 분류 안 됨] 물음표 없는 요청형 — 알려/가르쳐 + 존대 어미
            "알려", "가르쳐", "궁금", "설명해", "나요", "까요", "할지", "해야 하는", "해야 할 항목", "해야 할 일", "할 일이",
@@ -216,6 +218,8 @@ PLAIN_BY_KEY = {
     "asked_about_symptom": "물으신 말 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
     "symptom_alongside": "말씀 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
     "answers_ask": "방금 물었던 것에 대한 답으로 읽었습니다 — 넣기를 누르면 밭 정보에 들어가고 그 값을 판단이 읽습니다",   # [§9 2026-10-03] 어느 값인지는 초안 카드가 말한다
+    "use_declared": "이 밭의 용도를 말씀하신 것으로 읽었습니다(본 것이 아닙니다) — 넣기를 누르면 밭 정보의 용도가 이 값으로 바뀝니다",   # [2026-10-04] 속성 선언 갈래
+    "from_diary": "일지에 이미 적힌 말에서 읽었습니다 — 묻지 않고 올립니다. 맞으면 넣기, 아니면 그냥 두시면 됩니다",                   # [2026-10-04] 묻기 전 원장 읽기
 }
 
 
@@ -534,7 +538,20 @@ def classify(text: str, today: date, subject: dict[str, Any] | None = None) -> l
     """발화 → 초안 목록. 하나도 못 나누면 [] (되묻는다). 초안은 확인 전까지 아무 원장에도 안 들어간다.
     말미에 **증상 이중 사용** 한 번 — 갈래마다 넣지 않고 산출 말미 1회(§7.5 지점 축 · 차단·필터 위치 규율과 같은 형태).
     `subject` 를 주면 그 격자 규칙이 아는 증상 말도 증상으로 본다(어휘 한 벌) — 없으면 정본 목록만."""
-    return _with_symptom_observation(_classify(text, today), text.strip(), today, grid_symptom_words(subject))
+    drafts = _classify(text, today)
+    for d in drafts:
+        if d.get("kind") == "parcel.field" and not d.get("parcel") and subject is not None:
+            # [2026-10-04] 용도 선언은 어느 밭의 값인지가 있어야 초안이다 — 재배 단위의 필지로 채운다(send 는 늘 재배 단위를 넘긴다 · 재배 단위 없이 나누면 비워 둔다).
+            # 재배 단위는 있는데 필지가 없으면 지어내지 않고 원문을 관찰 메모로(보이게)
+            pid = subject.get("parcel")
+            if pid:
+                d["parcel"] = pid
+            else:
+                dropped.note("용도 선언", subject.get("id") or "?", "재배 단위에 필지가 없어 밭 정보 초안을 짓지 못했다 — 관찰 메모로 둔다")
+                drafts = [{"kind": "observation.note", "text": text.strip(), "observed_at": parse_day(text, today, past=True) or today.isoformat(),
+                           "why": "용도 선언이나 필지가 없어 관찰 메모로(원문 그대로)", "why_key": "statement", "needs": []}]
+                break
+    return _with_symptom_observation(drafts, text.strip(), today, grid_symptom_words(subject))
 
 
 def _keeps_the_text(d: dict[str, Any], t: str) -> bool:
@@ -619,6 +636,13 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
     if et and _done_evidence(t):
         return [{"kind": "event", "type": et, "observed_at": day_past, "note": t, "why": f"사건 어휘 → {et}",
                  "needs": [] if day_past else ["observed_at"]}]
+    use_v = parcels.use_declared(t)
+    if use_v:
+        # [발행자 실사용 2026-10-04 "이 쪽파는 종구생산을 위한 목적이다" → 본 것] 관찰이 아니라 **재배 단위의 용도 선언**이다 — 여덟 갈래에 속성 선언이 없어 아무 어휘도
+        # 안 걸린 서술문으로 떨어졌다. 종구용 결정으로 용도 축을 만들고도 채팅에서 그 축으로 가는 길이 없었다("밭 정보 화면에 적으십시오" 가 요구였다). 배수 답이
+        # 밭 정보 초안으로 가는 길(§9 parcel.field)과 같은 형태 — 확인 뒤 parcels.set_fields · 어느 필지인지는 classify() 가 재배 단위에서 채운다.
+        return [{"kind": "parcel.field", "field": "use", "value": use_v, "parcel": None, "text": t,
+                 "why": f"용도 선언 → 밭 정보 용도 '{use_v}' (확인 뒤 parcels.set_fields · 종구면 재배 달력도 그 기준)", "why_key": "use_declared", "needs": []}]
     if et:
         # 사건 어휘는 있는데 한 일의 표지가 없다("비료 상태가 안 좋다" · "웃거름 시기다") — 상태 서술이다. 사건이면 확인에서 '다른 종류'로 바꾼다
         return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
@@ -901,6 +925,20 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
                     rec["drafts"] = drafts
         except (OSError, ValueError) as e:
             dropped.note(asks.DROP_WHERE, asks.path().name, f"{type(e).__name__}: {e}")
+    if not photo_only:
+        # [발행자 진단 2026-10-04 "묻기 전에 원장을 먼저 읽는 규칙"] 판정이 읽는 밭 정보 값이 **일지(관찰)에 이미 있으면** 묻지 않고 초안으로 올린다 — 한 곳(ingest.known).
+        # 같은 (값, 어휘) 초안이 아직 서 있으면 다시 안 올린다 · 등록부에는 쓰지 않는다(확인은 사람). 실패는 답을 막지 않되 보이게.
+        from ingest import known, parcels
+        try:
+            already = {(d.get("field"), d.get("value")) for _, _, d in pending_drafts(subject_id) if d.get("kind") == "parcel.field"}
+            already |= {(d.get("field"), d.get("value")) for d in drafts if d.get("kind") == "parcel.field"}
+            props = known.proposals(s, parcels.FIELDS_READ_BY_JUDGMENT, already)
+        except (OSError, ValueError) as e:
+            props = []
+            dropped.note(known.DROP_WHERE, subject_id, f"{type(e).__name__}: {e}")
+        if props:
+            drafts = drafts + props
+            rec["drafts"] = drafts
     msg = _append(rec)
     media_line, asked = "", []
     if media_refs:
@@ -953,7 +991,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         from ingest import questions                       # 함수 안에서 — questions 가 3층(judge.need)을 들므로 모듈 수준이면 층이 뒤집힌다
         try:
             from judge import run as judge_run             # answer() 와 같은 규율 — 3층 봉투만 받는다
-            q = questions.top(subject_id, judge_run.judgments_for(subject_id, today=today))
+            q = questions.top(subject_id, judge_run.judgments_for(subject_id, today=today), subject=s)   # 묻기 전 원장 읽기(known)는 top 안
         except Exception as e:                             # noqa: BLE001 — 질문 생성 실패는 답을 막지 않는다 · 사유는 변경 로그에
             q = None
             dropped.note(questions.DROP_WHERE, subject_id, f"{type(e).__name__}: {e}")
