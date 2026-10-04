@@ -855,8 +855,10 @@ def _capture_landed(subject_id: str, media_ids: list[str], today: date) -> str:
         return ""
     if env is None or env.kind != "판단함":
         return ""
+    # [내부 값 전수 2026-10-04] 전에는 **사람이 읽는 근거 문장 안에서** 영상 id 를 찾았다 — 그 문장이 바뀌면 조용히 0건이 된다(문장에 기대는 이음).
+    # 판정기가 id 를 제 칸(`evidence_ref`)에 두고 나서는 그 칸으로 잇는다 — 사람 말이 어떻게 바뀌어도 이음이 안 끊긴다
     rows = [r for r in (env.result or {}).get("rows") or []
-            if r.get("kind") == "plan.capture" and any(mid and mid in (r.get("evidence") or "") for mid in media_ids)]
+            if r.get("kind") == "plan.capture" and r.get("evidence_ref") in [mid for mid in media_ids if mid]]
     if not rows:
         return ""
     from frontend import words as _w             # '칸 3' → '3단계' — 사람 말은 4층 정본 하나가 정한다

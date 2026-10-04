@@ -88,7 +88,8 @@ def test_capture_fulfilled_by_video_ledger():
     vids = [{"id": "vid_x", "observed_at": "2026-09-18T06:30:00+00:00"}]     # 3단계 창(9/4~9/24) 안
     rows = _rows(PVA.judge(SUBJ, today=date(2026, 9, 19), videos=vids))
     caps = [r for r in PVA.judge(SUBJ, today=date(2026, 9, 19), videos=vids).result["rows"] if r["kind"] == "plan.capture"]
-    assert any(c["status"] == "이행" and "vid_x" in c["evidence"] for c in caps)
+    assert any(c["status"] == "이행" and c["evidence_ref"] == "vid_x" for c in caps)   # [내부 값 전수 2026-10-04] id 는 문장이 아니라 제 칸에
+    assert all("vid_x" not in (c["evidence"] or "") for c in caps)                     # 사람이 읽는 줄에는 안 섞인다
     assert any(c["status"] == "예정" for c in caps)                             # 뒤 단계 촬영은 아직
 
 

@@ -156,14 +156,16 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
     for p in plan.from_unit(unit, anchor_d, subject.get("cert")):
         wd = date.fromisoformat(p["work_date"])
         dl = date.fromisoformat(p["deadline_date"]) if p.get("deadline_date") else wd + timedelta(days=tol)
-        status, evidence = None, None
+        status, evidence, evidence_ref = None, None, None
         if p["kind"] == "plan.capture":
             hit = [v for v in videos
                    if p["work_date"] <= (v.get("observed_at") or "")[:10] <= p["deadline_date"] and v.get("id") not in used_media]
             if hit:
                 used_media.add(hit[0].get("id"))
                 what = "사진" if hit[0].get("kind") == media.KIND_IMAGE else "영상"      # 사진을 '영상' 이라 부르던 자리
-                status, evidence = "이행", f"{what} {hit[0].get('id')} ({hit[0].get('observed_at', '')[:10]})"
+                # [내부 값 전수 2026-10-04] 근거 칸이 `영상 vid_… (날짜)` 였다 — 기록 id 를 **사람이 읽는 문장 안에** 구워 넣으면 화면이 그것을
+                # 떼어낼 수 없다. 문장과 id 를 나눠 둔다(id 는 `evidence_ref` 로 가고 화면은 그것을 `title` 에 내린다)
+                status, evidence, evidence_ref = "이행", f"{what} ({hit[0].get('observed_at', '')[:10]})", hit[0].get("id")
         else:
             m = _matched_event(p, evts, tol, d.params)
             if m:
@@ -196,7 +198,7 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
                 ask.append({"task": p["task"], "work_date": p["work_date"], "stage": p["stage"]})
         counts[status] += 1
         rows.append({"stage": p["stage"], "task": p["task"], "work_date": p["work_date"], "deadline_date": p.get("deadline_date"),
-                     "status": status, "evidence": evidence, "materials": p.get("materials"), "kind": p["kind"],
+                     "status": status, "evidence": evidence, "evidence_ref": evidence_ref, "materials": p.get("materials"), "kind": p["kind"],
                      "source_note": p.get("source_note", ""), "fixable_by": p.get("fixable_by")})   # [WO-ASK-01 §10 지점 2026-10-03] 할 일도 추론값 — 누가 고칠 수 있는가를 답까지
     inputs = [AxisUse("anchor", anchor, subject.get("source", "farmer"), "cultivation_unit", "관측")]
     grades = ["관측", GRID_GRADE.get(unit["unit"].get("confidence", "하"), "추정")]

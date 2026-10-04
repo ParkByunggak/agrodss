@@ -210,7 +210,8 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
         from grid import schema as grid_schema
         out.append("<table><tr><th>상태</th><th>칸</th><th>작업</th><th>작업일</th><th>마감</th><th>근거</th><th>고칠 수 있나</th></tr>" + "".join(
             f'<tr><td><span class="st st-{st_cls.get(x["status"], "대기")}">{_e(x["status"])}</span></td><td>{_e(x["stage"])}</td><td>{_e(x["task"])}</td>'
-            f'<td>{_e(x["work_date"])}</td><td>{_e(x.get("deadline_date") or "")}</td><td>{_e(x.get("evidence") or "")}</td>'
+            f'<td>{_e(x["work_date"])}</td><td>{_e(x.get("deadline_date") or "")}</td>'
+            f'<td title="{_e(x.get("evidence_ref") or "")}">{_e(x.get("evidence") or "")}</td>'   # [내부 값 전수 2026-10-04] 기록 id 는 title 로
             f'<td title="{_e(x.get("fixable_by") or "")}">{_e(words.fixer(x.get("fixable_by"), grid_schema.is_inference(x.get("source_note"))))}</td></tr>'   # [§10 지점] 할 일도
             for x in r["rows"]) + "</table>")
     elif e["kind"] == "사실 인용" and e["decision_id"] == "forecast_citation":
@@ -295,7 +296,9 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
             if r.get("first_check"):
                 out.append(f"<p><b>먼저 할 확인</b> — {_e(r['first_check'])}</p>")
             if r.get("observations"):
-                out.append(f"<p class=\"meta\">읽은 관찰: {_e(' · '.join(str(x) for x in r['observations']))}</p>")
+                # [내부 값 전수 2026-10-04] 원장 id 를 줄줄이 내던 자리 — 사람이 알고 싶은 것은 **몇 건을 읽었나**이고 id 는 `title` 에 남는다
+                out.append(f"<p class=\"meta\" title=\"{_e(' · '.join(str(x) for x in r['observations']))}\">"
+                           f"읽은 관찰 {len(r['observations'])}건</p>")
     else:
         out.append(f"<p>{_e(r.get('why', ''))} {_e(r.get('who', ''))}</p>")
     if e["inputs"]:

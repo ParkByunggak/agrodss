@@ -45,7 +45,7 @@ echo "HEAD $H"
 if grep -q "이 커밋 X" docs/handover_20260919.md; then
   step "핸드오버 해시 기재 → $H"
   sed -i "s/(이 커밋 X)/$H/; s/이 커밋 X\b/$H/g" docs/handover_20260919.md
-  printf 'docs: 핸드오버 — %s 해시 기재(%s)\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QP3adTM3PKy9M3tMgSUL4L\n' "$H" "$LABEL" > "$LOG"
+  printf 'docs: 핸드오버 — %s 해시 기재(%s)\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QP3adTM3PKy9M3tMgSUL4L\n' "$H" "$LABEL" > "$LOG"
   git commit -q -am "$(cat "$LOG")"
   echo "docs $(git rev-parse --short HEAD)"
 fi
