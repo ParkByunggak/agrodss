@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 from frontend import config, render, words
 from grid import capture as grid_capture
-from schema import labels
+from schema import labels, records
 from ingest import asks, chat, events as ev, feedback as fb, media, parcels, profile, subjects
 from judge import evolve, registry, run as judge_run
 
@@ -211,9 +211,10 @@ def user_tab_html(current: str) -> str:
         href, label, sub = it
         on = ' class="on"' if href == current else ""
         items.append(f'<a href="{href}"{on}>{_e(label)}' + (f"<small>{_e(sub)}</small>" if sub else "") + "</a>")
-    return (f'<details class="umenu" id="user-tab"><summary class="user{cls}"><b>{_e(name)}<span class="pill">{_e(role)}</span></b>'
+    said = words.role(role)      # [내부 값 전수 2026-10-04] 역할 어휘(farmer · publisher)가 배지와 머리에 그대로 나갔다 — 안쪽 값은 title 에 남긴다
+    return (f'<details class="umenu" id="user-tab"><summary class="user{cls}"><b>{_e(name)}<span class="pill" title="{_e(role)}">{_e(said)}</span></b>'
             f'<span>필지 {len(u.get("parcels") or [])} · 메뉴 ▴</span></summary>'
-            f'<div class="ulist"><div class="uhead">{_e(name)} · {_e(role)}</div>{"".join(items)}</div></details>')
+            f'<div class="ulist"><div class="uhead" title="{_e(role)}">{_e(name)} · {_e(said)}</div>{"".join(items)}</div></details>')
 
 
 # [발행자 2026-09-21 "필지 3문항과 토성·경사가 비어 있어서 병해충 필지 보정과 과습 판정이 막혀 있다"]
@@ -397,7 +398,7 @@ def me_main(message: str = "", error: str = "", form: dict[str, str] | None = No
         out.append(f'<p class="err">{_e(error)}</p>')
     if message:
         out.append(f'<p class="ok">{_e(message)}</p>')
-    roles = "".join(f'<option value="{r}"{" selected" if (f.get("role") or u.get("role")) == r else ""}>{r}</option>' for r in profile.ROLES)
+    roles = "".join(f'<option value="{r}"{" selected" if (f.get("role") or u.get("role")) == r else ""}>{_e(words.role(r))}</option>' for r in profile.ROLES)
     out.append('<div class="form" style="margin-top:8px"><form method="post" action="/me">'
                f'<label>표시명</label><input name="name" value="{_e(f.get("name") or u.get("name") or "")}" required>'
                f'<label>역할</label><select name="role">{roles}</select>'
@@ -721,13 +722,15 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
     if subject:
         lab = next((s["label"] for s in subs if s["id"] == subject), subject)
         out.append(f'<p class="meta">작목 「{_e(lab)}」 만 봅니다 — <a href="/improve">전체 보기</a></p>')
-    tg = "".join(f'<option value="{t}">{t}</option>' for t in ("other", "grid", "decision", "dictionary", "screen", "schema", "input"))
+    # [내부 값 전수 2026-10-04] 대상 어휘를 여기 **사본**으로 박아 두고 영문 그대로 냈다 — 정본은 schema.records.TARGETS 하나 · 보이는 말은 words.target
+    tg = "".join(f'<option value="{t}">{_e(words.target(t))}</option>' for t in sorted(records.TARGETS, key=lambda x: x != "other"))
     out.append(f'<h2 style="font-size:14px">고쳐 달라는 말 (사용자)</h2><form method="post" action="/improve/request" class="draft" style="margin-left:0"><input name="text" size="60" placeholder="무엇이 틀렸거나 불편한가" required> <select name="target">{tg}</select> <select name="subject"><option value="">(목록 없음)</option>{sel}</select> <button class="btn pri">접수</button></form>')
     reqs = [r for r in fb.latest_by_id("feedback.request").values() if not subject or r.get("subject") == subject]
     if reqs:
         out.append('<table class="tb"><tr><th>상태</th><th>요구</th><th>대상</th><th>목록</th><th>개선 항목</th></tr>')
         for r in reversed(reqs):
-            out.append(f'<tr><td>{_e(r["status"])}</td><td>{_e(r["text"])}</td><td>{_e(r["target"])}</td><td>{_e(r.get("subject") or "")}</td><td>{_e(r.get("item_ref") or "")}</td></tr>')
+            out.append(f'<tr><td>{_e(r["status"])}</td><td>{_e(r["text"])}</td><td title="{_e(r["target"])}">{_e(words.target(r["target"]))}</td>'
+                       f'<td title="{_e(r.get("subject") or "")}">{_e(words.subject_label(r.get("subject")))}</td><td>{_e(r.get("item_ref") or "")}</td></tr>')
         out.append("</table>")
     out.append('<h2 style="font-size:14px">개선 항목</h2>')
     items = [it for it in fb.latest_by_id("improvement.item").values() if not subject or it.get("subject") in (None, "", subject)]
@@ -786,7 +789,7 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
 def mall_main(view: dict[str, Any]) -> str:
     """[M-11] 소비자가 볼 상세페이지의 목업 — 영상 시계열이 본문이다. 내부 화면 안에서만 렌더된다(D-6)."""
     out = [f'<div class="thead"><div><h1>{_e(view["title"])} <span class="pill plan">목업 · 내부</span></h1>'
-           f'<div class="meta">상품 = 농사 {_e(view["product_id"])} · {_e(view["status"])} · 심은 날({_e(view.get("anchor_kind") or "")}) 뒤 {_e(view.get("days_since_anchor"))}일 · {_e(view["as_of"])}</div></div>'   # [작목별 메뉴 처방 직후 전수 2026-10-04] 농가 화면 — 사람 말로
+           f'<div class="meta" title="{_e(view["product_id"])}">상품 = 농사 {_e(words.subject_label(view["product_id"]))} · {_e(view["status"])} · 심은 날({_e(view.get("anchor_kind") or "")}) 뒤 {_e(view.get("days_since_anchor"))}일 · {_e(view["as_of"])}</div></div>'   # [작목별 메뉴 처방 직후 전수 2026-10-04] 농가 화면 — 사람 말로
            f'<div><a href="/c/{quote(view["product_id"])}">대화로</a></div></div><div class="msgs">']
     out.append(f'<div class="card"><b>인증 표기</b> {_e(view["cert_label"])}</div>')
     out.append(f'<div class="card"><b>현장 영상 {view["clips_total"]}건</b> — {_e(view["editing_rule"])}</div>')

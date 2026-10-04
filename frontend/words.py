@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import re
 
+from schema import records as _records      # 요구 대상 어휘의 정본(안쪽 이름) — 사람 말은 아래 표 하나
+
 # 봉투 8종 → 사람 말. 안쪽 이름은 `judge.envelope.KINDS` 가 정본이고 여기서 배반하지 않는다(검사가 전수를 본다).
 KIND_SAID = {
     "판단함": "이렇게 보입니다",
@@ -43,6 +45,32 @@ SHOT_TIME_SAID = {
 
 def shot_time(source: str | None) -> str:
     return SHOT_TIME_SAID.get(source or "", source or "")
+
+
+# [내부 값 전수 2026-10-04] 화면이 **내부 값을 그대로** 낸 세 자리 — 고쳐 달라는 말의 대상(영문 other · grid …) · 사용자 역할(farmer · publisher) · 재배 단위 id(p001-jjokpa-2026f).
+# 사람 말 래칫(JARGON)은 **한글 목록**이라 영문 값과 id 를 한 번도 못 잡았다(/improve · /events · /media · /mall 네 꼴에서 id 가 나가고 있었다). 안쪽 어휘는 각 층의 정본이고
+# 사람 말은 여기 하나다 — 화면은 값 그대로를 title 에 남긴다(정확함을 안 버린다).
+TARGET_SAID = {"grid": "재배 달력", "decision": "판단", "dictionary": "이름 사전", "screen": "화면", "schema": "기록 양식", "input": "들어온 자료", "other": "그 밖"}
+assert set(TARGET_SAID) == set(_records.TARGETS), f"요구 대상 어휘와 사람 말 표가 어긋난다: {_records.TARGETS}"
+ROLE_SAID = {"farmer": "농가", "publisher": "발행자"}      # ingest.profile.ROLES — 층 때문에 여기서 import 하지 않고 검사가 전수를 본다
+
+
+def target(t: str | None) -> str:
+    return TARGET_SAID.get(t or "", t or "")
+
+
+def role(r: str | None) -> str:
+    return ROLE_SAID.get(r or "", r or "")
+
+
+def subject_label(sid: str | None) -> str:
+    """재배 단위 id → 그 농사의 이름(「괴산 연풍 텃밭 · 쪽파 · 2026 가을」). 모르는 id 는 그대로 둔다(지어내지 않는다).
+    [2026-10-04] 표의 목록 칸이 id 를 그대로 냈다 — 농가도 발행자도 p001-jjokpa-2026f 로는 어느 밭의 무엇인지 모른다."""
+    from ingest import subjects            # 4층이 모듈 수준에서 ingest 를 들면 층이 뒤집힌다(opened 와 같은 규율)
+    if not sid:
+        return ""
+    s = subjects.by_id(sid)
+    return (s or {}).get("label") or sid
 
 # 닫힌 낱말 표 — **측정으로 고른 것만** 넣는다. 긴 것부터 바꾼다(짧은 것이 먼저 물면 뒤가 어그러진다).
 SWAPS: tuple[tuple[str, str], ...] = (

@@ -356,7 +356,7 @@ def events_page(message: str = "", error: str = "", subject: str | None = None) 
     out.append(f"<h2>기록 ({len(recs)})</h2>")
     if recs:
         out.append("<table><tr><th>종류</th><th>농사</th><th>일어난 날</th><th>내용</th><th>기록 시각</th></tr>" + "".join(
-            f"<tr><td>{_e(r.get('type') or r.get('kind'))}</td><td>{_e(r.get('subject'))}</td><td>{_e(r.get('observed_at'))}</td>"
+            f"<tr><td>{_e(r.get('type') or r.get('kind'))}</td><td title=\"{_e(r.get('subject'))}\">{_e(words.subject_label(r.get('subject')))}</td><td>{_e(r.get('observed_at'))}</td>"
             f"<td>{_e(r.get('reason') or r.get('note') or '')} {_e(', '.join(r.get('materials') or []))}</td><td>{_e(render.local_time(r.get('recorded_at')))}</td></tr>"
             for r in reversed(recs)) + "</table>")
     else:
@@ -430,7 +430,7 @@ def media_page(message: str = "", error: str = "", subject: str | None = None) -
         out.append("<table><tr><th>찍은 때</th><th>농사</th><th>파일</th><th>해상도</th><th>길이</th>"
                    "<th>위치</th><th>시각 출처</th><th>메모</th></tr>")
         for r in sorted(records, key=lambda r: r["observed_at"], reverse=True):
-            out.append(f'<tr><td>{_e(r["observed_at"])}</td><td>{_e(r["subject"])}</td><td><code>{_e(r["file"])}</code></td>'
+            out.append(f'<tr><td>{_e(r["observed_at"])}</td><td title="{_e(r["subject"])}">{_e(words.subject_label(r["subject"]))}</td><td><code>{_e(r["file"])}</code></td>'
                        f'<td>{_e(r.get("width"))}×{_e(r.get("height"))}</td><td>{_e(r.get("duration_sec"))}s</td>'
                        f'<td>{_e(r["gps"])}</td><td>{_e(words.shot_time(r.get("observed_at_source")))}</td><td>{_e(r.get("note"))}</td></tr>')
         out.append("</table>")
