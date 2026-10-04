@@ -98,9 +98,22 @@ def top(subject_id: str, envs: list[Any], subject: dict[str, Any] | None = None)
     if REPEAT_CAP is None:
         return cands[0]
     counts = {r["axis"]: int(r.get("count", 0)) for r in asks.for_subject(subject_id)}
+    # [2026-10-04 필지 값은 필지의 것] 밭 정보 값(배수 · 용도 · 환경 — 물음의 field)을 물은 횟수는 **같은 밭의 모든 작목**에 걸쳐 센다 — 쪽파 채팅에서 세 번 안 답한 배수를
+    # 대파 채팅이 세 번 더 묻지 않게(「모르겠다」 신호도 필지의 것). 농사 값(인증)은 작목마다 따로 — 그 작목의 횟수만(known 의 가름과 같다).
+    # 원장은 축(soil_water)으로 세고 필지 값은 field(drainage)로 가른다 — 축 이름과 필드 이름은 다르다(첫 판이 축 이름으로 걸러 한 건도 안 더해졌다 · 검사가 잡았다).
+    from ingest import known, parcels
+    parcel_fields = set(parcels.FIELDS_READ_BY_JUDGMENT)
+    others = [sib for sib in known.parcel_siblings(subject) if sib != subject_id] if subject else []
     for q in cands:
-        if counts.get(q["axis"], 0) >= REPEAT_CAP:
-            asks.mark_stopped(subject_id, q["axis"], f"반복 상한 {REPEAT_CAP}회 — 출처: {REPEAT_CAP_SOURCE}")
+        total = counts.get(q["axis"], 0)
+        if q.get("field") in parcel_fields:
+            total += sum(int(r.get("count", 0)) for sib in others for r in asks.for_subject(sib) if r["axis"] == q["axis"])
+        if total >= REPEAT_CAP:
+            why = f"반복 상한 {REPEAT_CAP}회 — 출처: {REPEAT_CAP_SOURCE}"
+            asks.mark_stopped(subject_id, q["axis"], why)
+            if q.get("field") in parcel_fields:
+                for sib in others:        # 물음이 난 작목의 행에 멈춤을 적는다 — 행이 없는 작목에는 안 쓴다(asks 규율 · 조용히 사라지는 질문은 없다)
+                    asks.mark_stopped(sib, q["axis"], f"{why} · 같은 밭의 작목 전체로 셌다({subject_id} 에서 멈춤)")
             continue
         return q
     return None
