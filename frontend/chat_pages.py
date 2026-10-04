@@ -57,6 +57,7 @@ aside.side { background:var(--side); border-right:1px solid var(--line); padding
 .pill { display:inline-block; font-size:11px; padding:0 7px; border-radius:9px; background:var(--chip); color:var(--muted); margin-left:4px; }
 .pill.run { background:var(--ok); color:var(--ok-fg); } .pill.plan { background:var(--warn); color:var(--warn-fg); } .pill.end { background:var(--chip); color:var(--muted); }
 .side .lnk { display:block; padding:5px 10px; font-size:13px; color:var(--muted); text-decoration:none; } .side .lnk:hover { color:var(--fg); }
+.crop-screens { padding:0 10px 8px 14px; font-size:12px; color:var(--muted); } .crop-screens a { color:var(--muted); text-decoration:none; } .crop-screens a:hover { color:var(--fg); }
 aside.side { display:flex; flex-direction:column; }
 """ + render.USER_MENU_CSS + """
 main.thread { display:flex; flex-direction:column; min-height:100vh; min-width:0; }   /* [U-34] 그리드 항목의 min-width:auto 가 안쪽 폼 폭(size=60)에 밀려 화면을 넘겼다(390px 실측: 개선 화면 832 · 내 정보 475) */
@@ -163,7 +164,9 @@ def sidebar(current: str, docs: list[str], today: date) -> str:
         cls = ' on' if current == f"/c/{s['id']}" else ""
         pill = {"재배 중": "run", "종료": "end"}.get(st, "plan")          # 종료(작기 종료 경로 2026-09-20)는 계획 색이 아니라 회색
         out.append(f'<a class="chat{cls}" href="/c/{quote(s["id"])}"><b>{_e(s.get("crop"))}<span class="pill {pill}">{_e(st)}</span></b><span>{meta}</span></a>')
-    out.append('<div class="grp">화면</div>')
+        # [발행자 2026-10-04 "이 메뉴가 작목마다 있어야 한다"] 작목마다 그 작목으로 좁힌 화면 한 줄 — 이름·주소는 화면 이름 계약(schema.labels.CROP_SCREENS) 하나
+        out.append('<div class="crop-screens">' + " · ".join(f'<a href="{labels.crop_screen_href(k, s["id"])}">{_e(lab)}</a>' for k, lab in labels.CROP_SCREENS) + "</div>")
+    out.append(f'<div class="grp">{_e(labels.CROP_GROUP)}</div>')
     first = subs[0]["id"] if subs else ""
     # [발행자 §2 둘째 측정 2026-10-04 "밭 정보 메뉴를 찾지 못함"] 이름은 화면 이름 계약(schema.labels) 하나에서 — 요구 문장의 「어디서」 와 보고가 같은 목록을 쓴다. /me 가 여기 있다.
     for href, label in (*labels.SIDEBAR, (f"/mall/{quote(first)}" if first else "/c/new", labels.MALL)):
@@ -702,7 +705,8 @@ def new_main(error: str = "", form: dict[str, str] | None = None) -> str:
             '<div style="margin-top:14px"><button class="btn pri" type="submit">목록 만들기</button></div></form></div>')
 
 
-def improve_main(today: date, message: str = "", error: str = "", cycle: dict[str, Any] | None = None) -> str:
+def improve_main(today: date, message: str = "", error: str = "", cycle: dict[str, Any] | None = None, subject: str | None = None) -> str:
+    # [발행자 2026-10-04 "이 메뉴가 작목마다"] subject 가 오면 그 작목의 고쳐 달라는 말·개선 항목만(목록 칸이 그 작목으로 미리 골라진다)
     # [U-26 잔여 2026-09-26] 이 화면도 사람 말로 — 발행자가 '고쳐 달라는 말' 을 넣고 확인하러 오는 곳이다. 대장 번호(J · D-14 · U-14 · M-10)는 뺀다.
     out = ['<div class="thead"><div><h1>개선 · 자율진화</h1><div class="meta">보이게까지는 자동입니다 — 보수(근거를 낮추는 쪽)는 자동 반영, 넓히는 쪽(임계·규칙·단계)은 제안까지. 채택은 사람이 합니다.</div></div></div><div class="msgs">']
     if error:
@@ -713,17 +717,20 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
         out.append(f'<p class="ok">한 바퀴: 예측 {cycle["predictions"]} 줄 · 대조 {len(cycle["outcomes"])} · 제안 {len(cycle["proposals"])}</p>')
     out.append('<form method="post" action="/improve/cycle" style="margin:8px 0"><button class="btn pri">자율진화 한 바퀴 (측정 → 제안)</button> <span style="color:var(--muted);font-size:12px">몇 번 돌려도 같은 것을 두 번 적지 않는다</span></form>')
     subs = subjects.load()
-    sel = "".join(f'<option value="{_e(s["id"])}">{_e(s["label"])}</option>' for s in subs)
+    sel = "".join(f'<option value="{_e(s["id"])}"{" selected" if s["id"] == subject else ""}>{_e(s["label"])}</option>' for s in subs)
+    if subject:
+        lab = next((s["label"] for s in subs if s["id"] == subject), subject)
+        out.append(f'<p class="meta">작목 「{_e(lab)}」 만 봅니다 — <a href="/improve">전체 보기</a></p>')
     tg = "".join(f'<option value="{t}">{t}</option>' for t in ("other", "grid", "decision", "dictionary", "screen", "schema", "input"))
     out.append(f'<h2 style="font-size:14px">고쳐 달라는 말 (사용자)</h2><form method="post" action="/improve/request" class="draft" style="margin-left:0"><input name="text" size="60" placeholder="무엇이 틀렸거나 불편한가" required> <select name="target">{tg}</select> <select name="subject"><option value="">(목록 없음)</option>{sel}</select> <button class="btn pri">접수</button></form>')
-    reqs = list(fb.latest_by_id("feedback.request").values())
+    reqs = [r for r in fb.latest_by_id("feedback.request").values() if not subject or r.get("subject") == subject]
     if reqs:
         out.append('<table class="tb"><tr><th>상태</th><th>요구</th><th>대상</th><th>목록</th><th>개선 항목</th></tr>')
         for r in reversed(reqs):
             out.append(f'<tr><td>{_e(r["status"])}</td><td>{_e(r["text"])}</td><td>{_e(r["target"])}</td><td>{_e(r.get("subject") or "")}</td><td>{_e(r.get("item_ref") or "")}</td></tr>')
         out.append("</table>")
     out.append('<h2 style="font-size:14px">개선 항목</h2>')
-    items = list(fb.latest_by_id("improvement.item").values())
+    items = [it for it in fb.latest_by_id("improvement.item").values() if not subject or it.get("subject") in (None, "", subject)]
     if not items:
         out.append("<p>아직 없다 — 빗나감 · 못 한 이유 · 고쳐 달라는 말이 생기면 제안이 만들어진다.</p>")
     else:

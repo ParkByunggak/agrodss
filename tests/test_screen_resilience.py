@@ -38,7 +38,7 @@ def test_registry_paths_refuse_bad_anchor(reg):
 
 
 def test_handler_exception_becomes_500_page_and_server_survives(srv, monkeypatch):
-    def boom():
+    def boom(*a, **k):                                                              # 디스패치가 넘기는 인자(only=… · 작목별 화면 2026-10-04)와 무관하게 터진다
         raise RuntimeError("의도한 실패 <b>x</b>")
     monkeypatch.setattr(serve, "judge_page", boom)
     c = http.client.HTTPConnection("127.0.0.1", srv, timeout=5)

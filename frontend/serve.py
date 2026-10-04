@@ -308,12 +308,14 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
     out[start:] = [words.plain(x) for x in out[start:]]
 
 
-def judge_page() -> tuple[int, str]:
-    out = ["<h1>판단 — 무엇을 어떻게 봤는가</h1>",
+def judge_page(only: str | None = None) -> tuple[int, str]:
+    # [발행자 2026-10-04 "이 메뉴가 작목마다"] only 가 오면 그 작목만(채팅 목록 작목 아래 「판단」 줄) — 판정은 같은 함수(all_judgments(only=…))
+    out = ["<h1>판단 — 무엇을 어떻게 봤는가</h1>" if not only else f"<h1>판단 — {_e(next((s['label'] for s in media.load_subjects() if s['id'] == only), only))}</h1>"
+           '<p class="meta"><a href="/judge">전체 보기</a></p>',
            "<p class=\"meta\">밭마다 판단이 어떻게 보이는지가 먼저 나오고, 무슨 자료를 봤는지가 그 다음입니다. 정확한 이름은 글자 위에 마우스를 올리면 보입니다.</p>"]
     if config.today_frozen():
         out.append(f'<p class="err"><b>오늘이 {_e(config.today_frozen())} 로 고정돼 있다</b> ({config.TODAY_ENV} — 검사·재현용. 운영이면 .env 에서 지운다)</p>')
-    for s, envs, info in judge_run.all_judgments(config.today()):
+    for s, envs, info in judge_run.all_judgments(config.today(), only=only or None):
         out.append(f"<h1 style=\"font-size:17px;margin-top:24px\">{_e(s['label'])}</h1>")
         for env in envs:
             e = env.to_dict()
@@ -326,14 +328,16 @@ def judge_page() -> tuple[int, str]:
     return 200, render.page("AGRODSS —판단", nav_html("/judge"), "".join(out), "판단은 여덟 가지 말 중 하나로 답합니다", footer)
 
 
-def events_page(message: str = "", error: str = "") -> tuple[int, str]:
+def events_page(message: str = "", error: str = "", subject: str | None = None) -> tuple[int, str]:
     subjects = media.load_subjects()
     out = ["<h1>사건 · 불이행 사유 — 1층 기록</h1>"]
+    if subject:   # [발행자 2026-10-04 "이 메뉴가 작목마다"] 그 작목만 — 폼의 목록 칸도 그 작목으로 미리 골라진다
+        out.append(f'<p class="meta">작목 「{_e(next((s["label"] for s in subjects if s["id"] == subject), subject))}」 만 봅니다 — <a href="/events">전체 보기</a></p>')
     if error:
         out.append(f'<p class="err"><b>기록 안 됨</b> — {_e(error)}</p>')
     if message:
         out.append(f'<p class="ok">{_e(message)}</p>')
-    sel = "".join(f'<option value="{_e(s["id"])}">{_e(s["label"])}</option>' for s in subjects)
+    sel = "".join(f'<option value="{_e(s["id"])}"{" selected" if s["id"] == subject else ""}>{_e(s["label"])}</option>' for s in subjects)
     types = "".join(f'<option value="{_e(t)}">{_e(t)}</option>' for t in ev.EVENT_TYPES)
     out.append('<h2>사건 추가</h2><form method="post" action="/events/add" class="reg">')
     out.append(f'<label>재배 단위 <select name="subject">{sel}</select></label>')
@@ -347,7 +351,7 @@ def events_page(message: str = "", error: str = "") -> tuple[int, str]:
     out.append('<label>계획 작업일 <input name="planned_day" size="14" placeholder="2026-09-08"></label>')
     out.append('<label>사유 <input name="reason" size="50" placeholder="예: 트랩을 못 구했다 / 비가 계속 왔다 / 필요 없다고 봤다"></label>')
     out.append('<button type="submit">기록</button></form>')
-    recs = ev.list_records()
+    recs = ev.list_records(subject or None)
     out.append(f"<h2>기록 ({len(recs)})</h2>")
     if recs:
         out.append("<table><tr><th>종류</th><th>재배 단위</th><th>대상 시각</th><th>내용</th><th>기록 시각</th></tr>" + "".join(
@@ -362,12 +366,14 @@ def events_page(message: str = "", error: str = "") -> tuple[int, str]:
                                                 "사건(I-3 §2) · 결정(§5 불이행 사유) — 대상 시각 없이는 기록되지 않는다", footer)
 
 
-def media_page(message: str = "", error: str = "") -> tuple[int, str]:
+def media_page(message: str = "", error: str = "", subject: str | None = None) -> tuple[int, str]:
     subjects = media.load_subjects()
     items = media.list_inbox()
-    records = [media.public_view(r) for r in media.list_records()]
+    records = [media.public_view(r) for r in media.list_records(subject or None)]
     watch = media.watch_dirs()
     out = ["<h1>영상 반입 — 관찰(영상) 1층 등록</h1>"]
+    if subject:   # [발행자 2026-10-04 "이 메뉴가 작목마다"] 그 작목의 영상만 · 등록 폼의 목록 칸도 그 작목으로
+        out.append(f'<p class="meta">작목 「{_e(next((s["label"] for s in subjects if s["id"] == subject), subject))}」 만 봅니다 — <a href="/media">전체 보기</a></p>')
     if error:
         out.append(f'<p class="err"><b>등록 안 됨</b> — {_e(error)}</p>')
     if message:
@@ -409,7 +415,7 @@ def media_page(message: str = "", error: str = "") -> tuple[int, str]:
             out.append(f'<div class="meta">메타 판독: {_e(pr["error"])}</div>')
         out.append('<label>재배 단위 <select name="subject">')
         for s in subjects:
-            out.append(f'<option value="{_e(s["id"])}">{_e(s["label"])}</option>')
+            out.append(f'<option value="{_e(s["id"])}"{" selected" if s["id"] == subject else ""}>{_e(s["label"])}</option>')
         out.append("</select></label>")
         if auto:
             out.append(f'<label>촬영 시각(메타, UTC) <input name="observed_at" value="{_e(auto)}" size="28"></label>')
@@ -515,8 +521,8 @@ def selfcheck_page() -> tuple[int, str]:
     return 200, _shell("/selfcheck", selfcheck.main_html(report, today), None, "자기 점검")
 
 
-def improve_page(message: str = "", error: str = "", cycle=None) -> tuple[int, str]:
-    return (400 if error else 200), _shell("/improve", chat_pages.improve_main(config.today(), message, error, cycle), None, "개선 · 자율진화")
+def improve_page(message: str = "", error: str = "", cycle=None, subject: str | None = None) -> tuple[int, str]:
+    return (400 if error else 200), _shell("/improve", chat_pages.improve_main(config.today(), message, error, cycle, subject=subject), None, "개선 · 자율진화")
 
 
 def parse_body(content_type: str, raw: bytes) -> tuple[dict[str, str], list[tuple[str, bytes]]]:
@@ -624,6 +630,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(401, render.page("접근 불가", "", "<h1>토큰이 필요하다</h1><p>같은 Wi-Fi 동기화(D-16)는 첫 접속을 <code>?t=&lt;토큰&gt;</code> 으로 한다.</p>", "", ""))
             return
         loc = None
+        # [발행자 2026-10-04 "이 메뉴가 작목마다 있어야 한다"] ?s=<재배 단위 id> — 판단 · 한 일 · 영상 · 고쳐 달라는 말 화면을 그 작목으로 좁힌다(없는 id 면 전체처럼 빈 화면)
+        crop = (parse_qs(urlparse(self.path).query).get("s", [""])[0] or "").strip() or None
         if p == "/running":
             # [발행자 2026-09-23] `update.bat` 이 *"화면이 ed45339 를 돌고 있을 것"* 이라고 **주장**만 했다 — 재지 않았다.
             # 이 트랙이 며칠을 잃은 형태가 바로 그것이다(커밋 완료 ≠ 반영 완료). 배치가 **읽을 수 있는** 줄을 낸다:
@@ -639,7 +647,7 @@ class Handler(BaseHTTPRequestHandler):
         elif p.startswith("/diary/"):
             status, body = diary_page(unquote(p[len("/diary/"):]))
         elif p == "/improve":
-            status, body = improve_page()
+            status, body = improve_page(subject=crop)
         elif p == "/me":
             status, body = me_page()
         elif p == "/me/outlook":
@@ -651,11 +659,11 @@ class Handler(BaseHTTPRequestHandler):
         elif p.startswith("/mall/"):
             status, body = mall_page(unquote(p[len("/mall/"):]))
         elif p == "/media":
-            status, body = media_page()
+            status, body = media_page(subject=crop)
         elif p == "/judge":
-            status, body = judge_page()
+            status, body = judge_page(only=crop)
         elif p == "/events":
-            status, body = events_page()
+            status, body = events_page(subject=crop)
         elif p == "/changes":
             status, body = changes_page()
         elif p.startswith("/doc/"):

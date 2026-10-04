@@ -22,6 +22,24 @@ SIDEBAR: tuple[tuple[str, str], ...] = (
     ("/events", "한 일 · 못 한 이유(표)"),
 )
 MALL = "몰 상세페이지 목업 (M-11)"
+# [발행자 2026-10-04 "이 메뉴가 작목마다 있어야 한다"] 작목(재배 단위)마다 붙는 화면 — 채팅 목록의 각 작목 아래 한 줄. 전체 화면(SIDEBAR)과 짝이고 같은 화면을 그 작목으로 좁혀 연다.
+CROP_SCREENS: tuple[tuple[str, str], ...] = (
+    ("judge", "판단"),
+    ("diary", "일지"),
+    ("events", "한 일 · 못 한 이유"),
+    ("media", "영상"),
+    ("improve", "고쳐 달라는 말"),
+    ("mall", "몰 목업"),
+)
+CROP_GROUP = "화면 — 전체"          # 전체 화면 묶음의 머리(작목별 줄은 각 작목 아래)
+
+
+def crop_screen_href(key: str, sid: str) -> str:
+    """작목별 화면 주소 — 재배 단위로 좁힌다(?s= 또는 경로). 주소 규칙은 여기 하나."""
+    from urllib.parse import quote
+    q = quote(sid)
+    return {"judge": f"/judge?s={q}", "diary": f"/diary/{q}", "events": f"/events?s={q}", "media": f"/media?s={q}",
+            "improve": f"/improve?s={q}", "mall": f"/mall/{q}"}[key]
 # /me 화면의 구역 머리 — 「밭 정보」 가 구역 이름이다(요구 문장 · 보고 · 폼 단추가 같은 말)
 ME_SECTIONS = {"outlook": "장기 전망", "decisions": "결정", "parcel": "밭 정보", "sync": "설정 · 동기화"}
 ME_TITLE = "사용자 정보"
@@ -60,7 +78,7 @@ def retired_in(text: str) -> list[str]:
 
 
 def menu_labels() -> frozenset[str]:
-    out = {NEW_CHAT, MALL, ME_TITLE, PARCEL_SAVE, USER_MENU_ME[1]} | {lab for _, lab in SIDEBAR} | set(ME_SECTIONS.values())
+    out = {NEW_CHAT, MALL, ME_TITLE, PARCEL_SAVE, USER_MENU_ME[1], CROP_GROUP} | {lab for _, lab in SIDEBAR} | set(ME_SECTIONS.values()) | {lab for _, lab in CROP_SCREENS}
     return frozenset(out)
 
 
