@@ -217,6 +217,10 @@ CORPUS = [
     ("싹이 왜 안 나오나", "question", None),
     ("비가 왜 안 오나", "question", None),
     ("잎이 이상한데", "observation.note", None),
+    # [2026-10-04 심은 날 물음 걷기] 부정이 **동사 바로 앞**에 오는 꼴(안 심었 · 못 심었) — 접기(§)가 동사 앞에 붙어 "안에 § 가 끼는" 검사에 안 걸려 파종 **사건**이 됐다(넣으면 심은 날이 선다)
+    ("아직 안 심었어요", "decision.noncompliance", None),
+    ("종구 못 심었다", "decision.noncompliance", None),
+    ("아직 안 뿌렸어요", "decision.noncompliance", None),                                     # 반대편 「비가 안 와서 물 줬다」 는 위에 이미 있다 — 다른 서술어의 부정은 그대로 한 일
 ]
 
 

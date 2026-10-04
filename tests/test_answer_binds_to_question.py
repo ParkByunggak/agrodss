@@ -77,6 +77,6 @@ def test_without_a_pending_question_a_bare_word_is_not_bound():
 def test_the_binding_is_one_place_and_reads_values_with_the_diary_canon():
     src = inspect.getsource(chat._drafts_from_answer)
     assert "known.value_in(f, text)" in src and "subjects.CERT_WORDS" in src and "known.SUBJECT_AXES" in src and "_short_answer(text)" in src
-    assert "_drafts_from_answer(s, text, pend)" in inspect.getsource(chat.send)
+    assert "_drafts_from_answer(s, text, pend, today)" in inspect.getsource(chat.send)
     assert "answers_ask_subject" in chat.PLAIN_BY_KEY
     assert not chat._short_answer(DIARY_LINE) and chat._short_answer("배수는 좋아요")

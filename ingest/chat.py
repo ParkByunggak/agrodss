@@ -253,6 +253,7 @@ PLAIN_BY_KEY = {
     "symptom_alongside": "말씀 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
     "answers_ask": "방금 물었던 것에 대한 답으로 읽었습니다 — 넣기를 누르면 밭 정보에 들어가고 그 값을 판단이 읽습니다",   # [§9 2026-10-03] 어느 값인지는 초안 카드가 말한다
     "answers_ask_subject": "방금 물었던 것에 대한 답으로 읽었습니다 — 넣기를 누르면 이 농사의 정보에 들어가고 그 값을 판단이 읽습니다",   # [2026-10-04] 농사 값(인증) — 밭 정보가 아니다
+    "answers_ask_anchor": "방금 물었던 심은 날에 대한 답으로 읽었습니다 — 날짜만 적으셔서 그 날 심은 것으로 둡니다. 넣기를 누르면 심은 날이 그 날로 들어가고 날짜를 세는 판단이 그 날부터 셉니다",   # [2026-10-04]
     "use_declared": "이 밭의 용도를 말씀하신 것으로 읽었습니다(본 것이 아닙니다) — 넣기를 누르면 밭 정보의 용도가 이 값으로 바뀝니다",   # [2026-10-04] 속성 선언 갈래
     "cert_declared": "이 농사의 인증을 말씀하신 것으로 읽었습니다(본 것이 아닙니다) — 넣기를 누르면 인증이 이 값으로 들어가고 자재·시비 판단이 그 갈래를 봅니다",
     "from_diary": "일지에 이미 적힌 말에서 읽었습니다 — 묻지 않고 올립니다. 맞으면 넣기, 아니면 그냥 두시면 됩니다",                   # [2026-10-04] 묻기 전 원장 읽기
@@ -495,8 +496,8 @@ def _negated_task(text: str) -> tuple[str, int] | None:
             m = re.search("§?".join(re.escape(ch) for ch in w), norm)
             if not m:
                 continue
-            if "§" in m.group(0):
-                return et, m.end()
+            if "§" in m.group(0) or (m.start() > 0 and norm[m.start() - 1] == "§"):
+                return et, m.end()           # [2026-10-04] § 가 **동사 바로 앞**에 붙는 꼴(안 심었 · 못 심었)도 부정 — 두 낱말 짝(약 §쳤)만 보다가 한 낱말 동사를 놓쳐 「아직 안 심었어요」 가 파종 사건이 됐다
             if _PAST_WORD.search(w):
                 continue                     # "물 줬" · "약 쳤" — 이미 한 일. 뒤에 오는 '지 않'은 다른 서술어의 부정이다(§ 가 안에 끼는 형태만 부정)
             a = _NEG_AFTER.match(norm[m.end():])
@@ -951,7 +952,17 @@ def _short_answer(text: str) -> bool:
     return len(t) <= 20 and "," not in t and "." not in t[:-1]
 
 
-def _drafts_from_answer(subject: dict[str, Any], text: str, pend: dict[str, Any]) -> list[dict[str, Any]]:
+def _bare_date(text: str, today: date) -> str | None:
+    """말이 **날짜만**인가(「9월 1일」 「2026-09-01」 「9/1」 「9월 1일이요」) — 그러면 그 날, 아니면 None. 다른 말이 섞이면 분류기가 그대로 본다."""
+    day = parse_day(text, today, past=True)
+    if not day:
+        return None
+    rest = _SLASH.sub("", _MD.sub("", _ISO.sub("", text)))
+    rest = re.sub(r"[이요에입니다날\s.]", "", rest)
+    return day if rest == "" else None
+
+
+def _drafts_from_answer(subject: dict[str, Any], text: str, pend: dict[str, Any], today: date | None = None) -> list[dict[str, Any]]:
     """[WO-ASK-01 §9] 직전 물음에 대한 답 → 그 값의 초안. 물음이 겨냥한 **필지 값**(pend.fields)과 **농사 값**(pend.axes 중 known.SUBJECT_AXES — 인증)을 한 자리에서.
     어휘가 둘 이상이거나 없으면 그 값은 초안을 안 짓는다(지어내지 않는다 — 「인증은 없어요」 는 관행으로 읽지 않는다).
     [2026-10-04 실측] 전에는 필지 값만 · 등록부 글자 그대로만 읽었다 — 인증을 물은 뒤 「무농약」 이 본 것이 되고, 배수를 물은 뒤 「배수는 좋아요」 「물 잘 빠져요」 가 본 것이 됐다
@@ -960,6 +971,13 @@ def _drafts_from_answer(subject: dict[str, Any], text: str, pend: dict[str, Any]
     from ingest import known, parcels
     out: list[dict[str, Any]] = []
     for ax in pend.get("axes") or []:
+        if ax == "anchor":
+            # [2026-10-04 심은 날 물음 걷기] 물음이 「심은 날(파종일)」 이라고 뜻을 정했으니 날짜만 적은 답은 그 날의 파종이다 — 전엔 본 것(statement)으로 떨어져 심은 날이 안 섰다.
+            # 말이 더 있으면(심었어요 · 안 심었어요 · 심을 예정) 분류기가 그대로 본다 — 사건 · 불이행 · 계획.
+            day = _bare_date(text, today or date.today())
+            if day:
+                out.append({"kind": "event", "type": "파종", "observed_at": day, "note": text,
+                            "why": f"직전 물음(심은 날)에 대한 답 — 날짜만 적은 말을 파종일 {day} 로 읽었다 · 확인 뒤 심은 날(subjects.set_anchor)", "why_key": "answers_ask_anchor", "needs": []})
         if ax in known.SUBJECT_AXES and ax == "cert":
             hits = [k for k, ws in subjects.CERT_WORDS.items() if k in text or any(w in text for w in ws)]
             if len(hits) == 1:
@@ -1031,7 +1049,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
                 rec["after_ask"] = {"axes": list(pend.get("axes") or []), "msg": pend.get("msg")}
                 # [WO-ASK-01 §9 2026-10-03] 답이 올 때 그 축의 초안 — 물음이 필지 값(배수)을 겨냥했고 이 말에 등록부 어휘(좋음 · 보통 · 나쁨)가 있으면
                 # **필지 초안**을 맨 앞에 둔다. 등록부에 바로 쓰지 않는다(다른 초안과 같은 길 — 확인 뒤 confirm 이 parcels.set_fields). 어휘가 없으면 초안을 안 짓는다(지어내지 않는다).
-                bound = _drafts_from_answer(s, text, pend)          # 필지 값 · 농사 값(인증) 한 자리
+                bound = _drafts_from_answer(s, text, pend, today)   # 필지 값 · 농사 값(인증) · 심은 날 한 자리
                 if bound:
                     drafts = bound + [d for d in drafts if d.get("kind") != "observation.note" or d.get("why_key") != "statement"]   # 답 한 토막이 '본 것'으로도 서던 것은 걷는다
                     rec["drafts"] = drafts
