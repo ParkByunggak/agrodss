@@ -190,6 +190,22 @@ CORPUS = [
     ("잎이 노랗구나", "observation.note", None),
     ("비가 왔으니까", "observation.note", None),
     ("마른 포기가 둘이나", "observation.note", None),
+    # [문장 형태 2026-10-04] 목적어와 동사 사이의 부사·수량 말 — 두 낱말 짝(물 줬 · 약 쳤 · 풀 뽑)이 깨져 본 것이 되던 한 일(과거 어미는 그대로 있다 — 기존 규칙의 빈칸)
+    ("물 한 번 줬네", "event", None),
+    ("물을 좀 줬다", "event", None),
+    ("물 많이 줬다", "event", None),
+    ("약 조금 쳤다", "event", None),
+    ("풀 좀 뽑았다", "event", None),
+    # 일지 투의 명사형 끝 — 작업 어휘 + 앞날 표지 없음 = 한 일(「방제 완료」 「9/8 트랩 확인」 과 같은 축)
+    ("풀 뽑음", "event", None),
+    ("물 줌", "event", None),
+    ("약 침", "event", None),
+    ("웃거름 줌", "event", None),
+    # 반대편 — 앞날 표지가 있으면 계획 · 작업 어휘 없는 명사형은 본 것 · 활동 이름(-기)은 한 일이 아니다
+    ("내일 물 줌", "plan.farmer", None),
+    ("잎이 노람", "observation.note", None),
+    ("싹이 올라옴", "observation.note", None),
+    ("물 주기", "observation.note", None),
 ]
 
 

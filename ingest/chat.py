@@ -29,7 +29,8 @@ RESOLUTION = "cultivation_unit"
 
 EVENT_SYNONYMS: dict[str, tuple[str, ...]] = {
     "파종": ("파종", "심었", "심음", "씨 뿌", "씨뿌", "종구를"), "정식": ("정식", "옮겨 심", "옮겨심"),
-    "방제": ("방제", "약 쳤", "약을 쳤", "약쳤", "살포", "뿌렸"), "시비": ("시비", "비료", "거름", "웃거름", "밑거름", "추비", "기비", "퇴비"),
+    # [2026-10-04] 방제에 일지 투 명사형 「약 침」(치다 → 침). (첫 판이 이 줄 끝에 주석을 붙여 같은 줄의 시비 항목을 통째로 주석 처리했다 — 말뭉치 7행이 바로 붉어졌다)
+    "방제": ("방제", "약 쳤", "약을 쳤", "약쳤", "살포", "뿌렸", "약 침", "약을 침", "약침"), "시비": ("시비", "비료", "거름", "웃거름", "밑거름", "추비", "기비", "퇴비"),
     # [발행자 실사용 2026-09-21 "오늘 스프링쿨러로 급수함" → 관찰 메모로 제안됐다] '관수' 는 있는데 **'급수' 가 없었다**.
     # 한자어 동의어가 빠져 한 일을 못 읽은 것이다. 장치 이름(스프링쿨러 · 점적)은 넣지 않는다 — "스프링쿨러가 고장났다"가
     # 관수 사건이 된다. 넣는 것은 **한 일을 가리키는 말**뿐이고, 한 일인지는 지금처럼 완료 표지가 가른다("급수 시설이 없다"는 관찰).
@@ -414,10 +415,21 @@ _TIME_OF_DAY = ("오전", "오후", "아침", "저녁", "새벽", "낮에", "밤
 
 
 # ── 분류(2층 — 제안만) ─────────────────────────────────────────────────────────────
+# [문장 형태 2026-10-04] 목적어와 동사 사이에 끼는 **부사·수량 말** — 사건 어휘가 두 낱말 짝(물 줬 · 약 쳤 · 풀 뽑)이라 「물 한 번 줬네」 「약 조금 쳤다」 「풀 좀 뽑았다」 가
+# 짝이 깨져 본 것(또는 엉뚱한 종류 — 풀 좀 뽑았다 → 수확)이 됐다(실측 6/10). 닫힌 목록 · 낱말 단위로만 걷는다(글자 단위면 "다시 심" 의 '다시' 가 걷혀 보식이 사라진다).
+_ADVERBS = ("좀 더", "한 번", "두 번", "세 번", "한번", "두번", "좀", "조금", "많이", "충분히", "살짝", "약간", "흠뻑", "푹", "잔뜩", "듬뿍", "가볍게", "꼼꼼히", "대충", "얼른", "일찍")
+_ADVERB_RE = re.compile(r"(?<![가-힣])(?:" + "|".join(re.escape(a) for a in sorted(_ADVERBS, key=len, reverse=True)) + r")(?![가-힣])\s*")
+
+
+def _fold_adverbs(text: str) -> str:
+    return _ADVERB_RE.sub("", text)
+
+
 def _event_type(text: str) -> str | None:
-    for t, words in EVENT_SYNONYMS.items():
-        if any(w in text for w in words):
-            return t
+    t = _fold_adverbs(text)          # 한 자리 — _event_type 을 쓰는 모든 갈래(사건 · 부정 · 계획 꼬리)가 같은 걷기를 받는다
+    for ty, words in EVENT_SYNONYMS.items():
+        if any(w in t for w in words):
+            return ty
     return None
 
 
@@ -444,10 +456,15 @@ def _past_ending(text: str) -> bool:
     return bool(_DONE_SUFFIX.search(text) and not re.search(r"겠습니다", text))
 
 
+# [문장 형태 2026-10-04] 일지 투의 **명사형 끝**(풀 뽑음 · 물 줌 · 약 침 · 종구 심음) — 작업 어휘가 있고 앞날 표지가 없으면 한 일이다(「방제 완료」 와 같은 축). 사건 갈래에서만 본다 —
+# `_past_ending`(계획 ↔ 한 일 가름)에는 넣지 않는다: 「내일 물 줌」 은 앞날이 먼저 이기고(plan), 여기까지 오는 것은 앞날 표지가 없는 말뿐이다. 명사(점검 · 작업)는 끝이 음/줌/침이 아니다.
+_CLIPPED_DONE = re.compile(r"(?:[가-힣]음|줌|침)\s*$")
+
+
 def _done_evidence(text: str) -> bool:
     if any((ord(ch) - 0xAC00) % 28 == 20 for ch in text if "가" <= ch <= "힣"):   # 받침 ㅆ = 과거 어미
         return True
-    if _DONE_SUFFIX.search(text):
+    if _DONE_SUFFIX.search(text) or _CLIPPED_DONE.search(text):
         return True
     return bool(_ISO.search(text) or _MD.search(text) or _SLASH.search(text) or _AGO.search(text) or any(w in text for w in _REL))
 
