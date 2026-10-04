@@ -176,6 +176,20 @@ CORPUS = [
     ("인증은 무농약이다", "subject.field", None),
     ("관행 재배다", "subject.field", None),
     ("유기질 비료를 줬다", "event", None),                                         # 반대편 — 자재 말은 선언이 아니다(한 일)
+    # [대파 걷기 2026-10-04] 종결 의문 어미(-나 · -냐 · -ㅂ니까) — 쪽파 · 대파 둘 다 '본 것' 으로 적혔던 물음(물음표 없는 물음의 남은 갈래)
+    ("물 줘야 하나", "question", "drought_alert"),
+    ("병충해 뭐 봐야 하나", "question", "risk_alert"),
+    ("비료 뭐 주나", "question", "material_citation"),
+    ("서리 오나", "question", "risk_alert"),
+    ("약 쳐야 하냐", "question", "material_citation"),
+    ("물을 줘야 합니까", "question", "drought_alert"),
+    ("비가 오면 뭐 하나", "question", "risk_alert"),                                 # 의문사 뒤 「하나」 는 셈말이 아니다
+    ("언제 수확하나", "question", "harvest_timing"),
+    # 반대편 — 끝이 같아도 물음이 아닌 것: 셈말 「하나」 · 감탄 「-구나」 · 이유 「-니까」(ㅂ 받침 없음) · 셈 「-이나」
+    ("노란 포기가 하나", "observation.note", None),
+    ("잎이 노랗구나", "observation.note", None),
+    ("비가 왔으니까", "observation.note", None),
+    ("마른 포기가 둘이나", "observation.note", None),
 ]
 
 

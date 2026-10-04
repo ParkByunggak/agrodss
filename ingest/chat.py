@@ -128,6 +128,38 @@ def _indirect_question(t: str) -> bool:
     return "가" <= prev <= "힣" and (ord(prev) - 0xAC00) % 28 in (4, 8)      # 받침 ㄴ · ㄹ
 
 
+# [대파 걷기 2026-10-04] 평서 의문 어미 — 「-나 · -냐 · -ㅂ니까」. 실측: 「물 줘야 하나」 「병충해 뭐 봐야 하나」 「비료 뭐 주나」 「서리 오나」 가 쪽파 · 대파 **둘 다**
+# '본 것' 으로 적혔다(물음이 일지 초안이 된다) — 물음표 없는 물음 15 중 8(2026-09-21) 과 같은 형태인데 그때는 간접 의문(-는지)만 넓혔고 종결 의문 어미는 남았다.
+# 용도 선언 · 되묻기 불평 다음의 네 번째 오분류 형태다(발행자 "셋을 따로 고치지 말고 하나로 묶으라" — 물음 판정은 _classify 의 그 한 줄에서만).
+_Q_WH = ("뭐", "뭘", "무엇", "무얼", "어떻게", "언제", "왜", "어찌", "어디", "누가")
+_NOT_Q_TAILS = ("구나", "거나", "으나", "이나", "니까")     # 감탄 · 나열 · 대조 · 셈(둘이나) · 이유 — 끝이 같아도 물음이 아니다(「-ㅂ니까」 만 아래서 되살린다)
+
+
+def _plain_interrogative(t: str) -> bool:
+    """끝이 **종결 의문 어미**인가 — 줘야 하나 · 봐야 하나 · 주나 · 오나 · 하냐 · 합니까.
+
+    경계(실측으로 잡았다): 「하나」 는 셈말이기도 하다(노란 포기가 하나) — 앞 말이 '…야'(해야 · 줘야 · 봐야)이거나 의문사(뭐 · 어떻게 …)일 때만
+    물음. 「-구나」(감탄) · 「-거나 · -으나 · -이나」(나열 · 대조 · 셈) · 「-니까」(이유)는 뺀다 — 단 「-ㅂ니까」(합니까 · 습니까 · 입니까)는 물음이다.
+    """
+    s = t.strip().rstrip("?!. ").rstrip()
+    if s.endswith("요"):
+        s = s[:-1].rstrip()          # 존대 꼴 — 「주나요」 는 Q_WORDS('나요')가 이미 보지만 「합니까요」 같은 꼴도 같은 규칙으로
+    if len(s) < 2:
+        return False
+    if s.endswith("냐"):
+        return True
+    if s.endswith("까"):
+        if s.endswith("니까"):
+            return len(s) >= 3 and "가" <= s[-3] <= "힣" and (ord(s[-3]) - 0xAC00) % 28 == 17      # ㅂ 받침(합 · 습 · 입) → 물음 · 「오니까」 는 이유
+        return True
+    if not s.endswith("나") or any(s.endswith(x) for x in _NOT_Q_TAILS):
+        return False
+    toks = s.split()
+    if toks[-1] == "하나":
+        return len(toks) >= 2 and (toks[-2].endswith("야") or toks[-2] in _Q_WH)
+    return True
+
+
 _WEATHER_NOUNS = ("날씨", "기온", "예보", "기상", "전망", "강수량", "강수 확률", "비 올 확률")
 _Q_TYPOS = ("어떄", "어떼", "어뗘", "어떤가", "어떤지", "어때")
 
@@ -589,8 +621,8 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
     # 종류는 규칙이 정하고 내용(날짜 · 사건 종류)은 지어내지 않는다 — 없으면 needs 로 남긴다. 확인에서 사람이 종류를 바꿀 수 있다.
     if any(w in t for w in REQ_WORDS) and not _farm_work_not_a_request(t):
         return [{"kind": "feedback.request", "text": t, "target": "other", "why": "교정·요구 어휘"}]
-    if "?" in t or any(w in t for w in Q_WORDS) or _indirect_question(t) or _weather_ask(t):
-        return [{"kind": "question", "why": "물음표·의문·요청형 어휘"}]     # 물음 안의 증상은 classify() 말미가 관찰로도 세운다
+    if "?" in t or any(w in t for w in Q_WORDS) or _indirect_question(t) or _plain_interrogative(t) or _weather_ask(t):
+        return [{"kind": "question", "why": "물음표·의문·요청형 어휘"}]     # 물음 안의 증상은 classify() 말미가 관찰로도 세운다 · 종결 의문 어미(-나 · -냐 · -ㅂ니까)도 여기
     et = _event_type(t)
     # [처방 직후 전수 2026-09-20 · C15 형태] 교정 어휘를 고친 직후 같은 형태를 다른 갈래에서 셌다 — **갈래 어휘가 밭일 서술 안에
     # 들어 있으면 그 갈래가 사건보다 먼저 가로챈다**. 실측: "계획대로 웃거름을 줬다" · "예정대로 파종했다" → 계획(한 일이 계획이 된다).
