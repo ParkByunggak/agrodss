@@ -33,6 +33,7 @@ NO_SUBJECT = "심은 날이 적힌 목록이 없어 점검할 재료가 없다 �
 PROBES_PATH = str(_probes.PATH)
 PROBES_TITLE = "문장 형태 점검 — 같은 명사 × 다른 어미 · 같은 뜻 × 다른 표현"
 FILL_ME = "기대 종류 — 발행자가 붙일 것"
+PROBES_BROKEN = "문장 목록 파일을 못 읽었다 — 다른 점검은 그대로 돈다"
 NO_ROUTE = "어느 판단으로도 안 간다"
 
 
@@ -60,8 +61,13 @@ def _route_said(route: str | None) -> str:
 
 def utterances(today: date, subject: dict[str, Any] | None) -> dict[str, Any]:
     """문장마다 실제 종류(classify — 순수 함수)와 경로. 기대가 있는 줄만 맞다/다르다 · 없는 줄은 None(발행자가 붙일 것)."""
-    from ingest import chat
-    doc = probes()
+    from ingest import chat, dropped
+    try:
+        doc = probes()
+    except (OSError, ValueError) as ex:                       # 깨진 목록 — 화면이 죽지 않고 이유를 말한다(조용한 실패 금지 · 결정 답 파일과 같은 형태) · /changes 에도 남긴다
+        why = f"{type(ex).__name__}: {ex}"
+        dropped.note(_probes.DROP_WHERE, _probes.PATH.name, why)
+        return {"groups": [], "with_expected": 0, "without_expected": 0, "ok": 0, "differ": 0, "error": why}
     groups, with_e, without_e, ok_n, differ = [], 0, 0, 0, 0
     for g in doc.get("groups", []):
         rows = []
@@ -90,6 +96,8 @@ def utterances(today: date, subject: dict[str, Any] | None) -> dict[str, Any]:
 def _utterance_html(u: dict[str, Any] | None, e) -> str:
     if not u:
         return ""
+    if u.get("error"):
+        return f'<h2 style="font-size:15px;margin-top:18px">{e(PROBES_TITLE)}</h2><p class="err">{e(PROBES_BROKEN)} — {e(u["error"])}</p>'
     out = [f'<h2 style="font-size:15px;margin-top:18px">{e(PROBES_TITLE)}</h2>',
            f'<p class="meta">기대 있는 줄 {u["with_expected"]} — 맞음 {u["ok"]} · 다름 {u["differ"]} · 기대 없는 줄 {u["without_expected"]}. 기대 종류는 발행자가 붙입니다(세션이 붙이면 채점자와 응시자가 같습니다) — 「문장 — 종류」 한 줄씩 세션에 보내시면 됩니다. 다른 줄은 규칙이 못 나눈 사례로 쌓입니다(비교 세트 재료).</p>']
     for g in u["groups"]:

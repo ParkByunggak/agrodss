@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 PATH = Path(__file__).resolve().parent.parent / "data" / "utterance_probes.json"
+DROP_WHERE = "문장 목록"          # /changes 「읽다 버린 것」 의 '어디' 열 — 목록 파일이 깨졌을 때
 KINDS = ("question", "event", "observation.note", "plan.farmer", "plan.target_date", "feedback.request", "decision.noncompliance", "subject.end", "parcel.field", "subject.field")
 
 
