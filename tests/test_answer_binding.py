@@ -68,9 +68,9 @@ def test_a_field_no_judgment_reads_is_never_bound_even_if_asked(monkeypatch):
     """§5-1 은 여기서도 선다 — 물음 기록이 소비자 0 인 값을 겨냥했어도(앞으로의 결함) 초안을 짓지 않고 그 사실을 남긴다."""
     dropped.clear()
     s = media.load_subjects()[0]
-    out = chat._parcel_drafts_from_answer(s, "경사는 급경사", ["slope"])
+    out = chat._drafts_from_answer(s, "경사는 급경사", {"axes": ["soil_water"], "fields": ["slope"]})          # [2026-10-04] 필지 값 · 농사 값 한 자리로 — 물음 기록(pend) 을 그대로 받는다
     assert out == [] and any(d["where"] == asks.DROP_WHERE and d["path"].endswith("/slope") for d in dropped.all_drops())
-    assert [d["field"] for d in chat._parcel_drafts_from_answer(s, "배수 보통", ["drainage"])] == ["drainage"]
+    assert [d["field"] for d in chat._drafts_from_answer(s, "배수 보통", {"axes": ["soil_water"], "fields": ["drainage"]})] == ["drainage"]
 
 
 def test_the_card_shows_the_value_in_farmer_words_and_no_date_box():

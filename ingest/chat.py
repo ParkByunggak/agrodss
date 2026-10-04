@@ -252,6 +252,7 @@ PLAIN_BY_KEY = {
     "asked_about_symptom": "물으신 말 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
     "symptom_alongside": "말씀 안에 밭에서 보신 것(증상)이 있어 본 것으로도 적어 둡니다 — 원문 그대로",
     "answers_ask": "방금 물었던 것에 대한 답으로 읽었습니다 — 넣기를 누르면 밭 정보에 들어가고 그 값을 판단이 읽습니다",   # [§9 2026-10-03] 어느 값인지는 초안 카드가 말한다
+    "answers_ask_subject": "방금 물었던 것에 대한 답으로 읽었습니다 — 넣기를 누르면 이 농사의 정보에 들어가고 그 값을 판단이 읽습니다",   # [2026-10-04] 농사 값(인증) — 밭 정보가 아니다
     "use_declared": "이 밭의 용도를 말씀하신 것으로 읽었습니다(본 것이 아닙니다) — 넣기를 누르면 밭 정보의 용도가 이 값으로 바뀝니다",   # [2026-10-04] 속성 선언 갈래
     "cert_declared": "이 농사의 인증을 말씀하신 것으로 읽었습니다(본 것이 아닙니다) — 넣기를 누르면 인증이 이 값으로 들어가고 자재·시비 판단이 그 갈래를 봅니다",
     "from_diary": "일지에 이미 적힌 말에서 읽었습니다 — 묻지 않고 올립니다. 맞으면 넣기, 아니면 그냥 두시면 됩니다",                   # [2026-10-04] 묻기 전 원장 읽기
@@ -926,24 +927,40 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
 INPUT_MODES = ("text", "voice", "file")
 
 
-def _parcel_drafts_from_answer(subject: dict[str, Any], text: str, fields: list[str]) -> list[dict[str, Any]]:
-    """[WO-ASK-01 §9] 물음이 겨냥한 필지 값(fields)마다 이 말에서 **등록부 어휘** 하나를 찾아 초안으로. 어휘가 둘 이상이거나 없으면 그 값은 초안을 안 짓는다(지어내지 않는다).
+def _short_answer(text: str) -> bool:
+    """물음에 대한 **짧은 답**인가 — 한 토막(스무 글자 안 · 쉼표 없음). 「배수는 좋아요」 「물 잘 빠져요」 는 답이고, 「밭에 나가 확인하니 고랑 물 빠짐이 잘 되고 있고, …」 는 일지 줄이다."""
+    t = (text or "").strip()
+    return len(t) <= 20 and "," not in t and "." not in t[:-1]
+
+
+def _drafts_from_answer(subject: dict[str, Any], text: str, pend: dict[str, Any]) -> list[dict[str, Any]]:
+    """[WO-ASK-01 §9] 직전 물음에 대한 답 → 그 값의 초안. 물음이 겨냥한 **필지 값**(pend.fields)과 **농사 값**(pend.axes 중 known.SUBJECT_AXES — 인증)을 한 자리에서.
+    어휘가 둘 이상이거나 없으면 그 값은 초안을 안 짓는다(지어내지 않는다 — 「인증은 없어요」 는 관행으로 읽지 않는다).
+    [2026-10-04 실측] 전에는 필지 값만 · 등록부 글자 그대로만 읽었다 — 인증을 물은 뒤 「무농약」 이 본 것이 되고, 배수를 물은 뒤 「배수는 좋아요」 「물 잘 빠져요」 가 본 것이 됐다
+    (「좋음」 만 묶였다). 값 읽기는 일지 읽기와 같은 정본(known.value_in — 등록부 어휘 + 일지 말) 하나로.
     읽는 판정이 없는 값(§5-1)은 물음이 못 만들지만 여기서도 한 번 더 막는다(관문의 입력)."""
-    from ingest import parcels
-    out = []
+    from ingest import known, parcels
+    out: list[dict[str, Any]] = []
+    for ax in pend.get("axes") or []:
+        if ax in known.SUBJECT_AXES and ax == "cert":
+            hits = [k for k, ws in subjects.CERT_WORDS.items() if k in text or any(w in text for w in ws)]
+            if len(hits) == 1:
+                out.append({"kind": "subject.field", "subject": subject.get("id"), "field": "cert", "value": hits[0], "text": text,
+                            "why": f"직전 물음(인증)에 대한 답 — 어휘 '{hits[0]}' 를 읽었다 · 확인 뒤 subjects.set_cert", "why_key": "answers_ask_subject", "needs": []})
     pid = subject.get("parcel")
     if not pid:
         return out
-    for f in fields:
+    for f in pend.get("fields") or []:
         if f not in parcels.FIELDS_READ_BY_JUDGMENT:
             dropped.note(asks.DROP_WHERE, f"{subject.get('id')}/{f}", "읽는 판정이 없는 필지 값의 답 — 초안을 짓지 않는다(§5-1)")
             continue
-        opts = parcels.FIELD_CHOICES.get(f) or ()
-        hit = [o for o in opts if o in text]
-        if len(hit) != 1:
+        value = known.value_in(f, text)                     # 등록부 어휘 그대로(좋음) 도 · 일지 말(물 잘 빠져요) 도 — 둘 이상 걸리면 None
+        if not value:
             continue
-        out.append({"kind": "parcel.field", "parcel": pid, "field": f, "value": hit[0], "text": text,
-                    "why": f"직전 물음({parcels.FIELD_WORDS.get(f, f)})에 대한 답 — 등록부 어휘 '{hit[0]}' 를 읽었다 · 확인 뒤 parcels.set_fields", "why_key": "answers_ask", "needs": []})
+        if value not in text and not _short_answer(text):
+            continue                                        # 일지 말로 읽은 값은 **짧은 답**일 때만 묶는다 — 긴 관찰 문장(발행자 10-03 일지 줄)은 본 것으로 남아 일지에 들어가고, 카드는 known 이 일지에서 올린다
+        out.append({"kind": "parcel.field", "parcel": pid, "field": f, "value": value, "text": text,
+                    "why": f"직전 물음({parcels.FIELD_WORDS.get(f, f)})에 대한 답 — 어휘 '{value}' 를 읽었다 · 확인 뒤 parcels.set_fields", "why_key": "answers_ask", "needs": []})
     return out
 
 
@@ -996,7 +1013,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
                 rec["after_ask"] = {"axes": list(pend.get("axes") or []), "msg": pend.get("msg")}
                 # [WO-ASK-01 §9 2026-10-03] 답이 올 때 그 축의 초안 — 물음이 필지 값(배수)을 겨냥했고 이 말에 등록부 어휘(좋음 · 보통 · 나쁨)가 있으면
                 # **필지 초안**을 맨 앞에 둔다. 등록부에 바로 쓰지 않는다(다른 초안과 같은 길 — 확인 뒤 confirm 이 parcels.set_fields). 어휘가 없으면 초안을 안 짓는다(지어내지 않는다).
-                bound = _parcel_drafts_from_answer(s, text, pend.get("fields") or [])
+                bound = _drafts_from_answer(s, text, pend)          # 필지 값 · 농사 값(인증) 한 자리
                 if bound:
                     drafts = bound + [d for d in drafts if d.get("kind") != "observation.note" or d.get("why_key") != "statement"]   # 답 한 토막이 '본 것'으로도 서던 것은 걷는다
                     rec["drafts"] = drafts
