@@ -61,5 +61,5 @@ def test_a_crop_value_question_is_still_counted_per_crop():
 
 def test_the_cross_parcel_count_goes_through_the_same_sibling_canon_and_keys_by_field():
     src = inspect.getsource(questions.top)
-    assert "known.parcel_siblings(subject)" in src and "parcels.FIELDS_READ_BY_JUDGMENT" in src
+    assert "known.parcel_siblings(subject)" in src and "known.PARCEL_SHARED_FIELDS" in src       # 밭이 공유하는 값만 — 용도는 작목의 것
     assert 'q.get("field") in parcel_fields' in src                                   # 축 이름이 아니라 필드로 가른다

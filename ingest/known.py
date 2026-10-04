@@ -54,6 +54,13 @@ def mentions(field: str, text: str) -> bool:
     return any(w in t for w in FIELD_MENTIONS.get(field, ()))
 
 
+# [둘째 작목 2026-10-04] 같은 밭의 모든 작목이 **공유하는** 밭 정보 값 — 물리적으로 밭의 것(배수 · 노지/시설). 용도는 등록부에 밭 값으로 있지만 **선언은 작목의 것**이다
+# ("이 쪽파는 종구생산을 위한 목적이다" 가 같은 밭의 대파까지 종구로 만들지 않는다) → 다른 작목의 일지로는 읽지 않는다(보수적인 쪽). 용도가 밭 값인지 작목 값인지는
+# 둘째 작목이 서자 갈린 설계 물음이라 발행자 결정(등재 여부 다리 B) — 여기서는 범위만 좁힌다.
+PARCEL_SHARED_FIELDS: tuple[str, ...] = ("drainage", "environment")
+assert set(PARCEL_SHARED_FIELDS) <= set(parcels.FIELDS_READ_BY_JUDGMENT) and "use" not in PARCEL_SHARED_FIELDS
+
+
 def parcel_siblings(subject: dict[str, Any]) -> list[str]:
     """같은 필지에 선 작목(재배 단위) 전부 — 자기 자신 포함. **필지 값(배수 · 용도)은 필지의 것**이라 어느 작목의 일지에 적혔든 같은 사실이다.
     [대파 걷기 2026-10-04] 쪽파 일지의 「고랑 물 빠짐이 잘 되고 있다」 를 같은 밭(p001)의 대파가 못 읽어 배수를 다시 물을 자리였다 — 원장을 작목 단위로만 읽은 것(묻기 전
@@ -78,13 +85,13 @@ def _hit(field: str, o: dict[str, Any], value: str | None) -> dict[str, Any]:
 
 
 def known_field(subject: dict[str, Any], field: str) -> dict[str, Any] | None:
-    """세 층을 순서대로 — ① 속성 ② 관찰 원장(**같은 필지의 모든 작목** · 최근 먼저 · 그 값을 **언급**한 첫 줄) ③ None. 관찰 항목은 값이 없을 수 있다(언급만)."""
+    """세 층을 순서대로 — ① 속성 ② 관찰 원장(밭이 공유하는 값은 **같은 필지의 모든 작목** · 아니면 그 작목만 · 최근 먼저 · 그 값을 **언급**한 첫 줄) ③ None. 관찰 항목은 값이 없을 수 있다(언급만)."""
     pid = subject.get("parcel") or ""
     p = parcels.by_id(pid) if pid else None
     attr = (p or {}).get(field)
     if attr not in (None, ""):
         return {"from": "attribute", "field": field, "value": attr}
-    for o in _observations(parcel_siblings(subject)):
+    for o in _observations(parcel_siblings(subject) if field in PARCEL_SHARED_FIELDS else [subject.get("id")]):
         text = str(o.get("text") or "")
         if mentions(field, text):
             return _hit(field, o, value_in(field, text))
@@ -97,7 +104,7 @@ def known_use_differs(subject: dict[str, Any]) -> dict[str, Any] | None:
     pid = subject.get("parcel") or ""
     p = parcels.by_id(pid) if pid else None
     cur = str((p or {}).get("use") or "")
-    for o in _observations(parcel_siblings(subject)):         # 용도도 필지 값 — 같은 밭의 모든 작목 일지
+    for o in _observations([subject.get("id")]):              # 용도 선언은 작목의 것 — 그 작목의 일지만(PARCEL_SHARED_FIELDS 밖 · 위 주석)
         text = str(o.get("text") or "")
         v = parcels.use_declared(text)
         if not v:

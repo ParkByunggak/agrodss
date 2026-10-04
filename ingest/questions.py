@@ -101,8 +101,8 @@ def top(subject_id: str, envs: list[Any], subject: dict[str, Any] | None = None)
     # [2026-10-04 필지 값은 필지의 것] 밭 정보 값(배수 · 용도 · 환경 — 물음의 field)을 물은 횟수는 **같은 밭의 모든 작목**에 걸쳐 센다 — 쪽파 채팅에서 세 번 안 답한 배수를
     # 대파 채팅이 세 번 더 묻지 않게(「모르겠다」 신호도 필지의 것). 농사 값(인증)은 작목마다 따로 — 그 작목의 횟수만(known 의 가름과 같다).
     # 원장은 축(soil_water)으로 세고 필지 값은 field(drainage)로 가른다 — 축 이름과 필드 이름은 다르다(첫 판이 축 이름으로 걸러 한 건도 안 더해졌다 · 검사가 잡았다).
-    from ingest import known, parcels
-    parcel_fields = set(parcels.FIELDS_READ_BY_JUDGMENT)
+    from ingest import known
+    parcel_fields = set(known.PARCEL_SHARED_FIELDS)        # 밭이 공유하는 값만(배수 · 노지/시설) — 용도는 작목의 것(known 과 같은 가름)
     others = [sib for sib in known.parcel_siblings(subject) if sib != subject_id] if subject else []
     for q in cands:
         total = counts.get(q["axis"], 0)

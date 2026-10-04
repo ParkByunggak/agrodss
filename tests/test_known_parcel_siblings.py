@@ -57,8 +57,20 @@ def test_a_crop_on_another_parcel_does_not_read_this_parcels_diary_and_cert_stay
     assert known.known_subject_field(subjects.by_id(SID), "cert")                            # 쪽파 자신은 읽는다
 
 
-def test_parcel_readers_go_through_the_sibling_canon_and_the_crop_reader_does_not():
-    for fn in (known.known_field, known.known_use_differs):
-        assert "_observations(parcel_siblings(subject))" in inspect.getsource(fn), fn.__name__
-    assert "parcel_siblings" not in inspect.getsource(known.known_subject_field)
-    assert "known.parcel_siblings(s)" in inspect.getsource(chat.send)                        # 채팅도 같은 밭의 카드를 한 번만
+def test_a_use_declared_in_one_crops_diary_does_not_become_the_other_crops_card():
+    """용도는 등록부엔 밭 값이지만 선언은 작목의 것 — 「이 쪽파는 종구생산을 위한 목적이다」 가 같은 밭의 대파에 종구 카드를 세우면 틀린다(밭 값인지 작목 값인지는 발행자 결정)."""
+    sid2 = _second()
+    m, _ = chat.send(SID, "이 쪽파는 종구생산을 위한 목적이다", today=T, now=NOW)
+    assert m["drafts"][0]["kind"] == "parcel.field" and m["drafts"][0]["field"] == "use"      # 쪽파 채팅엔 카드(선언 갈래)
+    assert known.known_use_differs(subjects.by_id(sid2)) is None                              # 대파는 그 선언을 자기 것으로 읽지 않는다
+    m2, _ = chat.send(sid2, "오늘 물 줬다", today=T, now=NOW)
+    assert not any(x.get("kind") == "parcel.field" and x.get("field") == "use" for x in m2["drafts"])
+    assert "use" not in known.PARCEL_SHARED_FIELDS and set(known.PARCEL_SHARED_FIELDS) == {"drainage", "environment"}
+
+
+def test_parcel_readers_go_through_the_sibling_canon_and_the_crop_readers_do_not():
+    src = inspect.getsource(known.known_field)
+    assert "parcel_siblings(subject) if field in PARCEL_SHARED_FIELDS else" in src              # 밭이 공유하는 값만 같은 밭 전체
+    for fn in (known.known_use_differs, known.known_subject_field):
+        assert "parcel_siblings" not in inspect.getsource(fn), fn.__name__                      # 용도 선언 · 인증은 작목의 것
+    assert "known.parcel_siblings(s)" in inspect.getsource(chat.send) and "known.PARCEL_SHARED_FIELDS" in inspect.getsource(chat.send)   # 채팅도 같은 밭의 카드를 한 번만 — 공유 값만

@@ -979,7 +979,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
             already |= {(d.get("field"), d.get("value")) for d in drafts if d.get("kind") in ("parcel.field", "subject.field")}
             for sib in known.parcel_siblings(s):          # [2026-10-04] 밭 정보 값은 필지의 것 — 같은 밭의 다른 작목 채팅에 이미 선 카드를 여기 또 올리지 않는다(묻지도 않는다 — known 이 그 일지를 읽는다)
                 if sib != subject_id:
-                    already |= {(d.get("field"), d.get("value")) for _, _, d in pending_drafts(sib) if d.get("kind") == "parcel.field"}
+                    already |= {(d.get("field"), d.get("value")) for _, _, d in pending_drafts(sib) if d.get("kind") == "parcel.field" and d.get("field") in known.PARCEL_SHARED_FIELDS}
             props = known.proposals(s, parcels.FIELDS_READ_BY_JUDGMENT, already, subject_fields=tuple(subjects.SUBJECT_FIELD_CONSUMERS))
         except (OSError, ValueError) as e:
             props = []
