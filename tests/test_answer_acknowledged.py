@@ -47,6 +47,6 @@ def test_a_bound_field_answer_does_not_get_the_line_twice_and_an_unprompted_mess
 
 def test_the_line_is_one_place_and_names_the_decision_from_the_ask_ledger():
     src = inspect.getsource(chat.send)
-    assert "_answered_line(subject_id, rec[\"after_ask\"])" in src
+    assert "_answered_line(subject_id, " in src and "_answers_axis(" in src            # 한 자리 — 축에 맞는 말에만(처방 직후 전수)
     hsrc = inspect.getsource(chat._answered_line)
     assert "asks.for_subject" in hsrc and ".decision(" in hsrc and ".axis(" in hsrc                  # 판단 · 축 이름은 사람 말 정본(frontend.words)에서

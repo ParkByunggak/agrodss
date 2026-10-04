@@ -929,6 +929,20 @@ INPUT_MODES = ("text", "voice", "file")
 
 
 ANSWERED_AS = "방금 물었던 것"      # 답이 물음에 이어진 말이라고 말하는 표지 — §9 문면(answers_ask)과 같은 머리말
+_RAIN_WORDS = ("비", "강수", "빗", "소나기", "장마")
+
+
+def _answers_axis(axis: str, draft: dict[str, Any]) -> bool:
+    """이 초안이 그 축의 **답**인가 — 비 온 날(precip) ← 관수 한 일 · 비 관찰 / 심은 날(anchor) ← 파종·정식 한 일 / 증상(observation) ← 본 것. 밭 정보 값 · 농사 값은 §9 묶기만이 답이고,
+    발행자 몫 축(예보 받기)은 농가 말이 답이 아니다. 어느 쪽도 아니면 줄을 안 붙인다(거짓 줄은 없는 줄보다 나쁘다)."""
+    kind, text = draft.get("kind"), str(draft.get("text") or draft.get("note") or "")
+    if axis == "precip":
+        return (kind == "event" and draft.get("type") == "관수") or (kind == "observation.note" and any(w in text for w in _RAIN_WORDS))
+    if axis == "anchor":
+        return kind == "event" and draft.get("type") in ("파종", "정식")
+    if axis == "observation":
+        return kind == "observation.note"
+    return False
 
 
 def _answered_line(subject_id: str, after_ask: dict[str, Any]) -> str:
@@ -1119,8 +1133,12 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         reply_text = f"{plain_why(d)}. '{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
     # [§12 2026-10-04] 밭 정보 값이 아닌 물음(비 온 날 · 물 준 날)에 답한 말 — 기록은 섰는데 답이 "본 것으로 적었습니다" 만 말했다. 묶인 초안이 없고 직전 물음에 이어진 말이면
     # 「방금 물었던 것에 대한 답으로도 읽었습니다 — 넣으면 어느 판단이 읽는지」 한 줄(판단 이름은 묻기 원장의 decision). 묶인 답(§9)은 그 문면이 이미 말하니 두 번 안 붙인다.
-    if rec.get("after_ask") and drafts and not any(d.get("why_key") in ("answers_ask", "answers_ask_subject") for d in drafts):
-        reply_text += _answered_line(subject_id, rec["after_ask"])
+    # [처방 직후 전수 2026-10-04] after_ask 는 "물음 뒤 처음 온 말" 의 기록이고, 줄은 **그 말이 그 축의 답일 때만** — 배수를 물은 뒤 「오늘 대파도 심었어요」 에 「방금 물었던 것(토양 수분)에
+    # 대한 답」 이 붙었다(거짓). 축마다 무엇이 답인지는 _answers_axis 한 자리(비 온 날 ← 관수 · 비 관찰 / 심은 날 ← 파종·정식 / 증상 ← 본 것 · 밭 정보 값은 §9 묶기만).
+    if rec.get("after_ask") and drafts and not any(d.get("why_key") in ("answers_ask", "answers_ask_subject", "answers_ask_anchor") for d in drafts):
+        fit = [ax for ax in (rec["after_ask"].get("axes") or []) if any(_answers_axis(ax, d) for d in drafts)]
+        if fit:
+            reply_text += _answered_line(subject_id, {"axes": fit})
     if media_refs and drafts:
         reply_text = media_line + reply_text
     if not asked:
