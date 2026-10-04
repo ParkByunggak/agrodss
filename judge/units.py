@@ -30,7 +30,21 @@ assert set(MISS_KIND) == set(grid_schema.REASONS), f"격자 사유 갈래와 봉
 def envelope_for(miss: grid_schema.UnitMiss, decision_id: str, sid: str, as_of: str) -> Envelope:
     """격자를 못 읽었을 때 그 결정이 내는 봉투. **해당 없음을 내지 않는다** — 할 일이 아니었던 것이 아니다."""
     kind = MISS_KIND[miss.reason]
-    missing = ([need("격자 정본", "발행자", f"깨진 재배 달력 파일 고치기 — {miss.fixer}", "publisher", "재배 달력이 읽혀야 이 판단이 선다")]
-               if kind == "판단 불가(데이터)" else [])
-    return Envelope(kind, decision_id, sid, as_of, missing=missing,
-                    result={"why": miss.why, "summary": miss.summary, "grid_unit_miss": miss.reason})
+    # [대파 걷기 2026-10-04] 달력이 없는 작목(발행자 화면의 대파)은 셋 다 **발행자 몫**이다 — 전엔 unreadable 만 요구 문장이 있어 「누가 · 어디서」 없이 「서면 열린다」 만 나갔다(§2).
+    # 2026-09-21 의 "지식 미비에는 missing 을 채우지 않는다 — 농가가 채울 것이 아니다" 는 요구 문장이 농가 것뿐일 때의 결정이었다 — 이제 누가(발행자)를 적는 자리가 있다.
+    # 달력 자체는 지식이라 세션이 짓지 않는다 — 요구는 "만들기를 세션에 요청" 까지다.
+    # 봉투 계약: missing 은 판단 불가(데이터)에서만 — 지식 쪽은 result["who"](화면이 why 옆에 낸다 · 채팅 요약도)로 같은 요구 문장(need 가 만든 것)을 싣는다.
+    who = None
+    if kind == "판단 불가(데이터)":
+        missing = [need("격자 정본", "발행자", f"깨진 재배 달력 파일 고치기 — {miss.fixer}", "publisher", "재배 달력이 읽혀야 이 판단이 선다")]
+    else:
+        missing = []
+        if miss.reason == "no_file":
+            who = need("격자 정본", "발행자", f"재배 달력 파일 이름 어긋남 고치기(가리키는 이름 {miss.unit_id})", "publisher", "재배 달력이 읽혀야 이 판단이 선다")["who_can_fill"]
+        else:
+            who = need("격자 정본", "발행자", "이 작목·작기의 재배 달력 만들기(지식 — 세션에 「작목 · 작기 달력」 요청 한 줄)", "publisher",
+                       "달력이 서야 수확 시기 · 위험 · 할 일 판단이 선다")["who_can_fill"]
+    result = {"why": miss.why, "summary": miss.summary, "grid_unit_miss": miss.reason}
+    if who:
+        result["who"] = who
+    return Envelope(kind, decision_id, sid, as_of, missing=missing, result=result)

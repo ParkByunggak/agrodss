@@ -800,6 +800,9 @@ def summarize_envelope(e: Any, plain: bool = True) -> str:
         # 로 **축 안쪽 이름**을 냈다(/judge 는 words.axis 로 옮기고 있었다 — 두 화면이 어긋난 형태). 축 이름도 여기서 사람 말로(정확한 이름은 /judge 의 title 에 남는다)
         miss = " · ".join(f"{words.axis(m.get('axis')) if plain else m.get('axis')}: {m.get('who_can_fill')}" for m in (e.missing or []))
         out = f"{head} {body}" + (f" — 채울 사람: {miss}" if miss else "")
+        # [대파 걷기 2026-10-04] 지식 쪽(재배 달력 없음 · 이름 어긋남)은 missing 이 비어 있고 누가 · 어디서가 result.who 에 있다(judge.units) — 채팅 답도 그것을 말한다(/judge 와 같은 줄)
+        if r.get("who") and not miss:
+            out += f" — 채울 사람: {r['who']}"
         return words.plain(out) if plain else out
     out = _judged_line(e, r, head)
     return words.plain(out) if plain else out

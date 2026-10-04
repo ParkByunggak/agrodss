@@ -93,7 +93,9 @@ def test_no_grid_is_a_knowledge_gap_not_not_applicable():
     env = H.judge({"id": "s", "anchor": "2026-08-25"}, today=TODAY)
     assert env.kind == "판단 불가(지식)"
     assert env.result["grid_unit_miss"] == "unlinked"
-    assert not env.missing, "지식 미비에는 missing 을 채우지 않는다 — 농가가 채울 것이 아니다"
+    assert not env.missing, "지식 미비에는 missing 을 채우지 않는다(봉투 계약) — 누가 채우는지는 result.who 가 말한다"
+    # [대파 걷기 2026-10-04] 농가가 채울 것은 아니지만 **발행자가** 채울 것이다 — 요구 문장(누가 · 어디서)이 who 로 선다(전엔 "서면 열린다" 만 나갔다)
+    assert env.result["who"].startswith("발행자 — 이 작목·작기의 재배 달력 만들기")
 
 
 def test_knowledge_gap_precedes_data_gap(tmp_path, monkeypatch):
