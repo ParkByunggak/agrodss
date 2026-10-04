@@ -206,6 +206,17 @@ CORPUS = [
     ("잎이 노람", "observation.note", None),
     ("싹이 올라옴", "observation.note", None),
     ("물 주기", "observation.note", None),
+    # [문장 형태 2026-10-04 · 발행자 "「왜 …는가」 → 항의"] 시스템을 향한 항의 — 교정 어휘 없이 오는 두 꼴(왜 + 묻는 동사 · 시스템 명사 + 불평 서술)
+    ("왜 자꾸 같은 걸 묻지", "feedback.request", None),
+    ("같은 질문을 왜 반복하나", "feedback.request", None),
+    ("답이 이상한데", "feedback.request", None),
+    ("답이 말이 안 된다", "feedback.request", None),
+    ("화면이 안 뜬다", "feedback.request", None),
+    ("답이 왜 이래", "feedback.request", None),
+    # 반대편 — 밭을 향한 왜는 물음 · 시스템 명사 없는 이상은 본 것 그대로
+    ("싹이 왜 안 나오나", "question", None),
+    ("비가 왜 안 오나", "question", None),
+    ("잎이 이상한데", "observation.note", None),
 ]
 
 

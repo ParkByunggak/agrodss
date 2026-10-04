@@ -573,6 +573,21 @@ def _damage_risk(text: str) -> str | None:
     return NO_DAMAGE if negated else None
 
 
+# [문장 형태 2026-10-04 · 발행자 "「왜 …는가」 → 항의" · 10-04 "되묻기 불평 → 교정"] 시스템을 향한 항의가 교정 어휘 없이 오는 두 꼴 — 실측 22문장 중 10이 물음·본 것으로 떨어졌다.
+#   ① 「왜」 + 묻는 동사(묻 · 물어 · 질문 · 반복) — "왜 자꾸 같은 걸 묻지" · "같은 질문을 왜 반복하나". 밭을 향한 왜("잎이 왜 노랗나요")는 이 동사가 없어 물음 그대로.
+#   ② 시스템 명사(답 · 화면 · 알림 · 경보 · 판정 · 제안 · 카드 …) + 불평 서술(이상 · 말이 안 · 엉뚱 · 다른 답 · 안 뜬 · 깨진 · 늦 …) — "답이 이상한데" · "화면이 안 뜬다".
+#   '이상' 홀로는 여전히 안 쓴다(2026-09-19 — "잎이 이상하다" 는 관찰) · 일지 · 기록은 농가 자기 것을 가리키기도 해 명사 목록에서 뺐다.
+_SYS_NOUNS = ("답", "답변", "화면", "알림", "경보", "판정", "제안", "카드", "앱", "시스템", "메시지")
+_SYS_COMPLAINT = ("이상", "말이 안", "아닌 것 같", "아닌 듯", "엉뚱", "다른 답", "왜 이래", "안 뜬", "안 뜨", "안 보여", "안 보인", "깨진", "깨져", "늦", "느리", "멈췄", "먹통")
+_ASK_VERBS = ("묻", "물어", "물었", "질문", "반복")
+
+
+def _system_complaint(t: str) -> bool:
+    if "왜" in t and any(v in t for v in _ASK_VERBS):
+        return True
+    return any(n in t for n in _SYS_NOUNS) and any(c in t for c in _SYS_COMPLAINT)
+
+
 def _farm_work_not_a_request(t: str) -> bool:
     """[C15] 교정 어휘가 있어도 **밭일 서술**이면 개선 요구가 아니다.
 
@@ -636,8 +651,8 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
     # [발행자 2026-09-19] "질문을 분석하고 그 성격을 분류해서 내부 로직으로" — 사람에게 종류를 고르라고 넘기지 않는다.
     # 순서: 교정 요구(시스템을 향한 동사) → 질문(물음표 · 의문 · 요청형) → 계획 → 피해 → 사건 → 관찰 어휘 → 서술문은 관찰 메모.
     # 종류는 규칙이 정하고 내용(날짜 · 사건 종류)은 지어내지 않는다 — 없으면 needs 로 남긴다. 확인에서 사람이 종류를 바꿀 수 있다.
-    if any(w in t for w in REQ_WORDS) and not _farm_work_not_a_request(t):
-        return [{"kind": "feedback.request", "text": t, "target": "other", "why": "교정·요구 어휘"}]
+    if (any(w in t for w in REQ_WORDS) or _system_complaint(t)) and not _farm_work_not_a_request(t):
+        return [{"kind": "feedback.request", "text": t, "target": "other", "why": "교정·요구 어휘"}]     # 시스템을 향한 항의(왜 … 묻 · 답이 이상)도 여기
     if "?" in t or any(w in t for w in Q_WORDS) or _indirect_question(t) or _plain_interrogative(t) or _weather_ask(t):
         return [{"kind": "question", "why": "물음표·의문·요청형 어휘"}]     # 물음 안의 증상은 classify() 말미가 관찰로도 세운다 · 종결 의문 어미(-나 · -냐 · -ㅂ니까)도 여기
     et = _event_type(t)
