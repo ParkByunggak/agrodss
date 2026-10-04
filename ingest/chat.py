@@ -927,6 +927,24 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
 INPUT_MODES = ("text", "voice", "file")
 
 
+ANSWERED_AS = "방금 물었던 것"      # 답이 물음에 이어진 말이라고 말하는 표지 — §9 문면(answers_ask)과 같은 머리말
+
+
+def _answered_line(subject_id: str, after_ask: dict[str, Any]) -> str:
+    """직전 물음에 이어진 말(묶인 초안은 없음) 뒤에 붙는 한 줄 — 어느 물음(축)에 대한 답으로 읽었고 넣으면 어느 판단이 읽는가. 판단 이름은 묻기 원장(asks)의 decision · 둘 다 사람 말 정본."""
+    from frontend import words as _w
+    axes = [str(a) for a in (after_ask.get("axes") or []) if a]
+    if not axes:
+        return ""
+    try:
+        rows = {r["axis"]: r for r in asks.for_subject(subject_id)}
+    except (OSError, ValueError):
+        rows = {}
+    decisions = list(dict.fromkeys(_w.decision(rows[a]["decision"]) for a in axes if rows.get(a, {}).get("decision")))
+    who = " · ".join(decisions) if decisions else "판단"
+    return f" {ANSWERED_AS}({' · '.join(_w.axis(a) for a in axes)})에 대한 답으로도 읽었습니다 — '{CONFIRM_LABEL}' 를 누르면 {who}이 그 날을 읽습니다."
+
+
 def _short_answer(text: str) -> bool:
     """물음에 대한 **짧은 답**인가 — 한 토막(스무 글자 안 · 쉼표 없음). 「배수는 좋아요」 「물 잘 빠져요」 는 답이고, 「밭에 나가 확인하니 고랑 물 빠짐이 잘 되고 있고, …」 는 일지 줄이다."""
     t = (text or "").strip()
@@ -1081,6 +1099,10 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         _append(dict(msg))
         d = drafts[0]
         reply_text = f"{plain_why(d)}. '{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
+    # [§12 2026-10-04] 밭 정보 값이 아닌 물음(비 온 날 · 물 준 날)에 답한 말 — 기록은 섰는데 답이 "본 것으로 적었습니다" 만 말했다. 묶인 초안이 없고 직전 물음에 이어진 말이면
+    # 「방금 물었던 것에 대한 답으로도 읽었습니다 — 넣으면 어느 판단이 읽는지」 한 줄(판단 이름은 묻기 원장의 decision). 묶인 답(§9)은 그 문면이 이미 말하니 두 번 안 붙인다.
+    if rec.get("after_ask") and drafts and not any(d.get("why_key") in ("answers_ask", "answers_ask_subject") for d in drafts):
+        reply_text += _answered_line(subject_id, rec["after_ask"])
     if media_refs and drafts:
         reply_text = media_line + reply_text
     if not asked:
