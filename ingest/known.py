@@ -54,19 +54,40 @@ def mentions(field: str, text: str) -> bool:
     return any(w in t for w in FIELD_MENTIONS.get(field, ()))
 
 
+def parcel_siblings(subject: dict[str, Any]) -> list[str]:
+    """같은 필지에 선 작목(재배 단위) 전부 — 자기 자신 포함. **필지 값(배수 · 용도)은 필지의 것**이라 어느 작목의 일지에 적혔든 같은 사실이다.
+    [대파 걷기 2026-10-04] 쪽파 일지의 「고랑 물 빠짐이 잘 되고 있다」 를 같은 밭(p001)의 대파가 못 읽어 배수를 다시 물을 자리였다 — 원장을 작목 단위로만 읽은 것(묻기 전
+    원장 읽기 규칙의 §7.5 지점 판: 규칙은 섰는데 읽는 범위가 좁았다). 농사 값(인증)은 작목의 것이라 여기 안 탄다(known_subject_field)."""
+    pid = subject.get("parcel") or ""
+    ids = [s["id"] for s in subjects.load() if pid and (s.get("parcel") or "") == pid]
+    me = subject.get("id")
+    if me and me not in ids:
+        ids.append(me)
+    return ids
+
+
+def _observations(sids: list[str]) -> list[dict[str, Any]]:
+    """여러 작목의 본 것(관찰)을 한 줄로 — 최근 먼저(관찰한 날 · 적은 때)."""
+    obs = [o for sid in sids for o in ev.list_records(sid, "observation.note")]
+    return sorted(obs, key=lambda o: (str(o.get("observed_at") or ""), str(o.get("recorded_at") or "")), reverse=True)
+
+
+def _hit(field: str, o: dict[str, Any], value: str | None) -> dict[str, Any]:
+    return {"from": "observation", "field": field, "value": value, "id": o.get("id"), "observed_at": str(o.get("observed_at") or "")[:10],
+            "text": str(o.get("text") or ""), "subject": o.get("subject")}        # subject — 어느 작목의 일지였는지(같은 밭의 다른 작목이면 카드가 그것을 말한다)
+
+
 def known_field(subject: dict[str, Any], field: str) -> dict[str, Any] | None:
-    """세 층을 순서대로 — ① 속성 ② 관찰 원장(최근 먼저 · 그 값을 **언급**한 첫 줄) ③ None. 관찰 항목은 값이 없을 수 있다(언급만)."""
+    """세 층을 순서대로 — ① 속성 ② 관찰 원장(**같은 필지의 모든 작목** · 최근 먼저 · 그 값을 **언급**한 첫 줄) ③ None. 관찰 항목은 값이 없을 수 있다(언급만)."""
     pid = subject.get("parcel") or ""
     p = parcels.by_id(pid) if pid else None
     attr = (p or {}).get(field)
     if attr not in (None, ""):
         return {"from": "attribute", "field": field, "value": attr}
-    obs = sorted(ev.list_records(subject.get("id"), "observation.note"), key=lambda o: (str(o.get("observed_at") or ""), str(o.get("recorded_at") or "")), reverse=True)
-    for o in obs:
+    for o in _observations(parcel_siblings(subject)):
         text = str(o.get("text") or "")
         if mentions(field, text):
-            return {"from": "observation", "field": field, "value": value_in(field, text), "id": o.get("id"),
-                    "observed_at": str(o.get("observed_at") or "")[:10], "text": text}
+            return _hit(field, o, value_in(field, text))
     return None
 
 
@@ -76,15 +97,14 @@ def known_use_differs(subject: dict[str, Any]) -> dict[str, Any] | None:
     pid = subject.get("parcel") or ""
     p = parcels.by_id(pid) if pid else None
     cur = str((p or {}).get("use") or "")
-    obs = sorted(ev.list_records(subject.get("id"), "observation.note"), key=lambda o: (str(o.get("observed_at") or ""), str(o.get("recorded_at") or "")), reverse=True)
-    for o in obs:
+    for o in _observations(parcel_siblings(subject)):         # 용도도 필지 값 — 같은 밭의 모든 작목 일지
         text = str(o.get("text") or "")
         v = parcels.use_declared(text)
         if not v:
             continue
         if v == cur or (grid_schema.use_key(v) and grid_schema.use_key(v) == grid_schema.use_key(cur)):
             return None                                       # 이미 그 용도다
-        return {"from": "observation", "field": "use", "value": v, "id": o.get("id"), "observed_at": str(o.get("observed_at") or "")[:10], "text": text}
+        return _hit("use", o, v)
     return None
 
 
@@ -95,12 +115,11 @@ def known_subject_field(subject: dict[str, Any], field: str) -> dict[str, Any] |
     cur = subject.get("cert")
     if cur:
         return {"from": "attribute", "field": field, "value": cur}
-    obs = sorted(ev.list_records(subject.get("id"), "observation.note"), key=lambda o: (str(o.get("observed_at") or ""), str(o.get("recorded_at") or "")), reverse=True)
-    for o in obs:
+    for o in _observations([subject.get("id")]):               # 농사 값은 그 작목의 일지만 — 같은 밭이라도 인증은 작목마다 다를 수 있다
         text = str(o.get("text") or "")
         v = subjects.cert_declared(text)
         if v:
-            return {"from": "observation", "field": field, "value": v, "id": o.get("id"), "observed_at": str(o.get("observed_at") or "")[:10], "text": text}
+            return _hit(field, o, v)
     return None
 
 
@@ -124,7 +143,9 @@ def proposals(subject: dict[str, Any], fields: tuple[str, ...] | list[str], alre
             continue
         if (f, k["value"]) in already:
             continue
+        other = k.get("subject") if k.get("subject") not in (None, subject.get("id")) else None
+        whose = f"(같은 밭의 다른 작목 {(subjects.by_id(other) or {}).get('label', other)} 일지)" if other else ""
         out.append({"kind": "parcel.field", "parcel": pid, "field": f, "value": k["value"], "text": k["text"],
-                    "why": f"일지 {k['observed_at']} 관찰({k['id']})에서 읽은 {parcels.FIELD_WORDS.get(f, f)} '{k['value']}' — 묻지 않고 초안으로(확인 뒤 parcels.set_fields)",
+                    "why": f"일지 {k['observed_at']} 관찰({k['id']}){whose}에서 읽은 {parcels.FIELD_WORDS.get(f, f)} '{k['value']}' — 묻지 않고 초안으로(확인 뒤 parcels.set_fields)",
                     "why_key": "from_diary", "source_ref": k["id"], "observed_at": k["observed_at"], "needs": []})
     return out
