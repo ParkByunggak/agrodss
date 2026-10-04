@@ -786,11 +786,11 @@ def improve_main(today: date, message: str = "", error: str = "", cycle: dict[st
 def mall_main(view: dict[str, Any]) -> str:
     """[M-11] 소비자가 볼 상세페이지의 목업 — 영상 시계열이 본문이다. 내부 화면 안에서만 렌더된다(D-6)."""
     out = [f'<div class="thead"><div><h1>{_e(view["title"])} <span class="pill plan">목업 · 내부</span></h1>'
-           f'<div class="meta">상품 = 재배 단위 {_e(view["product_id"])} · {_e(view["status"])} · 기준점({_e(view.get("anchor_kind") or "")}) 후 {_e(view.get("days_since_anchor"))}일 · {_e(view["as_of"])}</div></div>'
+           f'<div class="meta">상품 = 농사 {_e(view["product_id"])} · {_e(view["status"])} · 심은 날({_e(view.get("anchor_kind") or "")}) 뒤 {_e(view.get("days_since_anchor"))}일 · {_e(view["as_of"])}</div></div>'   # [작목별 메뉴 처방 직후 전수 2026-10-04] 농가 화면 — 사람 말로
            f'<div><a href="/c/{quote(view["product_id"])}">대화로</a></div></div><div class="msgs">']
     out.append(f'<div class="card"><b>인증 표기</b> {_e(view["cert_label"])}</div>')
     out.append(f'<div class="card"><b>현장 영상 {view["clips_total"]}건</b> — {_e(view["editing_rule"])}</div>')
-    out.append('<h2 style="font-size:14px">촬영 시계열 (격자 촬영 칸 — 연속성이 상품)</h2>')
+    out.append('<h2 style="font-size:14px">촬영 시계열 (재배 달력의 촬영 단계 — 연속성이 상품)</h2>')
     for t in view["timeline"]:
         cls = {"촬영됨": "kind-판단함", "촬영 창 열림": "kind-판단불가"}.get(t["state"], "")
         out.append(f'<div class="card {cls}"><span class="k">{_e(t["stage"])}</span><b>{_e(t["state"])}</b><div>{_e(t["scene"])}</div><div style="color:var(--muted);font-size:12px">창 {_e(t["window"])}</div>')

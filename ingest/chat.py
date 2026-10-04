@@ -755,7 +755,7 @@ def answer_with_asks(subject: dict[str, Any], text: str, today: date) -> tuple[s
         said = [ev.said_observation(subject["id"], text, today.isoformat())]
         e = next((x for x in judge_run.judgments_for(subject["id"], today=today, said=said) if x.decision_id == "symptom_triage"), None)
         if e is None:
-            return f"{dont_know}. 이 목록은 아직 판정을 낼 재료(기준점·격자)가 없습니다. {can}.", []
+            return f"{dont_know}. 이 농사는 아직 판단을 낼 재료(심은 날 · 재배 달력)가 없습니다. {can}.", []     # [2026-10-04 전수] 농가 문장 — 안쪽 말(기준점 · 격자) 금지
         # [D-18 반영 2026-09-28 실측] 봉투 줄 뒤에 마침표 없이 이어 붙어 "근거: 짐작 지어내지 않습니다" 로 읽혔다 — 문장 경계를 둔다
         return f"{summarize_envelope(e).rstrip('.')}. 지어내지 않습니다. {can}.", asked_in(e)
     did = topic_of(text)
@@ -766,7 +766,7 @@ def answer_with_asks(subject: dict[str, Any], text: str, today: date) -> tuple[s
     envs = judge_run.judgments_for(subject["id"], today=today)
     e = next((x for x in envs if x.decision_id == did), None)
     if e is None:
-        return "판단 불가(데이터) — 이 목록은 아직 판정을 낼 재료(기준점·격자)가 없다", []
+        return f"{_w.said('판단 불가(데이터)')} — 이 농사는 아직 판단을 낼 재료(심은 날 · 재배 달력)가 없습니다. {can}.", []     # [2026-10-04 전수] 종류 이름도 사람 말 정본으로
     out = summarize_envelope(e)
     if did == "drought_alert":
         # [U-40 둘째 2026-10-03 "오늘 관수가 반영 안 됐다 — 초안 미확인인지 배선인지"] 그 갈림을 답이 말한다: 일지에 넣지 않은 관수·비 기록이 있으면 판단은 그것을 못 읽는다

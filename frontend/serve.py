@@ -330,7 +330,8 @@ def judge_page(only: str | None = None) -> tuple[int, str]:
 
 def events_page(message: str = "", error: str = "", subject: str | None = None) -> tuple[int, str]:
     subjects = media.load_subjects()
-    out = ["<h1>사건 · 불이행 사유 — 1층 기록</h1>"]
+    # [작목별 메뉴 처방 직후 전수 2026-10-04] 작목 줄(판단 · 일지 · 한 일 · 영상 · 고쳐 달라는 말 · 몰)이 농가를 이 화면으로 보낸다 — 농가 화면이다(FARMER_PAGES). 안쪽 말(사건 · 불이행 · 재배 단위 · 기준점 · 1층)을 사람 말로
+    out = ["<h1>한 일 · 못 한 이유 — 기록</h1>"]
     if subject:   # [발행자 2026-10-04 "이 메뉴가 작목마다"] 그 작목만 — 폼의 목록 칸도 그 작목으로 미리 골라진다
         out.append(f'<p class="meta">작목 「{_e(next((s["label"] for s in subjects if s["id"] == subject), subject))}」 만 봅니다 — <a href="/events">전체 보기</a></p>')
     if error:
@@ -339,14 +340,14 @@ def events_page(message: str = "", error: str = "", subject: str | None = None) 
         out.append(f'<p class="ok">{_e(message)}</p>')
     sel = "".join(f'<option value="{_e(s["id"])}"{" selected" if s["id"] == subject else ""}>{_e(s["label"])}</option>' for s in subjects)
     types = "".join(f'<option value="{_e(t)}">{_e(t)}</option>' for t in ev.EVENT_TYPES)
-    out.append('<h2>사건 추가</h2><form method="post" action="/events/add" class="reg">')
-    out.append(f'<label>재배 단위 <select name="subject">{sel}</select></label>')
+    out.append('<h2>한 일 추가</h2><form method="post" action="/events/add" class="reg">')
+    out.append(f'<label>농사 <select name="subject">{sel}</select></label>')
     out.append(f'<label>종류 <select name="type">{types}</select></label>')
     out.append('<label>일어난 날 <input name="observed_at" placeholder="2026-09-19" size="14"> <span class="meta">없으면 기록되지 않는다</span></label>')
     out.append('<label>자재(쉼표) <input name="materials" size="40" placeholder="예: 비티박사, 님오일"></label>')
     out.append('<label>메모 <input name="note" size="40"></label><button type="submit">기록</button></form>')
-    out.append('<h2>불이행 사유 (계획을 안 따른 이유)</h2><form method="post" action="/events/reason" class="reg">')
-    out.append(f'<label>재배 단위 <select name="subject">{sel}</select></label>')
+    out.append('<h2>못 한 이유 (계획을 안 따른 이유)</h2><form method="post" action="/events/reason" class="reg">')
+    out.append(f'<label>농사 <select name="subject">{sel}</select></label>')
     out.append('<label>계획 작업명 <input name="planned_task" size="30" placeholder="예: 예찰(트랩 · 육안)"></label>')
     out.append('<label>계획 작업일 <input name="planned_day" size="14" placeholder="2026-09-08"></label>')
     out.append('<label>사유 <input name="reason" size="50" placeholder="예: 트랩을 못 구했다 / 비가 계속 왔다 / 필요 없다고 봤다"></label>')
@@ -354,16 +355,16 @@ def events_page(message: str = "", error: str = "", subject: str | None = None) 
     recs = ev.list_records(subject or None)
     out.append(f"<h2>기록 ({len(recs)})</h2>")
     if recs:
-        out.append("<table><tr><th>종류</th><th>재배 단위</th><th>대상 시각</th><th>내용</th><th>기록 시각</th></tr>" + "".join(
+        out.append("<table><tr><th>종류</th><th>농사</th><th>일어난 날</th><th>내용</th><th>기록 시각</th></tr>" + "".join(
             f"<tr><td>{_e(r.get('type') or r.get('kind'))}</td><td>{_e(r.get('subject'))}</td><td>{_e(r.get('observed_at'))}</td>"
             f"<td>{_e(r.get('reason') or r.get('note') or '')} {_e(', '.join(r.get('materials') or []))}</td><td>{_e(render.local_time(r.get('recorded_at')))}</td></tr>"
             for r in reversed(recs)) + "</table>")
     else:
-        out.append("<p>아직 없다. 파종은 기준점(재배 단위 등록부)이 사건을 대신한다.</p>")
+        out.append("<p>아직 없다. 파종은 심은 날(새 채팅의 심은 날 칸)이 한 일을 대신한다.</p>")
     style = ""      # [U-35] 폼·알림 스타일은 render.CSS 정본 하나 — 여기 두 벌 인라인이던 것을 뺐다(U-34 가 둘 다 고쳐야 했다)
     footer = footer_text()
     return (400 if error else 200), render.page("AGRODSS —사건", nav_html("/events"), style + "".join(out),
-                                                "사건(I-3 §2) · 결정(§5 불이행 사유) — 대상 시각 없이는 기록되지 않는다", footer)
+                                                "한 일 · 못 한 이유 — 일어난 날 없이는 기록되지 않는다", footer)
 
 
 def media_page(message: str = "", error: str = "", subject: str | None = None) -> tuple[int, str]:
@@ -371,23 +372,23 @@ def media_page(message: str = "", error: str = "", subject: str | None = None) -
     items = media.list_inbox()
     records = [media.public_view(r) for r in media.list_records(subject or None)]
     watch = media.watch_dirs()
-    out = ["<h1>영상 반입 — 관찰(영상) 1층 등록</h1>"]
+    out = ["<h1>영상 반입 — 밭에서 찍은 영상</h1>"]      # [작목별 메뉴 처방 직후 전수 2026-10-04] 농가 화면 — 안쪽 말(1층 · 격자 · 기준점 · 재배 단위)을 사람 말로
     if subject:   # [발행자 2026-10-04 "이 메뉴가 작목마다"] 그 작목의 영상만 · 등록 폼의 목록 칸도 그 작목으로
         out.append(f'<p class="meta">작목 「{_e(next((s["label"] for s in subjects if s["id"] == subject), subject))}」 만 봅니다 — <a href="/media">전체 보기</a></p>')
     if error:
         out.append(f'<p class="err"><b>등록 안 됨</b> — {_e(error)}</p>')
     if message:
         out.append(f'<p class="ok">{_e(message)}</p>')
-    out.append("<h2>지금 찍을 장면 (격자 촬영 칸)</h2><ul>")
+    out.append("<h2>지금 찍을 장면 (재배 달력의 촬영 단계)</h2><ul>")
     for s in subjects:
         h = grid_capture.hint_for(s, config.today())
         if h is None:
-            out.append(f"<li><b>{_e(s['label'])}</b> — 격자 또는 기준점 없음</li>")
+            out.append(f"<li><b>{_e(s['label'])}</b> — 재배 달력 또는 심은 날 없음</li>")
         elif h["stage"] is None:
-            out.append(f"<li><b>{_e(s['label'])}</b> — 기준점 후 {h['day']}일: 격자 창 밖(단계 없음)</li>")
+            out.append(f"<li><b>{_e(s['label'])}</b> — 심은 날 뒤 {h['day']}일: 재배 달력 기간 밖(단계 없음)</li>")
         else:
             what = f"<b>찍는다</b> — {_e(h['scene'])}" if h["shoot"] else "이 단계는 촬영 칸이 아니다"
-            out.append(f"<li><b>{_e(s['label'])}</b> — 기준점 후 <b>{h['day']}일</b> · 단계 {_e(h['stage'])} "
+            out.append(f"<li><b>{_e(s['label'])}</b> — 심은 날 뒤 <b>{h['day']}일</b> · 단계 {_e(h['stage'])} "
                        f"({h['window'][0]}~{h['window'][1]}일) · {what}</li>")
     out.append("</ul>")
     out.append("<h2>어디서 들어오나</h2><ul>")
@@ -413,7 +414,7 @@ def media_page(message: str = "", error: str = "", subject: str | None = None) -
                    f'{_e(pr.get("duration_sec"))}s · 위치 {"있음" if pr.get("gps") else "없음"}</span></div>')
         if pr.get("error"):
             out.append(f'<div class="meta">메타 판독: {_e(pr["error"])}</div>')
-        out.append('<label>재배 단위 <select name="subject">')
+        out.append('<label>농사 <select name="subject">')
         for s in subjects:
             out.append(f'<option value="{_e(s["id"])}"{" selected" if s["id"] == subject else ""}>{_e(s["label"])}</option>')
         out.append("</select></label>")
@@ -426,7 +427,7 @@ def media_page(message: str = "", error: str = "", subject: str | None = None) -
         out.append('<button type="submit">등록</button></form>')
     out.append(f"<h2>등록된 영상 ({len(records)})</h2>")
     if records:
-        out.append("<table><tr><th>관측 시각</th><th>재배 단위</th><th>파일</th><th>해상도</th><th>길이</th>"
+        out.append("<table><tr><th>찍은 때</th><th>농사</th><th>파일</th><th>해상도</th><th>길이</th>"
                    "<th>위치</th><th>시각 출처</th><th>메모</th></tr>")
         for r in sorted(records, key=lambda r: r["observed_at"], reverse=True):
             out.append(f'<tr><td>{_e(r["observed_at"])}</td><td>{_e(r["subject"])}</td><td><code>{_e(r["file"])}</code></td>'
@@ -436,7 +437,7 @@ def media_page(message: str = "", error: str = "", subject: str | None = None) -
     else:
         out.append("<p>아직 없다.</p>")
     style = ""      # [U-35] 폼·알림 스타일은 render.CSS 정본 하나 — 여기 두 벌 인라인이던 것을 뺐다(U-34 가 둘 다 고쳐야 했다)
-    meta = "1층 관찰(영상) — 촬영 시각 · 출처 · 해상도가 붙어야 등록된다. 좌표는 화면에 내지 않는다"
+    meta = "밭에서 찍은 영상 — 촬영 시각 · 출처 · 해상도가 붙어야 등록된다. 좌표는 화면에 내지 않는다"
     footer = footer_text()
     return (400 if error else 200), render.page("AGRODSS —영상 반입", nav_html("/media"), style + "".join(out), meta, footer)
 

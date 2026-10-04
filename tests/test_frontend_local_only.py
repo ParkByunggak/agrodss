@@ -153,7 +153,7 @@ def test_judge_page_shows_kind_first(monkeypatch):
         assert "계획 대 실제" in page and "이행" in page              # M-10 ③
         conn.request("GET", "/events")
         resp = conn.getresponse()
-        assert resp.status == 200 and "불이행 사유" in resp.read().decode("utf-8")
+        assert resp.status == 200 and "못 한 이유" in resp.read().decode("utf-8")      # [2026-10-04 농가 화면 전수] 사람 말 — 안쪽 이름(불이행)은 화면에 안 낸다
         body = "subject=p001-jjokpa-2026f&type=%EC%98%88%EC%B0%B0&observed_at=&note="
         conn.request("POST", "/events/add", body=body,
                      headers={"Content-Type": "application/x-www-form-urlencoded", "Content-Length": str(len(body))})
@@ -185,7 +185,7 @@ def test_media_page_get_and_bad_register(monkeypatch):
         resp = conn.getresponse()
         page = resp.read().decode("utf-8")
         assert resp.status == 200 and "영상 반입" in page
-        assert "지금 찍을 장면" in page and "기준점 후" in page   # 격자 촬영 칸이 화면에 실린다
+        assert "지금 찍을 장면" in page and "심은 날 뒤" in page   # 격자 촬영 칸이 화면에 실린다(사람 말 — 2026-10-04 농가 화면 전수)
         body = "key=inbox%3Anope.mp4&subject=p001-jjokpa-2026f&observed_at=&note="
         conn.request("POST", "/media/register", body=body,
                      headers={"Content-Type": "application/x-www-form-urlencoded", "Content-Length": str(len(body))})
