@@ -970,7 +970,8 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         d = drafts[0]
         from frontend import words as _w
         word = parcels.FIELD_WORDS.get(d["field"]) or subjects.SUBJECT_FIELD_WORDS.get(d["field"], d["field"])
-        place = "밭 정보에 들어갑니다(밭 정보 화면에서 언제든 고칠 수 있습니다)" if d["kind"] == "parcel.field" else "이 농사의 정보에 들어갑니다"
+        from schema import labels as _labels
+        place = (f"밭 정보에 들어갑니다({_labels.PLACES['parcel']} 에서 언제든 고칠 수 있습니다)" if d["kind"] == "parcel.field" else "이 농사의 정보에 들어갑니다")   # 어디서 — 화면 이름 계약
         reply_text = (f"{plain_why(d)} — {word}: {d['value']}. '{CONFIRM_LABEL}' 를 누르면 {place}. "
                       + _w.opened(d["field"], d["value"]))   # [§12] 이 답이 연 판단 — 문장은 words.opened 하나(폼 · 확인 줄과 같은 자리)
     elif drafts:

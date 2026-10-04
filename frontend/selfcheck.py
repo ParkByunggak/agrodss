@@ -83,7 +83,8 @@ def main_html(report: dict[str, Any], today: date) -> str:
     """채팅 셸의 본문. 시스템 문장은 낱말 표를 거친다(농가가 쓴 글은 여기 없다 — 물음 문장은 이 파일의 것)."""
     from frontend import words
     e = html.escape
-    out = ['<div class="thead"><div><h1>자기 점검 — 화면이 스스로 확인한 것</h1><div class="meta">'
+    from schema import labels
+    out = [f'<div class="thead"><div><h1>{e(labels.label("/selfcheck"))}한 것</h1><div class="meta">'     # 머리 = 왼쪽 메뉴 이름 + 한 것(이름은 계약 하나에서)
            '발행자가 손으로 치던 확인을 화면이 같은 길로 돌려 본 결과입니다. 일지에는 아무것도 넣지 않습니다. 이 화면을 열 때마다 다시 돕니다.'
            '</div></div><div><a href="/judge">판단</a></div></div><div class="msgs">']
     s = report["subject"]

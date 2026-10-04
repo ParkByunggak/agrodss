@@ -63,7 +63,7 @@ def test_user_menu_items_all_resolve(srv):
         r = c.getresponse()
         r.read()
         assert r.status in (200, 302), (href, label, r.status)
-    assert [it[1] for it in chat_pages.USER_MENU if it][:2] == ["설정", "도움 받기"]        # 스크린샷 형식의 첫 두 항목
+    assert [it[1] for it in chat_pages.USER_MENU if it][:2] == ["밭 정보 · 설정", "도움 받기"]        # 스크린샷 형식의 첫 두 항목 — /me 는 왼쪽 메뉴와 같은 이름(10-04)
     # 스크린샷 형식 → agrodss 실재 항목 대응표(고정 기대 — 목록 자체를 기대로 쓰면 항목이 빠져도 못 잡는다: 주입 F 실측)
     assert {it[0] for it in chat_pages.USER_MENU if it} == {"/me", "/doc/m13_chat_screen.md", "/", "/judge", "/events", "/media", "/improve",
                                                             "/me#sync", "/changes", "/doc/agrodss_backlog.md"}

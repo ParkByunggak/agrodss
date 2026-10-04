@@ -30,7 +30,7 @@ def test_the_unrecoverable_risks_missing_value_comes_first_then_farmer_asks_then
     assert [q["axis"] for q in c][:2] == ["soil_water", "precip"], [q["axis"] for q in c]
     first = c[0]
     assert first["decision"] == "risk_alert" and first["field"] == "drainage" and first["priority"] == 0
-    assert "배수(좋음 · 보통 · 나쁨 중 하나)" in first["who_can_fill"] and "밭 정보 화면" in first["who_can_fill"] and "회복 불가" in first["who_can_fill"]
+    assert "배수(좋음 · 보통 · 나쁨 중 하나)" in first["who_can_fill"] and "「밭 정보」" in first["who_can_fill"] and "회복 불가" in first["who_can_fill"]   # 어디서 = 화면 이름 계약
     assert all(q["priority"] <= 3 for q in c) and [q["priority"] for q in c] == sorted(q["priority"] for q in c)
     assert len({q["axis"] for q in c}) == len(c)                                 # 같은 축은 한 번
 

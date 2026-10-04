@@ -11,6 +11,7 @@ from urllib.parse import quote
 
 from frontend import config, render, words
 from grid import capture as grid_capture
+from schema import labels
 from ingest import asks, chat, events as ev, feedback as fb, media, parcels, profile, subjects
 from judge import evolve, registry, run as judge_run
 
@@ -151,7 +152,7 @@ def shell(title: str, side: str, main: str, panel: str | None, footer: str) -> s
 def sidebar(current: str, docs: list[str], today: date) -> str:
     # [발행자 2026-09-19] 좌측 상단 탭 = AGRODSS(대문자) · 홈(/) 링크 · 모든 화면에 있다
     # [§7.5 전수 2026-09-21] 이 이름들은 **모든 페이지**에 실린다 — 한 낱말이 152곳 중 열 몇 곳을 혼자 만들고 있었다.
-    out = [BRAND_HTML, '<a class="newchat" href="/c/new">＋ 새 채팅 (작목 추가 · 계획)</a>',
+    out = [BRAND_HTML, f'<a class="newchat" href="/c/new">{_e(labels.NEW_CHAT)}</a>',
            '<div class="grp">채팅 — 짓는 농사</div>']
     subs = subjects.load()
     if not subs:
@@ -164,11 +165,9 @@ def sidebar(current: str, docs: list[str], today: date) -> str:
         out.append(f'<a class="chat{cls}" href="/c/{quote(s["id"])}"><b>{_e(s.get("crop"))}<span class="pill {pill}">{_e(st)}</span></b><span>{meta}</span></a>')
     out.append('<div class="grp">화면</div>')
     first = subs[0]["id"] if subs else ""
-    for href, label in (("/improve", "고쳐 달라는 말 · 스스로 개선"), ("/judge", "판단 전체"), ("/selfcheck", "자기 점검 — 화면이 스스로 확인"),   # [①⑤a 2026-09-29]
-                        ("/me/decisions", "결정 — 한 화면에서 답하기"),   # [WO-PB-01 다음 한 수 2026-09-29] 검토지(파일)가 11일째 비어 있던 자리를 화면으로
-                        ("/media", "영상 반입"), ("/events", "한 일 · 못 한 이유(표)"),
-                        (f"/mall/{quote(first)}" if first else "/c/new", "몰 상세페이지 목업 (M-11)")):
-        out.append(f'<a class="lnk" href="{href}">{label}</a>')
+    # [발행자 §2 둘째 측정 2026-10-04 "밭 정보 메뉴를 찾지 못함"] 이름은 화면 이름 계약(schema.labels) 하나에서 — 요구 문장의 「어디서」 와 보고가 같은 목록을 쓴다. /me 가 여기 있다.
+    for href, label in (*labels.SIDEBAR, (f"/mall/{quote(first)}" if first else "/c/new", labels.MALL)):
+        out.append(f'<a class="lnk" href="{href}">{_e(label)}</a>')
     out.append('<div class="grp">문서</div>')
     for name in docs:
         out.append(f'<a class="lnk" href="/doc/{_e(name)}">{_e(name.removesuffix(".md"))}</a>')
@@ -180,7 +179,7 @@ def sidebar(current: str, docs: list[str], today: date) -> str:
 #   설정 → /me · 도움 받기 → 채팅 화면 설명 · 모든 플랜 보기 → 모든 목록 · 앱/확장 → 휴대폰 동기화(D-16) · 변경 로그 → /changes · 자세히 → 대장.
 #   언어 · 팀 참여 · 로그아웃은 넣지 않았다 — 언어 전환 · 팀 · 계정이 없다(D-6 이 PC 뿐). 없는 기능을 메뉴에 두면 눌러서 실망하는 항목이 된다.
 USER_MENU: tuple[tuple[str, str, str] | None, ...] = (
-    ("/me", "설정", "사용자 정보 · 필지 · 동기화"),
+    labels.USER_MENU_ME,                      # 왼쪽 메뉴와 같은 이름(「밭 정보 · 설정」) — 이름이 둘이면 하나를 못 찾는다(발행자 10-04)
     ("/doc/m13_chat_screen.md", "도움 받기", "채팅 화면 설명"),
     None,
     ("/", "모든 목록 보기", "짓는 농사별 채팅"),
@@ -243,7 +242,7 @@ def parcel_form(p: dict[str, Any]) -> str:
                     f'<select name="{key}"><option value="">— 모름(비워 둔다)</option>{sel}</select>')
     for key, label in parcels.FIELD_LABELS:
         rows.append(f'<label>{_e(label)}{_parcel_note(key)}</label><input name="{key}" value="{_e(p.get(key) or "")}">')
-    rows.append('<div style="margin-top:8px"><button class="btn pri" type="submit">필지 저장</button>'
+    rows.append(f'<div style="margin-top:8px"><button class="btn pri" type="submit">{_e(labels.PARCEL_SAVE)}</button>'
                 '<span style="color:var(--muted)"> — 빈 칸은 건드리지 않는다(모르는 것을 지어내지도, 있는 값을 지우지도 않는다). '
                 '주소·좌표는 이 화면에 없다(PII)</span></div></form>')
     return '<div class="form">' + "".join(rows) + "</div>"
@@ -361,7 +360,7 @@ def decisions_main(message: str = "", error: str = "", form: dict[str, str] | No
     elif sm.get("stopped_asks"):
         rows = " · ".join(f'<span title="{_e(r.get("axis"))}">{_e(words.axis(r.get("axis")))}</span> {int(r.get("count", 0))}번' for r in sm["stopped_asks"])
         out.append(f'<p class="meta">더 묻지 않는 것 {len(sm["stopped_asks"])}건({rows}) — 같은 것을 상한만큼 물었는데 답이 안 왔다. 모르겠다와 같은 신호다: '
-                   '농가 몫이 아니라 아직 어디에도 없는 값일 수 있다(상한 값은 발행자 추론 · 밭 정보 화면에 적으면 풀린다).</p>')
+                   f'농가 몫이 아니라 아직 어디에도 없는 값일 수 있다(상한 값은 발행자 추론 · {_e(labels.PLACES["parcel"])} 에 적으면 풀린다).</p>')
     for it in dc.ITEMS:
         a = answers.get(it["id"])
         out.append(f'<div class="card dec"><b>{_e(it["id"])} · {_e(it["ask"])}</b>'
@@ -390,7 +389,7 @@ def decisions_main(message: str = "", error: str = "", form: dict[str, str] | No
 def me_main(message: str = "", error: str = "", form: dict[str, str] | None = None) -> str:
     u = profile.load()
     f = form or {}
-    out = ['<div class="thead"><div><h1>사용자 정보</h1><div class="meta">이름·역할·필지·설정. 연락처와 주소는 두지 않는다(PII).</div></div></div><div class="msgs">']
+    out = [f'<div class="thead"><div><h1>{_e(labels.ME_TITLE)}</h1><div class="meta">이름·역할·밭 정보·설정. 연락처와 주소는 두지 않는다(PII).</div></div></div><div class="msgs">']
     if error:
         out.append(f'<p class="err">{_e(error)}</p>')
     if message:
@@ -401,16 +400,16 @@ def me_main(message: str = "", error: str = "", form: dict[str, str] | None = No
                f'<label>역할</label><select name="role">{roles}</select>'
                f'<label>메모(연락처 금지)</label><input name="note" value="{_e(f.get("note") or u.get("note") or "")}">'
                '<div style="margin-top:12px"><button class="btn pri" type="submit">저장</button></div></form></div>')
-    out.append('<h2 style="font-size:14px">장기 전망</h2><p class="meta"><a href="/me/outlook">장기 전망 등재 →</a> 기상청 1·3개월 전망 발표문 수치를 출처와 함께(덮개 · git 밖). 날씨 물음의 「장기」 줄이 이것을 낸다.</p>')
-    out.append('<h2 style="font-size:14px">결정</h2><p class="meta"><a href="/me/decisions">결정 — 한 화면에서 답하기 →</a> 발행자만 답할 수 있는 것을 제안값과 함께. 줄마다 맞다 / 다르다 / 모르겠다.</p>')
-    out.append('<h2 style="font-size:14px">필지</h2>')
+    out.append(f'<h2 style="font-size:14px">{_e(labels.ME_SECTIONS["outlook"])}</h2><p class="meta"><a href="/me/outlook">장기 전망 등재 →</a> 기상청 1·3개월 전망 발표문 수치를 출처와 함께(덮개 · git 밖). 날씨 물음의 「장기」 줄이 이것을 낸다.</p>')
+    out.append(f'<h2 style="font-size:14px">{_e(labels.ME_SECTIONS["decisions"])}</h2><p class="meta"><a href="/me/decisions">{_e(labels.label("/me/decisions"))} →</a> 발행자만 답할 수 있는 것을 제안값과 함께. 줄마다 맞다 / 다르다 / 모르겠다.</p>')
+    out.append(f'<h2 id="parcel" style="font-size:14px">{_e(labels.ME_SECTIONS["parcel"])}</h2>')   # 「밭 정보」 — 요구 문장 · 보고 · 단추와 같은 말(전엔 「필지」)
     for p in parcels.load():
         v = parcels.public_view(p)
         miss = parcels.missing_inputs(p)
         out.append(f'<div class="card"><b>{_e(p["id"])}</b> · 용도 {_e(v.get("use") or "미기재")} · 위치 {_e(v["location"])} · 인증 주장 {_e(v.get("cert_claimed") or "없음")}'
                    f'<div style="color:var(--muted)">입력 대기 {len(miss)}: {_e(", ".join(miss))}</div>'
                    + parcel_form(p) + "</div>")
-    out.append('<h2 id="sync" style="font-size:14px">설정 · 동기화</h2>')
+    out.append(f'<h2 id="sync" style="font-size:14px">{_e(labels.ME_SECTIONS["sync"])}</h2>')
     lan = "켜짐(같은 Wi-Fi, 토큰 필요)" if config.BIND == config.LAN_BIND and config.LAN_TOKEN else "꺼짐(이 PC 에서만 — D-6)"
     out.append(f'<div class="card"><b>휴대폰 동기화(D-16)</b> {_e(lan)}<div style="color:var(--muted)">켜려면 <code>.env</code> 에 <code>AGRODSS_BIND=0.0.0.0</code> 과 <code>AGRODSS_LAN_TOKEN=(16자 이상)</code> 을 넣고 재시작, 휴대폰은 같은 Wi-Fi 에서 <code>http://&lt;PC IP&gt;:{config.PORT}/?t=&lt;토큰&gt;</code>. '
                '휴대폰 마이크·음성은 https 또는 localhost 에서만 열린다(브라우저 보안 규칙) — 휴대폰에서는 글·사진·영상 입력이 먼저다</div></div>')
@@ -838,7 +837,7 @@ def handle_parcel_form(form: dict[str, str]) -> str:
     opened = [words.opened(k, v) for k, v in filled.items() if words.opened(k, v)]
     tail = " · " + " ".join(opened) if opened else " · 지금 판단이 읽는 값은 없습니다(밭 정보에 남습니다)"
     names = ", ".join(parcels.FIELD_WORDS.get(k, k) for k in sorted(filled))
-    return f"필지 {pid} 저장 — {names}{tail} · 입력 대기 {len(left)}"
+    return f"{labels.ME_SECTIONS['parcel']}({pid}) 저장 — {names}{tail} · 입력 대기 {len(left)}"
 
 
 def run_cycle(today: date, head: str) -> dict[str, Any]:

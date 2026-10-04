@@ -57,7 +57,7 @@ def test_the_field_trip_path_walks_end_to_end(srv, monkeypatch):
     st, _, body = _post(srv, "/me/parcel", {"id": "p001", "soil_texture": "양토", "slope": "완경사",
                                             "drainage": "보통", "irrigation": "점적", "night_light": "없음",
                                             "microclimate": "동쪽 트임 · 안개 잦음 · 바람길 남북"})
-    assert st == 200 and "필지 p001 저장" in body
+    assert st == 200 and "밭 정보(p001) 저장" in body
     rec = parcels.by_id("p001")
     assert rec["soil_texture"] == "양토" and rec["microclimate"].startswith("동쪽")
     assert len(parcels.missing_inputs(rec)) == before_missing - 6

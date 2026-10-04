@@ -20,15 +20,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# 농가가 **가는 곳** — 문장에 이 가운데 하나가 있어야 한다. 화면 경로는 농가도 보는 주소라 그대로 둔다(/me · /judge).
-PLACES: dict[str, str] = {
-    "chat": "채팅에 한 줄",
-    "field": "밭에서 보고 채팅에 한 줄",
-    "parcel": "밭 정보 화면(/me 의 밭 칸)",
-    "subject": "작목 칸(/me 의 재배 목록)",
-    "judge": "판단 화면(/judge)",
-    "publisher": "발행자 PC",
-}
+# 농가가 **가는 곳** — 문장에 이 가운데 하나가 있어야 한다. [발행자 §2 둘째 측정 2026-10-04 "밭 정보 메뉴를 찾지 못함"] 이름은 화면 이름 계약(schema.labels)에서만
+# 고른다 — 전에는 여기 「밭 정보 화면(/me 의 밭 칸)」 이라고 적었는데 화면의 그 구역은 「필지」 였고 왼쪽 메뉴에 /me 가 없었다. 없는 이름이 나갈 수 없게 목록이 하나다.
+from schema import labels as _labels
+
+PLACES: dict[str, str] = dict(_labels.PLACES)
 WHO = ("농가", "발행자", "농가 또는 발행자")
 # 농가 문장에 들어오면 안 되는 것 — 명령줄 · 환경변수 · 키 이름 · 파일 경로 토큰. 정확한 명령은 detail 로.
 DEV_TOKENS = ("python", "-m ", ".env", "_KEY", "API", "<주소>", "--")     # 파일 이름은 막지 않는다 — 발행자 몫 문장은 고칠 파일을 짚어야 한다(test_grid_unit_miss)

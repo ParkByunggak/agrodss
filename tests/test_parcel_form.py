@@ -93,7 +93,7 @@ def test_filled_answers_are_saved_and_blanks_are_left_alone(srv):
     st, body = _post(srv, "/me/parcel", {"id": "p001", "soil_texture": "양토", "slope": "완경사", "drainage": "보통",
                                          "microclimate": "동향 · 안개 잦음", "area_m2": "330", "irrigation": "", "night_light": "",
                                          "environment": "", "use": "", "seed_source": "", "cert_legal": ""})
-    assert st == 200 and "필지 p001 저장" in body
+    assert st == 200 and "밭 정보(p001) 저장" in body                                   # [10-04] 구역 이름 「밭 정보」 — 요구 문장 · 보고와 같은 말(전엔 「필지」)
     rec = parcels.by_id("p001")
     assert rec["soil_texture"] == "양토" and rec["slope"] == "완경사" and rec["drainage"] == "보통"
     assert rec["area_m2"] == 330 and isinstance(rec["area_m2"], int)              # 숫자로 들어간다(문자열 "330" 이 아니라)
