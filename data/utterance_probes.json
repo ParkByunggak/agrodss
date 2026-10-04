@@ -1,0 +1,50 @@
+{
+  "note": "[발행자 2026-10-04 \"단문도 해석하지 못하고 있는지 확인\"] 문장 형태 점검의 문장 목록. 자기 점검 화면(/selfcheck)이 저장 없는 길(classify · 라우팅 어휘)로 돌려 실제 종류·경로를 보인다. 기대 종류는 발행자가 붙인다 — 세션이 붙이면 채점자와 응시자가 같다. expected 가 null 인 줄은 아직 기대가 없는 줄이다(화면이 그렇게 말한다). 종류 이름은 ingest.chat 의 초안 종류(event · observation.note · question · plan.farmer · plan.target_date · feedback.request · decision.noncompliance · subject.end · parcel.field · subject.field) · 경로는 결정 id 또는 diary_lookup.",
+  "groups": [
+    {
+      "name": "이미 틀린 여섯 — 발행자 표(2026-10-04)",
+      "rows": [
+        {"text": "잎 끝이 노란 형상을 어떻게 대처해야 하는가", "expected": "question", "expected_route": "symptom_triage", "expected_note": "질문(증상)", "by": "발행자 2026-10-04"},
+        {"text": "지금 어떤 병충해를 관찰해야 하는가", "expected": "question", "expected_route": "risk_alert", "expected_note": "질문(위험)", "by": "발행자 2026-10-04"},
+        {"text": "기상청 자료를 확인한 후 비없음 날수가 오늘 이전에 몇일인가", "expected": "question", "expected_route": null, "expected_note": "조회(관측) — 그런 경로가 아직 없다", "by": "발행자 2026-10-04"},
+        {"text": "이전에 관수를 일지에서 날짜별로 알려줘요", "expected": "question", "expected_route": "diary_lookup", "expected_note": "조회(일지)", "by": "발행자 2026-10-04"},
+        {"text": "이 쪽파는 종구생산을 위한 목적이다", "expected": "parcel.field", "expected_route": null, "expected_note": "속성 선언", "by": "발행자 2026-10-04"},
+        {"text": "고르신 종류(처음 제안과 다릅니다) · obs_93e9b4b67856 이미 있는데 왜 되묻는가?", "expected": "feedback.request", "expected_route": null, "expected_note": "교정 요구", "by": "발행자 2026-10-04"}
+      ]
+    },
+    {
+      "name": "같은 명사 × 다른 어미 — 관수",
+      "rows": [
+        {"text": "관수했다", "expected": null, "expected_route": null},
+        {"text": "관수를 알려줘", "expected": null, "expected_route": null},
+        {"text": "관수해야 하나", "expected": null, "expected_route": null},
+        {"text": "관수는 언제가 좋은가", "expected": null, "expected_route": null}
+      ]
+    },
+    {
+      "name": "같은 명사 × 다른 어미 — 배수",
+      "rows": [
+        {"text": "배수가 좋다", "expected": null, "expected_route": null},
+        {"text": "배수를 보여줘", "expected": null, "expected_route": null},
+        {"text": "배수가 나쁘면 어떻게 하나", "expected": null, "expected_route": null}
+      ]
+    },
+    {
+      "name": "같은 명사 × 다른 어미 — 종구",
+      "rows": [
+        {"text": "종구용이다", "expected": null, "expected_route": null},
+        {"text": "종구는 언제 캐나", "expected": null, "expected_route": null},
+        {"text": "종구를 남겼다", "expected": null, "expected_route": null}
+      ]
+    },
+    {
+      "name": "같은 뜻 × 다른 표현 — 물 주기",
+      "rows": [
+        {"text": "물 줘야 하나", "expected": null, "expected_route": null},
+        {"text": "관수가 필요한가", "expected": null, "expected_route": null},
+        {"text": "지금 물 주면 되나", "expected": null, "expected_route": null},
+        {"text": "가뭄인가", "expected": null, "expected_route": null}
+      ]
+    }
+  ]
+}
