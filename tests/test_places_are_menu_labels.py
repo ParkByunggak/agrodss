@@ -56,6 +56,17 @@ def test_screen_names_live_in_one_file_only():
     assert "밭 정보 · 설정" in (ROOT / "schema" / "labels.py").read_text(encoding="utf-8")
 
 
+def test_retired_screen_names_cannot_come_back_into_the_publisher_lists_or_requirement_sentences():
+    """물러난 이름(밭 정보 화면 · 밭 칸 · 설정(/me) · 필지 저장 …)은 화면에 없다 — 두 목록 · 요구 문장에 다시 들어오면 붉다(거부·통과)."""
+    assert blp.check_retired(blp.NEXT_PUBLISHER + blp.NEXT_SESSION) == []
+    assert blp.check_retired([("⓪ 밭 정보 화면(/me 의 밭 칸)에서", "…")]) and blp.check_retired([("x", "사용자 탭 「설정」 → 「필지」")])
+    assert blp.check_retired([("x", "왼쪽 메뉴 「밭 정보 · 설정」 → 「밭 정보」")]) == []
+    for place in labels.PLACES.values():
+        assert labels.retired_in(place) == [], place
+    src = (ROOT / "scripts" / "build_ledger_page.py").read_text(encoding="utf-8")
+    assert "assert not check_retired(NEXT_PUBLISHER + NEXT_SESSION)" in src                 # 배선 — 적재 때 멈춘다
+
+
 def test_the_report_cannot_name_a_menu_that_is_not_on_the_screen():
     import copy
     ok = copy.deepcopy(blp.BEST)

@@ -51,6 +51,14 @@ _QUOTED = re.compile(r"「([^」]+)」")
 EXAMPLE_QUOTES: frozenset[str] = frozenset({"인증은 유기다", "종구 생산"})
 
 
+# 물러난 이름 — 10-04 전 보고·요구 문장이 쓰던 말. 화면에 없으니 농가에게 가는 글(요구 문장 · 대장 페이지 두 목록 · 보고)에 다시 들어오면 검사가 붉다.
+RETIRED: tuple[str, ...] = ("밭 정보 화면", "밭 칸", "설정(/me)", "재배 목록", "작목 칸", "판단 화면(/judge)", "필지 저장", "「설정」", "「필지」")
+
+
+def retired_in(text: str) -> list[str]:
+    return [r for r in RETIRED if r in (text or "")]
+
+
 def menu_labels() -> frozenset[str]:
     out = {NEW_CHAT, MALL, ME_TITLE, PARCEL_SAVE, USER_MENU_ME[1]} | {lab for _, lab in SIDEBAR} | set(ME_SECTIONS.values())
     return frozenset(out)
