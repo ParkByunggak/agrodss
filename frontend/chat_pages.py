@@ -469,7 +469,7 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
         parts.append(f'<span style="color:var(--muted)" title="{_e(d.get("field"))}">{_e(word)} → <b>{_e(d.get("value"))}</b></span> ')
     if k not in ("feedback.request", "parcel.field", "subject.field"):
         parts.append(f'<input name="day" value="{_e(day)}" placeholder="YYYY-MM-DD{" (필요)" if need else ""}" size="12">')
-    parts.append(f'<button class="btn pri" type="submit">{_e(chat.CONFIRM_LABEL)}</button></form>')
+    parts.append(f'<button class="btn pri" type="submit">{_e(chat.confirm_label(k))}</button></form>')   # [2026-10-04] 단추 말도 가는 자리대로(일지 · 밭 정보 · 농사 정보 · 고쳐 달라는 말)
     parts.append('<form method="post" action="/c/' + quote(m["subject"]) + '/choose" style="margin-top:4px"><input type="hidden" name="msg" value="' + _e(m["id"]) + f'"><span style="color:var(--muted)">{_e(chat.OTHER_KIND_LABEL)}</span>'
                  + "".join(f'<button class="btn" name="kind" value="{kk}">{lab}</button>' for kk, lab in CHOOSABLE if kk != k) + '</form></div>')
     return "".join(parts)

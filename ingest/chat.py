@@ -233,7 +233,14 @@ KIND_PLAIN = {"event": "한 일", "observation.note": "본 것", "plan.farmer": 
               "observation.video": "영상", "question": "물음", "subject.new": "새 목록", "parcel.field": "밭 정보", "subject.field": "농사 정보"}
 assert set(KIND_PLAIN) == set(KIND_LABEL)      # 종류가 늘면 사람 말도 함께 는다 — 한쪽만 늘면 화면이 내부 이름을 낸다
 
-CONFIRM_LABEL = "일지에 넣기"            # 옛 문면 "확인 → 원장"
+CONFIRM_LABEL = "일지에 넣기"            # 옛 문면 "확인 → 원장" — 기본값(영농일지로 가는 종류)
+# [처방 직후 전수 2026-10-04] 일지로 **안 가는** 종류가 셋인데(고쳐 달라는 말 · 밭 정보 값 · 농사 값) 단추는 셋 다 「일지에 넣기」 였다 — 문장은 「밭 정보에 들어갑니다」 라면서
+# 단추는 일지라고 하면 농가는 어느 쪽이 참인지 모른다. 단추 말과 문장이 **같은 자리**에서 나온다(셋을 따로 고치면 다음 종류에서 또 어긋난다 · 지점 축).
+CONFIRM_LABELS: dict[str, str] = {"feedback.request": "고쳐 달라는 말로 넣기", "parcel.field": "밭 정보에 넣기", "subject.field": "농사 정보에 넣기"}
+
+
+def confirm_label(kind: str) -> str:
+    return CONFIRM_LABELS.get(kind, CONFIRM_LABEL)
 OTHER_KIND_LABEL = "다르게 적을까요?"     # 옛 문면 "다른 종류:"
 CHOSEN_WHY = "사람이 고름"               # 사람이 종류를 고른 초안의 표지 — 오분류 측정(ingest/misclassified.py · /changes 상시)이 이 표지를 읽는다(정본 하나)
 SAVED_LABEL = "일지에 넣었습니다"         # 옛 문면 "원장에 들어감"
@@ -588,6 +595,17 @@ def _system_complaint(t: str) -> bool:
     if "왜" in t and any(v in t for v in _ASK_VERBS):
         return True
     return any(n in t for n in _SYS_NOUNS) and any(c in t for c in _SYS_COMPLAINT)
+
+
+# [처방 직후 전수 2026-10-04] **묻는 것 자체**에 대한 항의 — 그 답에 또 물으면 항의를 그대로 되풀이한다(발행자 10-04 「이미 있는데 왜 되묻는가」 의 다음 층).
+# §3("답마다 하나 묻는다")의 예외는 여기 한 곳이고, 다음 말에는 다시 묻는다(반복 상한이 그쪽을 센다).
+_ASK_COMPLAINT_WORDS = ("되묻", "왜 또", "왜 다시", "이미 있는데", "또 물어", "또 묻")
+
+
+def _complains_about_asking(t: str) -> bool:
+    if any(w in t for w in _ASK_COMPLAINT_WORDS):
+        return True
+    return "왜" in t and any(v in t for v in _ASK_VERBS)
 
 
 def _farm_work_not_a_request(t: str) -> bool:
@@ -1109,14 +1127,23 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         word = parcels.FIELD_WORDS.get(d["field"]) or subjects.SUBJECT_FIELD_WORDS.get(d["field"], d["field"])
         from schema import labels as _labels
         place = (f"밭 정보에 들어갑니다({_labels.PLACES['parcel']} 에서 언제든 고칠 수 있습니다)" if d["kind"] == "parcel.field" else "이 농사의 정보에 들어갑니다")   # 어디서 — 화면 이름 계약
-        reply_text = (f"{plain_why(d)} — {word}: {d['value']}. '{CONFIRM_LABEL}' 를 누르면 {place}. "
+        reply_text = (f"{plain_why(d)} — {word}: {d['value']}. '{confirm_label(d['kind'])}' 를 누르면 {place}. "
                       + _w.opened(d["field"], d["value"]))   # [§12] 이 답이 연 판단 — 문장은 words.opened 하나(폼 · 확인 줄과 같은 자리)
+    elif drafts and drafts[0]["kind"] == "feedback.request":
+        # [처방 직후 전수 2026-10-04] 항의 갈래를 넓힌(㉝) 뒤 나가는 쪽을 재니 답이 **틀린 자리**를 가리켰다 — 「영농일지에 들어갑니다」. 확인은 fb.add_request 로 가므로 일지가 아니다.
+        # 그리고 「왜 자꾸 같은 걸 묻지」 에 대한 답이 **또 물었다**(아래 물음 블록) — 묻는 것 자체에 대한 항의면 그 답에는 안 묻는다.
+        from schema import labels as _labels
+        d = drafts[0]
+        reply_text = (f"{plain_why(d)}. '{confirm_label(d['kind'])}' 를 누르면 왼쪽 「{_labels.label('/improve')}」 에 들어갑니다(영농일지가 아닙니다). "
+                      "고칠지는 사람이 정합니다. 아니면 아래에서 다르게 고르시면 됩니다.")
+        if _complains_about_asking(text):
+            reply_text += " 이번 답에는 더 묻지 않습니다."
     elif drafts:
         d = drafts[0]
         need = d.get("needs") or []
         # [발행자 2026-09-21] 옛 문면은 `{KIND_LABEL}(으)로 읽었다 — {why}` 였다 — 내부 이름과 개발자 사유를 그대로 내보냈다.
         reply_text = (f"{plain_why(d)}. " + ("날짜를 넣고 " if need else "")
-                      + f"'{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다. 아니면 아래에서 다르게 고르시면 됩니다.")
+                      + f"'{confirm_label(d['kind'])}' 를 누르면 영농일지에 들어갑니다. 아니면 아래에서 다르게 고르시면 됩니다.")
         if len(drafts) > 1:
             reply_text += " 적을 것이 " + " · ".join(f"{n + 1}) {KIND_PLAIN.get(x['kind'], x['kind'])}"
                                                   for n, x in enumerate(drafts)) + " — 하나씩 넣습니다."
@@ -1141,8 +1168,8 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
             reply_text += _answered_line(subject_id, {"axes": fit})
     if media_refs and drafts:
         reply_text = media_line + reply_text
-    if not asked:
-        # [WO-ASK-01 §3 2026-10-03] 이 답이 스스로 묻지 않았으면 **하나** 묻는다 — 재료는 판정이 이미 말한 빈자리(위험 경보의 needs · 판단 불가의 요구)뿐이고
+    if not asked and not _complains_about_asking(text):
+        # [WO-ASK-01 §3 2026-10-03] 이 답이 스스로 묻지 않았으면 **하나** 묻는다 — [2026-10-04] 묻는 것에 대한 항의에는 안 묻는다(위 항의 갈래가 그 사실을 말한다) — 재료는 판정이 이미 말한 빈자리(위험 경보의 needs · 판단 불가의 요구)뿐이고
         # 문장은 요구 문장 정본(judge.need)이 만든 것 그대로. 질문을 못 만든 것은 답을 막지 않되 보이게(검토 §3-ⓑ · dropped 「질문 생성」).
         from ingest import questions                       # 함수 안에서 — questions 가 3층(judge.need)을 들므로 모듈 수준이면 층이 뒤집힌다
         try:

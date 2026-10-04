@@ -78,7 +78,7 @@ def test_the_card_shows_the_value_in_farmer_words_and_no_date_box():
     m, _ = chat.send(SID, "나쁨", today=T34, now=NOW)
     html = chat_pages._draft_html(m, 0, m["drafts"][0])
     visible = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", html))
-    assert "밭 정보" in visible and "배수 → 나쁨" in visible and 'name="day"' not in html and chat.CONFIRM_LABEL in html
+    assert "밭 정보" in visible and "배수 → 나쁨" in visible and 'name="day"' not in html and chat.confirm_label("parcel.field") in html   # [2026-10-04] 단추 말도 가는 자리대로(일지가 아니다)
     assert " drainage " not in visible and 'title="drainage"' in html
 
 
