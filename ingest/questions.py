@@ -15,6 +15,7 @@ from typing import Any
 
 from ingest import asks, dropped, known, parcels
 from judge.need import NeedError, need
+from schema import records as sch      # 사람이 쓴 글 인용 정본(sch.quote) — 일지 줄을 물음에 실을 때 자른 것이 보이게
 
 DROP_WHERE = "질문 생성"
 # [§8 반복 상한 — 값은 발행자 몫] None = 상한 없음(세기만 한다). 지시서 §8 의 수치가 오면 여기 하나만 바뀐다(출처를 옆에 적는다).
@@ -37,7 +38,8 @@ def _parcel_question(field: str, alert: dict[str, Any], subject: dict[str, Any] 
         if k and k["from"] == "observation":
             if k.get("value"):
                 return None
-            what += f" — 일지 {k['observed_at']} 「{k['text'][:30]}」 를 봤습니다, 어느 쪽인지"
+            # 일지 줄은 **그 사람이 쓴 글**이다 — 30자에서 자르면 자른 것이 보여야 한다(안 그러면 쓰지 않은 짧은 문장을 그 사람 말로 되묻는 꼴)
+            what += f" — 일지 {k['observed_at']} 「{sch.quote(k['text'], 30)}」 를 봤습니다, 어느 쪽인지"
     why = f"{alert.get('risk', '위험')}(회복 불가 · {alert.get('stage', '지금 칸')})의 근거에 실린다"
     q = need("soil_water" if field == "drainage" else field, "농가", what, "parcel", why)
     q["decision"] = "risk_alert"

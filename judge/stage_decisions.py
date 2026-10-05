@@ -18,6 +18,7 @@ from judge import plan_vs_actual, registry, risk_alert, units
 from judge.envelope import AxisUse, Envelope, weakest
 from judge.need import need, need_anchor, plain_reason
 from judge.harvest_timing import GRID_GRADE
+from schema import records as sch      # 사람이 쓴 글 인용 정본(sch.quote) — 불이행 사유를 요약에 실을 때
 
 FORB = ("humidity_air",)
 SELF_USE_WORDS = ("자가", "시험", "종구")      # 종구 — [발행자 전달 2026-10-03] 종구 생산은 출하 대상이 아니다(씨알을 남긴다)
@@ -434,7 +435,7 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
                             # 안 가르면 판정 종류만 고치고 **사람이 보는 문장은 그대로**인 표현 층 결함이 된다(G1 세 번째 형태).
                             "summary": f"{status} — 작업일 {work_date} · 마감 {dl} · 자재({cert}) {', '.join(m) or '없음'} · "
                                        + ("양 " + amount_note if p else ("양은 저장된 처방을 못 읽어 못 냅니다(다시 받으면 됩니다)" if unreadable else "양은 검정 처방이 오면 냅니다"))   # 농가 말(2026-09-29 전수)
-                                       + (f" · 사유: {reason['reason'][:120]}" if reason else "")},
+                                       + (f" · 사유: {sch.quote(reason['reason'], 120)}" if reason else "")},      # 사유는 농가가 쓴 글 — 자르면 자른 것이 보인다
                     notes=[grid_schema.source_note(unit), "양(kg/10a)은 지어내지 않는다 — 처방 정본이 없으면 비운다"])
 
 

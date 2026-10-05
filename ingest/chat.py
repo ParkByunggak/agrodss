@@ -851,7 +851,8 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
         if any(w in t for w in ("납품", "출하")):
             return [{"kind": "plan.target_date", "target_date": day, "note": t, "why": "납품·출하 + 계획 어휘",
                      "needs": [] if day else ["target_date"]}]
-        return [{"kind": "plan.farmer", "task": et or t[:60], "planned_day": day, "note": t, "why": "계획 어휘",
+        # 작업 어휘를 못 읽으면 쓴 문장이 그대로 할 일 **이름**이 된다 — 60자에서 자르면 자른 것이 보여야 한다(원문은 note 에 그대로)
+        return [{"kind": "plan.farmer", "task": et or sch.quote(t, 60), "planned_day": day, "note": t, "why": "계획 어휘",
                  "needs": [] if day else ["planned_day"]}]
     if _end_declared(t):
         # [처방 직후 전수 2026-09-20] "작기 끝나기 **전에** 웃거름을 줬다"가 작기 종료 초안이 됐다 — 종료 문구가 종속절에 있는데
@@ -1366,7 +1367,7 @@ def request_improvement(reply_id: str, text: str = "", now: datetime | None = No
         raise ChatError("개선 요구는 시스템 답변에 대해 낸다")
     # [발행자 2026-09-22] 칸이 없어서 **시스템이 지어낸 문장**만 접수되던 자리. 사람이 적은 말이 있으면 그것이 요구다.
     # 적힌 말이 없을 때만 답변을 인용한다 — 무엇이 틀렸는지를 지어내지 않는다(대리값 금지).
-    body = (text or "").strip() or f"이 답변이 틀리거나 부족하다: {m['text'][:200]}"
+    body = (text or "").strip() or f"이 답변이 틀리거나 부족하다: {sch.quote(m['text'], 200)}"      # 인용은 정본 하나 — 자르면 자른 것이 보인다
     req = fb.add_request(body, target="decision", target_ref=reply_id, subject=m.get("subject"), source="farmer", now=now)
     ts = _now(now).isoformat(timespec="seconds")
     note = _append({"id": f"msg_{uuid.uuid4().hex[:12]}", "kind": "chat.message", "subject": m["subject"], "role": "system",
@@ -1396,11 +1397,11 @@ def choose_kind(msg_id: str, kind: str, today: date | None = None) -> dict[str, 
     elif kind == "plan.farmer":
         # [발행자 실사용 2026-09-29] 손으로 '할 일' 로 바꾼 초안의 task 가 원문 60자였다 — 사건·불이행 갈래는 작업 어휘를 읽는데 이 갈래만 안 읽어
         # 계획 대 실제가 그 할 일을 어느 작업과도 못 맞췄다(관수를 해도 이행이 안 된다). 같은 정본(_event_type)으로, 없으면 원문
-        d = {"kind": "plan.farmer", "task": _event_type(t) or t[:60], "planned_day": day, "note": t, "why": CHOSEN_WHY, "needs": [] if day else ["planned_day"]}
+        d = {"kind": "plan.farmer", "task": _event_type(t) or sch.quote(t, 60), "planned_day": day, "note": t, "why": CHOSEN_WHY, "needs": [] if day else ["planned_day"]}
     elif kind == "feedback.request":
         d = {"kind": "feedback.request", "text": t, "target": "other", "why": CHOSEN_WHY}
     elif kind == "decision.noncompliance":
-        et = _event_type(_NEG_FOLD.sub("", t)) or t[:60]
+        et = _event_type(_NEG_FOLD.sub("", t)) or sch.quote(t, 60)
         d = {"kind": "decision.noncompliance", "task_type": et, "planned_task": et, "planned_day": day_past, "reason": t, "why": CHOSEN_WHY,
              "needs": [] if day_past else ["planned_day"]}
     elif kind == "subject.end":

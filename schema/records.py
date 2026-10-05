@@ -297,6 +297,22 @@ def strip_pii(rec: dict[str, Any]) -> dict[str, Any]:
     return {key: v for key, v in rec.items() if key not in drop}
 
 
+# ── 사람이 쓴 글을 인용할 때 ────────────────────────────────────────────────────────
+# [전수 2026-10-05] 사람이 쓴 글을 **잘라서** 다른 문장에 싣는 자리가 여섯인데 **잘렸다고 말하는 곳은 한 곳**뿐이었다(채팅 인용 꼬리만 「…」 를 붙였다).
+# 나머지 다섯은 말없이 자른다. 그중 일지 인용은 **30자**라 거의 매번 걸린다 — 「고랑 물 빠짐이 잘 되고 있고, 잎 끝 황화 현상은」 까지만 보인 채
+# 시스템이 그것을 **그 사람의 말로** 되묻는다. 앞 회차 결함과 같은 축이다(그쪽은 낱말이 바뀌었고 이쪽은 뒤가 사라진다 — 둘 다 쓴 글이 달라져 돌아온다).
+# 꼬리는 **자른 자리에만** 붙인다: 안 자른 글에 붙이면 그것도 거짓이다(양방향 검사가 둘 다 본다).
+QUOTE_TAIL = "…"
+
+
+def quote(text: Any, limit: int) -> str:
+    """사람이 쓴 글을 limit 자까지 인용 — 자르면 꼬리를 붙여 **자른 것이 보이게** 한다. 저장이 아니라 인용(표시 · 이름 · 요구 문장)의 정본이다."""
+    if limit < 1:
+        raise ValueError(f"인용 한도는 1자 이상이어야 한다 — {limit}")
+    s = "" if text is None else str(text)
+    return s if len(s) <= limit else s[:limit] + QUOTE_TAIL
+
+
 def describe() -> list[dict[str, Any]]:
     """문서 생성용(scripts/build_schema_doc.py)."""
     return [{"kind": k.name, "layer": k.layer, "required": list(k.required), "optional": list(k.optional),

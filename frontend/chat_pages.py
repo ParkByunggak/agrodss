@@ -565,7 +565,7 @@ def _answer_actions(m: dict[str, Any]) -> str:
     """
     mid = _e(m["id"])
     raw = (m.get("text") or "").strip()
-    quoted = _e(raw[:80]) + ("…" if len(raw) > 80 else "")
+    quoted = _e(records.quote(raw, 80))      # 이 자리만 꼬리를 붙이고 있었다(여섯 중 하나) — 꼴은 이제 정본 하나다
     return (f'<div class="acts" data-msg="{mid}">'
             f'<button type="button" class="act" data-act="copy" data-target="t-{mid}" title="복사">{ICONS["copy"]}<span>복사</span></button>'
             f'<details class="ask"><summary class="act" title="이 답이 틀리거나 부족합니다 — 무엇이 잘못됐는지 적어 보내 주세요">'
