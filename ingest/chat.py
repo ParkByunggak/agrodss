@@ -37,7 +37,7 @@ _CONTRACT = {0: 0, 4: 4, 8: 9, 13: 14, 20: 6, 1: 1, 5: 5, 18: 4}      # 어간 �
 def conjugations(stem: str) -> tuple[str, ...]:
     """어간 구(「물 주」 · 「약 치」 · 「뽑」)에서 **한 일 · 의지 · 앞날 · 명사형** 꼴을 만든다.
 
-    한 일(줬 · 주었 · 뽑았) · 의지(줘야) · 앞날 관형(줄) · 명사형(줌) · 현재(준다). 받침 있는 어간은 모음 조화로 았/었를 가른다.
+    한 일(줬 · 주었 · 뽑았) · 의지(줘야) · 앞날 관형(줄) · 명사형(줌) · 현재(준다) · 의도(주려고 · 심으려고). 받침 있는 어간은 모음 조화로 았/었를 가른다.
     **한 음절 어간의 ㄹ·ㅁ 꼴은 만들지 않는다** — 「캐」 의 「캘 · 캠」 이 「캘린더 · 캠페인」 에 걸린다(어휘는 부분 문자열로 찾는다).
     「하」 어간의 명사형(정리함 · 정비함)도 빼둔다 — 그 말이 물건 이름이다.
     """
@@ -47,32 +47,37 @@ def conjugations(stem: str) -> tuple[str, ...]:
     long_enough = len(stem.replace(" ", "")) >= 2            # ㄹ·ㅁ 꼴은 두 음절 이상 어간에서만
     if f:                                                    # 받침 있는 어간 — 뽑 · 심 · 걷 · 다듬
         a = m in (0, 8)
-        out = [head + last + ("았" if a else "었"), head + last + ("아야" if a else "어야"), head + last + "는다"]
+        out = [head + last + ("았" if a else "었"), head + last + ("아야" if a else "어야"), head + last + "는다",
+               head + last + "으려고"]                       # 심으려고 · 뽑으려고 (의도)
         if long_enough:
             out += [head + last + "을", head + last + "음"]
         return tuple(out)
     if last == "하":                                         # 정리하 · 정비하 · 출하하 — 해/했/할(함은 물건 이름이라 뺀다)
-        return (head + "했", head + "해야", head + "할", head + "한다")
+        return (head + "했", head + "해야", head + "할", head + "한다", head + "하려고")
     cm = _CONTRACT.get(m, m)
     joined = chr(0xAC00 + i * 588 + cm * 28)                 # 줘 · 쳐 · 봐 · 캐
     out = [head + chr(0xAC00 + i * 588 + cm * 28 + 20),          # 줬 · 쳤 · 봤 (축약 과거)
            head + last + ("았" if m in (0, 8) else "었"),        # 주었 · 보았 (안 줄인 과거)
            head + joined + "야",                                 # 줘야 · 쳐야 (의지)
-           head + chr(0xAC00 + i * 588 + m * 28 + 4) + "다"]     # 준다 · 친다 (현재 — 어간에 ㄴ 받침을 얹는다)
+           head + chr(0xAC00 + i * 588 + m * 28 + 4) + "다",     # 준다 · 친다 (현재 — 어간에 ㄴ 받침을 얹는다)
+           head + last + "려고"]                                 # 주려고 · 치려고 · 캐려고 (의도 — 「-려고」 가 의지인지 추측인지는 이 종류가 서야 갈린다)
     if long_enough:
         out += [head + chr(0xAC00 + i * 588 + m * 28 + 8), head + chr(0xAC00 + i * 588 + m * 28 + 16)]   # 줄 · 줌
     return tuple(out)
 
 
-# 어간(활용은 규칙이 만든다) — 명사·장치 이름은 아래 EVENT_NOUNS 에
+# 어간(활용은 규칙이 만든다) — 명사·장치 이름은 아래 EVENT_NOUNS 에.
+# [2026-10-05 ⓓ] 작업 이름 + 「하」 도 어간이다(방제하 · 수확하 …). 명사만 든 말과 **동사 꼴**을 가르기 위해서다 — 「올해는 수확이 적겠다」(명사 · 추측)와
+# 「수확할 것 같다」(동사 꼴 · 의지)는 같은 「겠다/것 같다」 를 쓰므로, 걸린 말이 명사인지 동사 꼴인지가 유일한 재료다(`work_said`).
 EVENT_VERBS: dict[str, tuple[str, ...]] = {
     # 「심」 은 한 음절이라 ㄹ·ㅁ 꼴을 안 만든다(「관심을 · 조심을」 에 걸린다) — 앞날로 말하는 꼴은 두 음절 구로 적는다(「종구 심을 것」)
-    "파종": ("심", "종구 심", "씨 뿌리", "씨뿌리"), "정식": ("옮겨 심", "옮겨심"),
-    "방제": ("약 치", "약을 치", "약치", "뿌리"), "관수": ("물 주", "물을 주", "물주"),
-    "제초": ("풀 뽑", "풀뽑", "풀을 뽑", "김매"), "예찰": ("살펴보", "둘러보"),
-    "보식": ("다시 심", "다시심"), "배수": ("물 빼", "물빼"),
-    "수확": ("캐", "캐내", "종구 캐", "뽑", "다듬", "거두"), "납품": ("보내", "출하하"),
+    "파종": ("심", "종구 심", "씨 뿌리", "씨뿌리", "파종하"), "정식": ("옮겨 심", "옮겨심", "정식하"),
+    "방제": ("약 치", "약을 치", "약치", "뿌리", "방제하"), "관수": ("물 주", "물을 주", "물주", "관수하", "급수하"),
+    "제초": ("풀 뽑", "풀뽑", "풀을 뽑", "김매", "제초하"), "예찰": ("살펴보", "둘러보", "예찰하"),
+    "보식": ("다시 심", "다시심", "보식하"), "배수": ("물 빼", "물빼", "배수하"),
+    "수확": ("캐", "캐내", "종구 캐", "뽑", "다듬", "거두", "수확하"), "납품": ("보내", "출하하", "납품하"),
     "정리": ("정리하", "정비하"),      # 「걷」 은 어간으로 두지 않는다 — 활용이 걷다(걸어가다)와 겹친다(「밭을 걷는다」). 과거 꼴만 아래 명사 목록에
+    "저장": ("저장하",), "소독": ("소독하",), "시비": ("시비하",),
 }
 
 # 명사 · 장치 이름 · 연결형처럼 **활용 규칙 밖**의 말. 어간은 위 EVENT_VERBS 에 — 한 종류의 말을 두 곳에 적지 않는다
@@ -149,7 +154,13 @@ _END_SUBORDINATE = re.compile(r"(끝|종료|마감|마치|마무리)\w*\s*(전�
 def _end_declared(text: str) -> bool:
     """작기 종료 **선언**인가 — 명시 문구가 있고 종속절이 아니다. 종료 갈래와 그보다 앞서는 갈래가 **같은 조건**을 쓴다(어휘 두 벌 금지)."""
     return any(w in text for w in END_WORDS) and not _END_SUBORDINATE.search(text)
-_PLAN_RE = re.compile(r"(려고|려 한다|려한다|할 예정|예정|계획|까 한다|해야겠|야겠|할 생각|생각\s*(이다|입니다|이에요|임)?\s*$)")
+_PLAN_RE = re.compile(r"(할 예정|예정|계획|까 한다|해야겠|야겠|할 생각|생각\s*(이다|입니다|이에요|임)?\s*$)")
+# [2026-10-05 ⓒ] 「-려고」 는 의도(물 주려고)와 **추측**(비가 오려고 한다 · 잎이 마르려고 한다)에 같이 쓰인다 — 여기 있던 「려고」 가 추측까지 할 일로 만들었다.
+# 가를 재료는 **작업 어휘가 서는가**다 — 그런데 그것이 서려면 활용을 읽어야 했다: 전에는 「물 주려고」 의 작업 종류가 None 이라(과거 꼴만 적혀 있었다) 이 가름을 세울 수 없었다.
+# 활용 규칙이 「물 주려고 · 약 치려고 · 종구 심으려고」 를 읽게 된 뒤에야 **작업 어휘가 있을 때만 의도**로 가를 수 있다 — 「비가 오려고 한다」 · 「해가 지려고 한다」 는 작업이 없다
+_INTENT_RE = re.compile(r"(려고|려 한다|려한다)")
+# 존대 꼴 「-겠습니다 · -겠어요」 는 거의 언제나 **의지**다(「확인하겠습니다」) — 다만 작업 어휘가 있을 때만 할 일로 센다. 「비가 오겠습니다」 는 예보고 작업 어휘가 없다
+_POLITE_WILL_RE = re.compile(r"(겠습니다|겠어요|겠네요)")
 # **추측·완곡** 꼴 — 의지일 때만 계획이다. 같은 어미가 둘을 다 쓴다(「물 줘야겠다」=의지 · 「비가 오겠다」=추측 / 「웃거름 해야 할 것 같다」=의지 · 「물이 부족할 것 같다」=추측).
 # 가르는 표지는 **작업 어휘**(`_event_type`)나 **의지·의무 표지**(야겠 · 야 할)다 — 문장 끝 현재·앞날 서술을 작업 어휘로 가르는 아래 규칙과 같은 축
 _GUESS_TAIL_RE = re.compile(r"(겠다|겠습니다|겠어요|겠음|것\s*같|듯\s*하|듯\s*싶)\w*\s*[.!]?\s*$")
@@ -534,6 +545,17 @@ def work_type(text: str) -> str | None:
     return _event_type(text)
 
 
+def work_said_as_verb(text: str) -> bool:
+    """작업을 **동사 꼴**로 말했는가(수확할 · 약 쳐야 · 물 주려고) — 이름만 든 것(수확이 · 비료가)과 가른다.
+
+    [2026-10-05 ⓓ] 같은 「겠다 · 것 같다」 가 의지와 추측에 다 쓰이는데, 가르는 재료가 **걸린 말의 꼴**이다:
+    「올해는 수확이 적겠다」 는 작업 **이름**만 들었으니 추측이고, 「수확할 것 같다」 는 동사 꼴이니 의지다.
+    그래서 작업 이름마다 「…하」 어간을 둔다(활용은 규칙이 만든다) — 이름 목록과 동사 목록이 갈려 있어 이 가름이 선다.
+    """
+    t = _fold_adverbs(text)
+    return any(w in t for stems in EVENT_VERBS.values() for stem in stems for w in conjugations(stem))
+
+
 def _event_type(text: str) -> str | None:
     t = _fold_adverbs(text)          # 한 자리 — _event_type 을 쓰는 모든 갈래(사건 · 부정 · 계획 꼬리)가 같은 걷기를 받는다
     for ty, words in EVENT_SYNONYMS.items():
@@ -595,10 +617,13 @@ _CLIPPED_DONE = re.compile(r"(?:[가-힣]음|줌|침)\s*$")
 
 
 def _done_evidence(text: str) -> bool:
-    if any((ord(ch) - 0xAC00) % 28 == 20 for ch in text if "가" <= ch <= "힣"):   # 받침 ㅆ = 과거 어미
+    # [2026-10-05 ⓓ 측정 중 나온 **네 번째 얼굴**] 받침 ㅆ 를 그대로 세면 **의지·추측의 ㅆ**(겠)까지 한 일로 센다 — 「올해는 수확이 적겠다」 · 「비료가 모자라겠다」 ·
+    # 「올해 파종이 늦겠다」 가 **사건**(한 일)이 됐다. 할 일로 잘못 가는 것보다 나쁘다: 하지도 않은 작업이 원장에 들어가고 계획 대 실제가 그것을 **이행**으로 센다.
+    # `_past_ending`(계획↔한 일 가름)은 이미 같은 정본으로 겠을 뺐는데 이 갈래만 안 뺐다 — 같은 물음에 두 답(§7.1). 「하겠습니다」 는 아래 `_DONE_SUFFIX` 가 따로 가른다
+    if any((ord(ch) - 0xAC00) % 28 == 20 for ch in text if "가" <= ch <= "힣" and ch not in _WILL_SSANG):   # 받침 ㅆ = 과거 어미
         return True
-    if _DONE_SUFFIX.search(text) or _CLIPPED_DONE.search(text):
-        return True
+    if (_DONE_SUFFIX.search(text) and "겠습니다" not in text) or _CLIPPED_DONE.search(text):
+        return True      # 「겠습니다」 는 앞날이다 — `_past_ending` 이 이미 그렇게 가르고 있었다(여기만 안 가르면 「확인하겠습니다」 가 한 일이 된다)
     return bool(_ISO.search(text) or _MD.search(text) or _SLASH.search(text) or _AGO.search(text) or any(w in text for w in _REL))
 
 
@@ -808,8 +833,10 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
     # 계획이 아니다) ② 날짜가 오늘보다 뒤면 앞날이다 — 전에는 "내일 파종" · "모레 방제" 가 **내일 날짜의 한 일**이 됐다(날짜 표지를 한 일 표지로 센 09-20
     # 규칙의 구멍 · 계획 대 실제가 안 한 일을 이행으로 센다). 받침 ㅆ 과거가 있으면 위 규칙대로 한 일이 이긴다("어제 오전에 물 줬다")
     future = bool(et and day and day > today.isoformat())
-    # 의지(어미 규칙 · 어휘 정본 하나) · 추측 꼴은 **작업 어휘나 의지 표지가 있을 때만** · 문장 끝 현재·앞날 서술은 작업 어휘가 있을 때만 · 앞날 날짜
-    willing = bool(et) or bool(_WILL_MARK_RE.search(t))
+    # 의지(어미 규칙 · 어휘 정본 하나) · 추측 꼴은 **작업을 동사 꼴로 말했거나 의지 표지가 있을 때만** · 문장 끝 현재·앞날 서술은 작업 어휘가 있을 때만 · 앞날 날짜.
+    # [2026-10-05 ⓓ] 전에는 `bool(et)` 였다 — 작업 **이름**만 들어도 의지로 세어 「올해는 수확이 적겠다」 · 「비료가 모자라겠다」 · 「올해 파종이 늦겠다」 가 할 일이 됐다.
+    # 이름은 의지가 아니다. 동사 꼴(수확할 · 약 쳐야 · 물 주려고)이 의지다 — 그 가름은 어휘를 이름과 어간으로 갈라 둔 덕에 선다
+    willing = work_said_as_verb(t) or bool(_WILL_MARK_RE.search(t))
     # [말뭉치 래칫이 잡았다] 의지 어미를 일반화하자 **용도 선언**을 가로챘다 — 「이번 작기는 팔 것이다」(판매 목적)가 계획이 됐다. 선언은 계획보다 앞선다.
     # 가드는 **새 주장**(어미 규칙 · 추측 꼴)에만 붙인다 — 옛 어휘(예정 · 계획 · 생각)의 순서는 말뭉치가 이미 고정해 두었다(「몰 납품용으로 쓸 생각」 은 납품 계획).
     # 그 비대칭(어미는 선언에 지고 어휘는 이긴다)은 기록해 둔다 — 「내일 종구용으로 심을 것」 처럼 둘이 겹치는 말은 선언으로 간다(종류는 확인에서 바꾼다).
@@ -817,7 +844,8 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
     # [2026-10-05] 용도 선언은 **한 번만** 묻는다(아래 용도 갈래가 이 값을 그대로 쓴다) — 두 번 부르면 작업 어휘 인자가 어긋날 수 있다(같은 말에 다른 답)
     use_v = parcels.use_declared(t, has_work=bool(et))
     said_declaration = bool(use_v) or _end_declared(t)
-    said_plan = (_PLAN_RE.search(t) or (not said_declaration and (_plan_ending(t) or (_GUESS_TAIL_RE.search(t) and willing)))
+    said_plan = (_PLAN_RE.search(t) or (et and _INTENT_RE.search(t)) or (et and _POLITE_WILL_RE.search(t))
+                 or (not said_declaration and (_plan_ending(t) or (_GUESS_TAIL_RE.search(t) and willing)))
                  or (et and _PLAN_TAIL_RE.search(t)) or future)
     if said_plan and not (et and _past_ending(t)):
         if any(w in t for w in ("납품", "출하")):

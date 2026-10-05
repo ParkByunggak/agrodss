@@ -270,6 +270,17 @@ CORPUS = [
     ("내일 종구 캘 생각", "plan.farmer", None),
     ("판매할 것이다", "parcel.field", None),                                                   # 반대편 — 작업 어휘가 없으면 용도 선언 그대로
     ("올해는 자가 소비할 것이다", "parcel.field", None),
+    # [2026-10-05 ⓒⓓ — 같은 병의 마지막 두 얼굴] 「-려고」 는 의도와 추측에 같이 쓰이고, 작업 **이름**만 든 말은 의지가 아니다
+    ("약 치려고", "plan.farmer", None),
+    ("종구 심으려고", "plan.farmer", None),
+    ("웃거름 주려고", "plan.farmer", None),                                                    # 작업 **이름**만 있어도 의도는 의도다(가름은 작업 어휘가 서는가 하나)
+    ("비가 오려고 한다", "observation.note", None),
+    ("잎이 마르려고 한다", "observation.note", None),
+    ("올해는 수확이 적겠다", "observation.note", None),                                          # 이름만 든 추측 — 전에는 **사건**(한 일)이었다(하지도 않은 수확이 원장에)
+    ("비료가 모자라겠다", "observation.note", None),
+    ("올해 파종이 늦겠다", "observation.note", None),
+    ("수확할 것 같다", "plan.farmer", None),                                                   # 반대편 — 동사 꼴은 의지다
+    ("비가 오겠습니다", "observation.note", None),                                              # 「-겠습니다」 는 의지 꼴이지만 작업 어휘가 없으면 예보다
 ]
 
 
@@ -281,7 +292,7 @@ def test_corpus_kind_and_topic(text, kind, topic):
         assert chat.topic_of(text) == topic, (text, chat.topic_of(text))
 
 
-CORPUS_MIN = 159   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
+CORPUS_MIN = 169   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
 
 
 def test_corpus_is_append_only():

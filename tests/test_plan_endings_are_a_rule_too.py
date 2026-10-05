@@ -71,9 +71,12 @@ def test_there_is_one_canon_for_plan_wording_not_two():
     """옛 `PLAN_WORDS` 튜플은 정규식 정본으로 합쳤다 — 되살리면 두 벌이 되고, 두 벌은 언젠가 어긋난다(§7.1)."""
     assert not hasattr(chat, "PLAN_WORDS"), "어휘 두 벌이 돌아왔다"
     src = inspect.getsource(chat._classify)
-    line = next(ln for ln in src.splitlines() if "said_plan =" in ln)
-    assert "_plan_ending(t)" in line and "_GUESS_TAIL_RE" in line                  # 어미 규칙과 추측 가름이 그 한 줄에서 선다
-    assert "_end_declared(t)" in inspect.getsource(chat._classify)                 # 종료 선언 조건은 두 자리가 같은 함수를 쓴다
+    # [2026-10-05] 첫 판은 `said_plan =` 가 든 **한 물리 줄**을 잡았다 — 식이 세 줄로 늘자 깨졌다(검사 대상은 하나도 안 바뀌었는데).
+    # 거리가 아니라 **구조**로 자른다: 대입이 시작된 자리에서 다음 문장(`if `)까지가 그 식이다(§7.5 "창을 고정하지 않는다")
+    block = src[src.index("said_plan = "):]
+    block = block[:block.index("\n    if ")]
+    assert "_plan_ending(t)" in block and "_GUESS_TAIL_RE" in block                # 어미 규칙과 추측 가름이 그 한 식에서 선다
+    assert "_end_declared(t)" in src                                               # 종료 선언 조건은 두 자리가 같은 함수를 쓴다
 
 
 def test_the_end_declaration_condition_is_shared_not_copied():
