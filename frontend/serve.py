@@ -620,7 +620,8 @@ class Handler(BaseHTTPRequestHandler):
             msg = f"{type(e).__name__}: {e}"
             try:
                 self._send(500, render.page("AGRODSS —오류", nav_html(""),
-                                            f"<h1>화면 오류</h1><p>이 화면을 만들다 실패했다. 아래 한 줄을 세션에 붙이면 고친다.</p><pre>{html.escape(msg)}</pre>", "", ""))
+                                            "<h1>화면 오류</h1><p>이 화면을 만들다 실패했다. 아래 한 줄을 세션에 붙이면 고친다 — 한 번 누르면 전체가 잡힌다.</p>"
+                                            + render.paste_block(msg), "", ""))      # 붙일 묶음 꼴은 정본 하나(render.paste_block — 이스케이프도 그 안에서 한다)
             except Exception:  # noqa: BLE001 — 응답 도중 끊긴 소켓
                 pass
 
@@ -786,7 +787,8 @@ class Handler(BaseHTTPRequestHandler):
             from ingest import decisions as _dc
             try:
                 r = _dc.answer(form.get("id", ""), form.get("verdict", ""), note=form.get("note", ""))
-                status, body = decisions_page(message=f"적었다 — {form.get('id', '')} {r['verdict']}" + (f" — {r['note']}" if r.get("note") else ""))
+                # 적은 메모는 **쓴 그대로** 되읽어 준다(words.mine — 확인 줄이 낱말 표를 거치면 「격자」 가 「재배 달력」 으로 바뀌어 되읽힌다)
+                status, body = decisions_page(message=f"적었다 — {form.get('id', '')} {r['verdict']}" + (f" — {words.mine(r['note'])}" if r.get("note") else ""))
             except ValueError as e:
                 status, body = decisions_page(error=f"저장하지 않았다 — {e}", form=form)
         elif p == "/me/decisions/delete":

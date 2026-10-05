@@ -374,20 +374,21 @@ def decisions_main(message: str = "", error: str = "", form: dict[str, str] | No
         if it["id"] in dc.DECIDED:
             out.append(f'<div class="ok">결정됨: {_e(dc.DECIDED[it["id"]])}</div>')     # 답한 카드로 남는다 — 지우기는 발행자 몫(세션 커밋)
         elif a:
-            out.append(f'<div class="ok">답: {_e(a.get("verdict", ""))}{(" — " + _e(a["note"])) if a.get("note") else ""} <span class="meta">{_e(render.local_time(a.get("at")))}</span></div>'     # 시각은 local_time 으로만(C16 — [:10] 은 UTC 날짜를 잘라 저녁 답이 어제로 뜬다)
+            out.append(f'<div class="ok">답: {_e(a.get("verdict", ""))}{(" — " + words.mine(_e(a["note"]))) if a.get("note") else ""} <span class="meta">{_e(render.local_time(a.get("at")))}</span></div>'     # 시각은 local_time 으로만(C16 — [:10] 은 UTC 날짜를 잘라 저녁 답이 어제로 뜬다) · 메모는 쓴 그대로(words.mine — 낱말 표를 대면 쓰지 않은 말이 된다)
                        f'<form method="post" action="/me/decisions/delete" style="margin-top:4px"><input type="hidden" name="id" value="{_e(it["id"])}"><button class="btn" type="submit">이 답 지우기</button></form>')
         else:
             mine = f.get("id") == it["id"]
             picked = (f.get("verdict") or "") if mine else ""
             radios = " ".join(f'<label style="display:inline-block;margin-right:10px"><input type="radio" name="verdict" value="{v}"{" checked" if picked == v else ""} required> {v}</label>' for v in dc.VERDICTS)
             out.append(f'<form method="post" action="/me/decisions" style="margin-top:6px"><input type="hidden" name="id" value="{_e(it["id"])}">{radios}'
-                       f'<input name="note" placeholder="다르다면 → 무엇" value="{_e((f.get("note") or "") if mine else "")}" style="width:60%;max-width:420px">'
+                       f'<input name="note" placeholder="다르다면 → 무엇" value="{words.mine(_e((f.get("note") or "") if mine else ""))}" style="width:60%;max-width:420px">'     # 되돌려 주는 칸도 쓴 그대로(틀린 줄을 다시 쳐야 하면 안 된다)
                        f' <button class="btn pri" type="submit">저장</button></form>')
         out.append('</div>')
     text = dc.to_session_text(answers)
-    out.append('<h2 style="font-size:14px">세션에 보낼 것</h2><p class="meta">답한 것만 · 항목 순서 · 한 줄씩. 이 글을 세션에 붙이면 세션이 작업 기록에 옮기고 항목을 닫는다.</p>')
-    out.append(f'<pre class="send" style="white-space:pre-wrap">{_e(text) if text else "아직 답이 없다"}</pre></div>')
-    return words.plain("".join(out))
+    out.append('<h2 style="font-size:14px">세션에 보낼 것</h2><p class="meta">답한 것만 · 항목 순서 · 한 줄씩. 한 번 누르면 전체가 잡힌다 — 이 글을 세션에 붙이면 세션이 작업 기록에 옮기고 항목을 닫는다.</p>')
+    # 묶음 꼴은 정본 하나(render.paste_block) · 안의 글은 발행자가 쓴 답이라 낱말 표를 대지 않는다(words.mine — 바뀐 말이 작업 기록에 들어가면 쓰지 않은 말이 기록된다)
+    out.append(words.mine(render.paste_block(text, empty="아직 답이 없다")) + "</div>")
+    return words.plain_outside("".join(out))
 
 
 def me_main(message: str = "", error: str = "", form: dict[str, str] | None = None) -> str:

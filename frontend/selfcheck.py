@@ -94,6 +94,12 @@ def utterances(today: date, subject: dict[str, Any] | None) -> dict[str, Any]:
     return {"groups": groups, "with_expected": with_e, "without_expected": without_e, "ok": ok_n, "differ": differ}
 
 
+def _mine(said: str) -> str:
+    """사람이 쓴 글(물음 문장 · 발행자 메모 · 묶음 이름) — 낱말 표를 대지 않는다. 이 화면은 페이지를 통째로 표에 넣으므로 싸 두지 않으면 쓴 말이 바뀌어 돌아온다."""
+    from frontend import words
+    return words.mine(said)
+
+
 def _utterance_html(u: dict[str, Any] | None, e) -> str:
     if not u:
         return ""
@@ -102,16 +108,17 @@ def _utterance_html(u: dict[str, Any] | None, e) -> str:
     out = [f'<h2 style="font-size:15px;margin-top:18px">{e(PROBES_TITLE)}</h2>',
            f'<p class="meta">기대 있는 줄 {u["with_expected"]} — 맞음 {u["ok"]} · 다름 {u["differ"]} · 기대 없는 줄 {u["without_expected"]}. 기대 종류는 발행자가 붙입니다(세션이 붙이면 채점자와 응시자가 같습니다) — 「문장 — 종류」 한 줄씩 세션에 보내시면 됩니다. 다른 줄은 규칙이 못 나눈 사례로 쌓입니다(비교 세트 재료).</p>']
     for g in u["groups"]:
-        out.append(f'<h3 style="font-size:13px;margin:10px 0 4px">{e(g["name"])}</h3>')
+        out.append(f'<h3 style="font-size:13px;margin:10px 0 4px">{_mine(e(g["name"]))}</h3>')     # 묶음 이름도 발행자가 쓴 말이다
         for r in g["rows"]:
             if r["ok"] is None:
                 verdict = f'<span class="meta">{e(FILL_ME)}</span>'
             else:
                 verdict = f'<span class="{"ok" if r["ok"] else "err"}"><b>{"맞다" if r["ok"] else "다르다"}</b></span>'
             route = f' · {e(r["route_said"])}' if r["route_said"] else ""
+            # 물음 문장과 발행자 메모는 **쓴 그대로**(words.mine) · 종류·갈래 말은 시스템 말이라 표를 거친다
             expected = (f'<div class="meta">기대: {e(r["expected_said"])}' + (f' · {e(r["expected_route_said"])}' if r["expected_route_said"] else "")
-                        + (f' ({e(r["expected_note"])})' if r["expected_note"] else "") + "</div>") if r["expected"] else ""
-            out.append(f'<div class="card utt"><b>{e(r["text"])}</b> · {verdict}<div>실제: <span title="{e(r["actual"] or "")}">{e(r["actual_said"])}</span>{route}</div>{expected}</div>')
+                        + (f' ({_mine(e(r["expected_note"]))})' if r["expected_note"] else "") + "</div>") if r["expected"] else ""
+            out.append(f'<div class="card utt"><b>{_mine(e(r["text"]))}</b> · {verdict}<div>실제: <span title="{e(r["actual"] or "")}">{e(r["actual_said"])}</span>{route}</div>{expected}</div>')
     out.append(_fill_block(u, e))
     return "".join(out)
 
@@ -131,9 +138,12 @@ def _fill_block(u: dict[str, Any], e) -> str:
     # 전부 보이면 틀이 거부하는 말(영상 · 새 목록)을 적게 되고, 그러면 목록 파일이 실리지 않는다(발행자가 왜 안 되는지 모른다)
     kinds = " · ".join(dict.fromkeys(chat.KIND_PLAIN[k] for k in _probes.KINDS if k in chat.KIND_PLAIN))
     lines = "\n".join(f"{t} — " for t in rows)
+    from frontend import render, words
+    # 묶음 꼴은 정본 하나(`render.paste_block` — 「붙이면」 이라고 말하는 자리가 셋인데 꼴이 하나뿐이었다) · 안의 문장은 **발행자가 쓴 물음**이라 낱말 표를 대지 않는다.
+    # 오늘 스무 줄 중 바뀌는 것은 0 이지만(측정 2026-10-05) 「원장을 보여줘」 같은 조회 물음이 들어오면 묶음이 「일지를 보여줘」 를 돌려준다 — 그 줄로 답하면 목록과 안 맞는다.
     return ('<h3 style="font-size:13px;margin:14px 0 4px">그대로 복사해 쓰실 줄</h3>'
             f'<p class="meta">{e(FILL_HOW)} 쓸 수 있는 말: {e(kinds)}</p>'
-            f'<pre style="white-space:pre-wrap;user-select:all">{e(lines)}</pre>')
+            + words.mine(render.paste_block(lines)))
 
 
 def subject() -> dict[str, Any] | None:
@@ -192,7 +202,8 @@ def run(today: date, judge_html: str | None) -> dict[str, Any]:
 
 
 def main_html(report: dict[str, Any], today: date) -> str:
-    """채팅 셸의 본문. 시스템 문장은 낱말 표를 거친다(농가가 쓴 글은 여기 없다 — 물음 문장은 이 파일의 것)."""
+    """채팅 셸의 본문. **시스템 문장만** 낱말 표를 거친다(plain_outside) — 물음 문장·발행자 메모·묶음 이름은 목록 파일에서 온 **사람이 쓴 글**이라
+    `_mine` 으로 싸 둔다. 전에 이 자리가 *"물음 문장은 이 파일의 것"* 이라 적고 페이지를 통째로 표에 넣었는데, 문장은 이 파일의 것이 아니다."""
     from frontend import words
     e = html.escape
     from schema import labels
@@ -202,7 +213,7 @@ def main_html(report: dict[str, Any], today: date) -> str:
     s = report["subject"]
     if s is None:
         out.append(f'<p class="err">{e(NO_SUBJECT)}</p>' + _utterance_html(report.get("utterances"), e) + '</div>')
-        return words.plain("".join(out))
+        return words.plain_outside("".join(out))     # 사람이 쓴 조각(물음 문장 · 메모 · 복사 묶음)은 빼고 — 둘 다 같은 길이다(목록 없는 꼴에서도 문장은 실린다)
     n, total = report["ok"], report["total"]
     if n == total:
         out.append(f'<p class="ok"><b>전부 맞다</b> ({n}/{total}) · 목록 {e(str(s.get("label") or s.get("id")))} · 오늘 {today.isoformat()}</p>')
@@ -215,4 +226,4 @@ def main_html(report: dict[str, Any], today: date) -> str:
     out.append(_utterance_html(report.get("utterances"), e))
     out.append(f'<p class="meta">{e(BROWSER_ONLY)}</p>')
     out.append('<p class="meta">날씨 줄이 오래 걸리면 원천(기상청)이 늦거나 죽어 있는 것입니다 — 걸린 시간이 그 증거입니다. 못 받은 이유는 실제 칸에 그대로 나옵니다.</p></div>')
-    return words.plain("".join(out))
+    return words.plain_outside("".join(out))

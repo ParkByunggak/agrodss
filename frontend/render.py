@@ -48,9 +48,22 @@ MISSING_MARKDOWN_NOTE = ("<p class=\"meta\">markdown 모듈이 없어 원문으�
                          "<code>python -m pip install markdown</code> 뒤 재시작하면 표·제목이 렌더된다</p>")
 
 
+# [붙일 묶음 2026-10-05] 「세션에 붙이면」 이라고 말하는 자리의 **꼴 정본 하나**. 앞 회차에 「그대로 복사해 쓰실 줄」 을 한 곳에 넣고 닫았는데,
+# §7.5 지점 축으로 전수를 세니 그렇게 말하는 자리가 **셋**이었고(결정 화면의 「세션에 보낼 것」 · 자기 점검의 복사 묶음 · 화면 오류의 한 줄)
+# 한 번 눌러 전체가 잡히는 꼴은 **하나뿐**이었다 — 나머지 둘은 여러 줄을 손으로 끌어 골라야 했다. 처방이 한 곳에 갇힌 그 형태다.
+PASTE_STYLE = "white-space:pre-wrap;user-select:all"    # user-select:all — 한 번 눌러 전체가 잡힌다(여러 줄을 손으로 끌지 않게)
+
+
+def paste_block(text: str, empty: str = "") -> str:
+    """붙여 넣을 글 한 덩어리 — 한 번 눌러 전체가 잡히는 꼴. 글은 이스케이프한다(화면이 깨지지 않게 · 쓴 글이 태그가 되지 않게).
+
+    사람이 쓴 글을 담을 때는 부르는 쪽이 `words.mine(...)` 으로 싸서 낱말 표를 피한다 — 여기서 싸면 사람 글이 아닌 자리까지 묶음째 빠진다."""
+    return f'<pre class="send" style="{PASTE_STYLE}">{html.escape(text if str(text).strip() else empty)}</pre>'
+
+
 def md_to_html(text: str) -> str:
     if markdown is None:
-        return MISSING_MARKDOWN_NOTE + "<pre>" + html.escape(text) + "</pre>"
+        return MISSING_MARKDOWN_NOTE + "<pre>" + html.escape(text) + "</pre>"      # 붙일 묶음이 아니다 — 문서 원문을 보여 주는 자리(paste_block 아님)
     body = markdown.markdown(text, extensions=["tables", "fenced_code"])
     return _STATE_CELL.sub(
         lambda m: f'<td><span class="st st-{m.group(1)}">{m.group(1)}{m.group(2)}</span></td>',
