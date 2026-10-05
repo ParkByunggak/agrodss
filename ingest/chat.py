@@ -528,6 +528,12 @@ def _fold_adverbs(text: str) -> str:
     return _ADVERB_RE.sub("", text)
 
 
+def work_type(text: str) -> str | None:
+    """이 한 줄이 가리키는 **작업 종류** — 활용을 규칙으로 보는 한 자리(`_event_type`)의 공개 이름.
+    다른 모듈(용도 선언 가름)이 *"이 말에 작업 어휘가 있는가"* 를 물을 때 쓴다 — 어휘를 두 벌로 적지 않기 위해서다."""
+    return _event_type(text)
+
+
 def _event_type(text: str) -> str | None:
     t = _fold_adverbs(text)          # 한 자리 — _event_type 을 쓰는 모든 갈래(사건 · 부정 · 계획 꼬리)가 같은 걷기를 받는다
     for ty, words in EVENT_SYNONYMS.items():
@@ -807,8 +813,10 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
     # [말뭉치 래칫이 잡았다] 의지 어미를 일반화하자 **용도 선언**을 가로챘다 — 「이번 작기는 팔 것이다」(판매 목적)가 계획이 됐다. 선언은 계획보다 앞선다.
     # 가드는 **새 주장**(어미 규칙 · 추측 꼴)에만 붙인다 — 옛 어휘(예정 · 계획 · 생각)의 순서는 말뭉치가 이미 고정해 두었다(「몰 납품용으로 쓸 생각」 은 납품 계획).
     # 그 비대칭(어미는 선언에 지고 어휘는 이긴다)은 기록해 둔다 — 「내일 종구용으로 심을 것」 처럼 둘이 겹치는 말은 선언으로 간다(종류는 확인에서 바꾼다).
-    # 같은 가로채기가 **작기 종료**에서도 났다(「이번 작기 끝낼게요」 → 계획) — 그 갈래는 확인하면 재배 단위를 닫으므로 잘못 걸릴 때의 대가가 가장 크다(아래 주석)
-    said_declaration = bool(parcels.use_declared(t)) or _end_declared(t)
+    # 같은 가로채기가 **작기 종료**에서도 났다(「이번 작기 끝낼게요」 → 계획) — 그 갈래는 확인하면 재배 단위를 닫으므로 잘못 걸릴 때의 대가가 가장 크다(아래 주석).
+    # [2026-10-05] 용도 선언은 **한 번만** 묻는다(아래 용도 갈래가 이 값을 그대로 쓴다) — 두 번 부르면 작업 어휘 인자가 어긋날 수 있다(같은 말에 다른 답)
+    use_v = parcels.use_declared(t, has_work=bool(et))
+    said_declaration = bool(use_v) or _end_declared(t)
     said_plan = (_PLAN_RE.search(t) or (not said_declaration and (_plan_ending(t) or (_GUESS_TAIL_RE.search(t) and willing)))
                  or (et and _PLAN_TAIL_RE.search(t)) or future)
     if said_plan and not (et and _past_ending(t)):
@@ -852,8 +860,7 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
     if et and _done_evidence(t):
         return [{"kind": "event", "type": et, "observed_at": day_past, "note": t, "why": f"사건 어휘 → {et}",
                  "needs": [] if day_past else ["observed_at"]}]
-    use_v = parcels.use_declared(t)
-    if use_v:
+    if use_v:                                    # 위에서 한 번 쟀다(작업 어휘를 함께 넘겨서) — 여기서 다시 묻지 않는다
         # [발행자 실사용 2026-10-04 "이 쪽파는 종구생산을 위한 목적이다" → 본 것] 관찰이 아니라 **재배 단위의 용도 선언**이다 — 여덟 갈래에 속성 선언이 없어 아무 어휘도
         # 안 걸린 서술문으로 떨어졌다. 종구용 결정으로 용도 축을 만들고도 채팅에서 그 축으로 가는 길이 없었다("밭 정보 화면에 적으십시오" 가 요구였다). 배수 답이
         # 밭 정보 초안으로 가는 길(§9 parcel.field)과 같은 형태 — 확인 뒤 parcels.set_fields · 어느 필지인지는 classify() 가 재배 단위에서 채운다.

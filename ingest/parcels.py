@@ -186,14 +186,28 @@ USE_WORDS: dict[str, tuple[str, ...]] = {
     "몰 납품": ("몰 납품", "몰에 납품", "납품용"),
 }
 # 선언의 표지 — 사건(심었다) · 계획(납품 예정) 어휘가 먼저 걸리면 그 갈래가 이긴다(순서는 ingest.chat._classify). 상태 서술이 아니라 **용도를 정하는 말**만.
-USE_DECLARE_WORDS = ("용도", "목적", "위한", "위해", "용이다", "용입니다", "용으로", "용임", "것이다", "것입니다", "할 생각", "하려고 한다")
+USE_DECLARE_WORDS = ("용도", "목적", "위한", "위해", "용이다", "용입니다", "용으로", "용임")
+# [2026-10-05] 이 넷은 여기 함께 있었는데 **의지 어미와 같은 꼴**이다 — 그래서 「종구 캘 것입니다」(할 일)가 용도 선언으로 읽혔다(「종구」 + 「것입니다」).
+# 가를 재료는 같은 날 생겼다: 작업 어휘가 활용을 보게 되면서 그 말의 작업 종류(수확)가 선다 → **작업 어휘가 있으면 할 일, 없으면 선언**이다.
+# 「이번 작기는 팔 것이다」 · 「판매할 것이다」 는 작업 어휘가 없으니 그대로 선언이고, 「종구 캘 것입니다」 · 「종구 심을 것이다」 는 할 일로 간다.
+USE_DECLARE_TAILS = ("것이다", "것입니다", "할 생각", "하려고 한다")
 
 
-def use_declared(text: str) -> str | None:
-    """채팅 한 줄이 재배 용도 선언이면 그 용도(USE_WORDS 의 키), 아니면 None. 둘 이상 걸리면 None."""
+def use_declared(text: str, has_work: bool | None = None) -> str | None:
+    """채팅 한 줄이 재배 용도 선언이면 그 용도(USE_WORDS 의 키), 아니면 None. 둘 이상 걸리면 None.
+
+    `has_work` — 이 말에 **작업 어휘**가 있는가(없으면 여기서 잰다). 의지 어미와 겹치는 표지(USE_DECLARE_TAILS)로만 서는 선언은
+    작업 어휘가 있으면 선언이 아니다. 기본값을 두는 이유: 이 가름을 부르는 자리가 둘(분류 · 묻기 전 원장 읽기)인데 **어느 쪽도 두 벌로 적지 않게** 하려는 것이다.
+    """
     t = text or ""
     if not any(w in t for w in USE_DECLARE_WORDS):
-        return None
+        if not any(w in t for w in USE_DECLARE_TAILS):
+            return None
+        if has_work is None:
+            from ingest import chat                    # 같은 층(ingest) 안의 늦은 import — 활용을 보는 작업 어휘 정본 하나를 쓴다
+            has_work = chat.work_type(t) is not None
+        if has_work:
+            return None                                # 할 일이다 — 용도를 정하는 말이 아니다
     hits = [k for k, ws in USE_WORDS.items() if any(w in t for w in ws)]
     return hits[0] if len(hits) == 1 else None
 # 필드의 **농가 말** — 요구 문장(judge.need)이 "읽는 판정이 없는 값을 묻지 않는다"(WO-ASK-01 §5-1)를 이 말로 잰다.

@@ -264,6 +264,12 @@ CORPUS = [
     ("밭을 걷는다", "observation.note", None),                                                  # 「걷」 은 어간으로 두지 않았다 — 걷다(걸어가다)와 겹친다
     ("물 준비를 했다", "observation.note", None),
     ("정리함을 샀다", "observation.note", None),
+    # [2026-10-05 ⓐ] 선언 표지에 섞여 있던 **의지 어미** — 작업 어휘가 활용을 보게 되자 가를 재료가 생겼다(작업 어휘 있으면 할 일 · 없으면 선언)
+    ("종구 캘 것입니다", "plan.farmer", None),
+    ("종구 심을 것이다", "plan.farmer", None),
+    ("내일 종구 캘 생각", "plan.farmer", None),
+    ("판매할 것이다", "parcel.field", None),                                                   # 반대편 — 작업 어휘가 없으면 용도 선언 그대로
+    ("올해는 자가 소비할 것이다", "parcel.field", None),
 ]
 
 
@@ -275,7 +281,7 @@ def test_corpus_kind_and_topic(text, kind, topic):
         assert chat.topic_of(text) == topic, (text, chat.topic_of(text))
 
 
-CORPUS_MIN = 154# [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
+CORPUS_MIN = 159   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
 
 
 def test_corpus_is_append_only():
