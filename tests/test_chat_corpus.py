@@ -254,6 +254,16 @@ CORPUS = [
     ("이번 작기 끝낼게요", "subject.end", None),                                              # 선언은 의지 어미보다 앞선다(확인하면 재배 단위가 닫힌다)
     ("고랑 손봐야 할 것 같다", "plan.farmer", None),                                           # 작업 어휘가 없고 의지 표지만 있는 말 — 주입 C 가 이 갈래의 미검사를 드러냈다
     ("이랑을 다시 만들어야 할 것 같다", "plan.farmer", None),
+    # [처방 직후 전수 2026-10-05 · 같은 병의 세 번째 자리] 작업 어휘가 과거 꼴만 적혀 있어 같은 일을 앞날로 말하면 종류가 안 섰다(초안 task 가 문장 전체가 되고 계획표와 못 잇는다)
+    ("종구 캘 것", "plan.farmer", None),
+    ("비닐 정리할 것", "plan.farmer", None),
+    ("다음 주에 밭 둘러볼 것", "plan.farmer", None),
+    ("고랑 물 뺄 것", "plan.farmer", None),
+    # 반대편 — 활용을 규칙으로 만들면 짧은 꼴이 엉뚱한 말에 걸릴 수 있다(한 음절 어간의 ㄹ·ㅁ 꼴을 안 만드는 이유)
+    ("캘린더에 적었다", "observation.note", None),
+    ("밭을 걷는다", "observation.note", None),                                                  # 「걷」 은 어간으로 두지 않았다 — 걷다(걸어가다)와 겹친다
+    ("물 준비를 했다", "observation.note", None),
+    ("정리함을 샀다", "observation.note", None),
 ]
 
 
@@ -265,7 +275,7 @@ def test_corpus_kind_and_topic(text, kind, topic):
         assert chat.topic_of(text) == topic, (text, chat.topic_of(text))
 
 
-CORPUS_MIN = 146 # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
+CORPUS_MIN = 154# [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
 
 
 def test_corpus_is_append_only():
