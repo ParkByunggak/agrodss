@@ -80,12 +80,39 @@ def grid_symptom_words(subject: dict[str, Any] | None) -> tuple[str, ...]:
     return SD.symptom_words_for(subject)
 
 
-PLAN_WORDS = ("예정", "할 것", "하려고", "하려 한다", "계획", "할까 한다", "할 생각", "하겠다", "할게", "해야겠")
+# [처방 직후 전수 2026-10-05 — 종결 어미 건의 쌍둥이] 계획 어휘도 **'하다' 꼴 조각**으로 적혀 있었고 두 벌이었다(`PLAN_WORDS` 와 `_PLAN_RE` 가 예정 · 할 것 ·
+# 할게 · 해야겠 · 할 생각을 겹쳐 들고 있었다 — §7.1 "어휘 두 벌 금지"). 그래서 ① 다른 동사에서 안 걸렸다(「내일 물 줄 것」 · 「모레 약 칠 것」 · 「비료 줄게」 ·
+# 「약 칠게」 가 **본 것**으로) ② 포함 검사라 추측까지 계획으로 만들었다(「비가 오겠다」 · 「잎이 노랗겠다」 · 「힘들겠다」 · 「모르겠다」 · 「물이 부족할 것 같다」 →
+# 계획 · 확인하면 농가 계획 원장에 없는 할 일이 들어가고 계획 대 실제가 그것을 센다). 정본은 하나이고, 의지 어미는 **끝에서** 본다(`_plan_ending`).
+_PLAN_WORDS_MERGED_INTO = "_PLAN_RE"      # 옛 `PLAN_WORDS` 는 여기로 합쳤다 — 되살리면 두 벌이 된다(래칫이 본다)
 # [시점 걷기 2026-09-20] 작기 종료 선언 — 사건 어휘('정리했' · '수확')보다 앞에서 본다. 명시 문구만(원문 '끝났다'류는 사건·관찰과 겹친다)
 END_WORDS = ("작기 종료", "작기 끝", "재배 종료", "농사 끝", "농사 종료", "올해 농사 마", "이번 작기 마", "작기를 마", "작기 마감")
 # 종료 문구가 **종속절**이면 선언이 아니다 — "작기 끝나기 전에 …" · "농사 끝날 때까지 …"(처방 직후 전수 2026-09-20)
 _END_SUBORDINATE = re.compile(r"(끝|종료|마감|마치|마무리)\w*\s*(전에|전까지|기\s*전|때까지|때쯤|무렵|하면)")
-_PLAN_RE = re.compile(r"(려고|려 한다|려한다|할 예정|예정|계획|할 것|겠다|겠습니다|겠어요|겠음|할게|해야겠|할 생각|생각\s*(이다|입니다|이에요|임)?\s*$)")
+
+
+def _end_declared(text: str) -> bool:
+    """작기 종료 **선언**인가 — 명시 문구가 있고 종속절이 아니다. 종료 갈래와 그보다 앞서는 갈래가 **같은 조건**을 쓴다(어휘 두 벌 금지)."""
+    return any(w in text for w in END_WORDS) and not _END_SUBORDINATE.search(text)
+_PLAN_RE = re.compile(r"(려고|려 한다|려한다|할 예정|예정|계획|까 한다|해야겠|야겠|할 생각|생각\s*(이다|입니다|이에요|임)?\s*$)")
+# **추측·완곡** 꼴 — 의지일 때만 계획이다. 같은 어미가 둘을 다 쓴다(「물 줘야겠다」=의지 · 「비가 오겠다」=추측 / 「웃거름 해야 할 것 같다」=의지 · 「물이 부족할 것 같다」=추측).
+# 가르는 표지는 **작업 어휘**(`_event_type`)나 **의지·의무 표지**(야겠 · 야 할)다 — 문장 끝 현재·앞날 서술을 작업 어휘로 가르는 아래 규칙과 같은 축
+_GUESS_TAIL_RE = re.compile(r"(겠다|겠습니다|겠어요|겠음|것\s*같|듯\s*하|듯\s*싶)\w*\s*[.!]?\s*$")
+_WILL_MARK_RE = re.compile(r"야\s*(겠|할|되)")
+
+
+def _plan_ending(t: str) -> bool:
+    """끝이 **의지 어미**인가 — 줄 것 · 칠 것 · 심을 것 · 줄게 · 칠게(받침 ㄹ + 「것」 또는 「게」).
+
+    조각 목록(「할 것」 · 「할게」)은 '하다' 꼴만 봐서 다른 동사에서 안 걸렸고, 포함 검사라 「방제할 것 같다」 까지 계획으로 만들었다 —
+    끝에서 보면 둘이 같이 닫힌다(「… 것 같다」 는 끝이 「같다」 이므로 여기 안 걸리고, 추측 갈래가 작업 어휘로 가른다).
+    """
+    s = t.strip().rstrip("?!. …").rstrip()
+    s = re.sub(r"(?:이다|입니다|이에요|예요|임|요)$", "", s).rstrip()
+    if not s.endswith(("것", "게")):
+        return False
+    prev = s[-3] if (s.endswith("것") and len(s) >= 3 and s[-2] == " ") else (s[-2] if len(s) >= 2 else "")
+    return "가" <= prev <= "힣" and (ord(prev) - 0xAC00) % 28 == 8          # 받침 ㄹ — 「늦게」(ㅈ) · 「크게」(없음) 는 안 걸린다
 # [발행자 실사용 2026-09-29 "오전에 스프링쿨러 가동 1시간한다"(06:18 에 적음)] 문장 끝의 **현재·앞날 서술**("…한다" · "…합니다" · "…할 거다")은 앞으로 할 일이다 —
 # 한 일은 받침 ㅆ(줬다 · 했다)로 끝난다. 이 꼴은 계획 어휘(려고 · 예정)가 없어 관찰 메모로 떨어졌고, "오늘 급수 1시간 한다" 는 '오늘' 이 한 일 표지로 읽혀
 # **사건**이 됐다(할 일이 한 일로 — 계획 대 실제가 이행으로 센다). 문장 끝만 본다(받침 ㅆ 과거가 있으면 위 규칙대로 한 일이 이긴다).
@@ -720,13 +747,22 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
     # 계획이 아니다) ② 날짜가 오늘보다 뒤면 앞날이다 — 전에는 "내일 파종" · "모레 방제" 가 **내일 날짜의 한 일**이 됐다(날짜 표지를 한 일 표지로 센 09-20
     # 규칙의 구멍 · 계획 대 실제가 안 한 일을 이행으로 센다). 받침 ㅆ 과거가 있으면 위 규칙대로 한 일이 이긴다("어제 오전에 물 줬다")
     future = bool(et and day and day > today.isoformat())
-    if (any(w in t for w in PLAN_WORDS) or _PLAN_RE.search(t) or (et and _PLAN_TAIL_RE.search(t)) or future) and not (et and _past_ending(t)):
+    # 의지(어미 규칙 · 어휘 정본 하나) · 추측 꼴은 **작업 어휘나 의지 표지가 있을 때만** · 문장 끝 현재·앞날 서술은 작업 어휘가 있을 때만 · 앞날 날짜
+    willing = bool(et) or bool(_WILL_MARK_RE.search(t))
+    # [말뭉치 래칫이 잡았다] 의지 어미를 일반화하자 **용도 선언**을 가로챘다 — 「이번 작기는 팔 것이다」(판매 목적)가 계획이 됐다. 선언은 계획보다 앞선다.
+    # 가드는 **새 주장**(어미 규칙 · 추측 꼴)에만 붙인다 — 옛 어휘(예정 · 계획 · 생각)의 순서는 말뭉치가 이미 고정해 두었다(「몰 납품용으로 쓸 생각」 은 납품 계획).
+    # 그 비대칭(어미는 선언에 지고 어휘는 이긴다)은 기록해 둔다 — 「내일 종구용으로 심을 것」 처럼 둘이 겹치는 말은 선언으로 간다(종류는 확인에서 바꾼다).
+    # 같은 가로채기가 **작기 종료**에서도 났다(「이번 작기 끝낼게요」 → 계획) — 그 갈래는 확인하면 재배 단위를 닫으므로 잘못 걸릴 때의 대가가 가장 크다(아래 주석)
+    said_declaration = bool(parcels.use_declared(t)) or _end_declared(t)
+    said_plan = (_PLAN_RE.search(t) or (not said_declaration and (_plan_ending(t) or (_GUESS_TAIL_RE.search(t) and willing)))
+                 or (et and _PLAN_TAIL_RE.search(t)) or future)
+    if said_plan and not (et and _past_ending(t)):
         if any(w in t for w in ("납품", "출하")):
             return [{"kind": "plan.target_date", "target_date": day, "note": t, "why": "납품·출하 + 계획 어휘",
                      "needs": [] if day else ["target_date"]}]
         return [{"kind": "plan.farmer", "task": et or t[:60], "planned_day": day, "note": t, "why": "계획 어휘",
                  "needs": [] if day else ["planned_day"]}]
-    if any(w in t for w in END_WORDS) and not _END_SUBORDINATE.search(t):
+    if _end_declared(t):
         # [처방 직후 전수 2026-09-20] "작기 끝나기 **전에** 웃거름을 줬다"가 작기 종료 초안이 됐다 — 종료 문구가 종속절에 있는데
         # 선언으로 읽힌다. 확인하면 그 재배 단위가 닫히고 그날 뒤 계획을 놓침으로 안 센다(되돌리는 길은 발행자 몫) — 이 갈래는
         # 잘못 걸릴 때의 대가가 가장 크다. '전에 · 전까지 · 기 전' 이 뒤따르면 선언이 아니다.

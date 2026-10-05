@@ -236,6 +236,24 @@ CORPUS = [
     ("물 줬는지 알려줘", "question", None),
     ("뭘 해야 하는지 모르겠다", "question", "plan_vs_actual"),                                  # 「모르겠다」 의 ㅆ 은 과거가 아니다(정본 _NOT_PAST_SSANG)
     ("할 일이 있나", "question", "plan_vs_actual"),                                           # 「있다」 도 같은 정본으로 빠진다
+    # [처방 직후 전수 2026-10-05 — 종결 어미 건의 쌍둥이] 계획 어휘도 '하다' 꼴 조각이었고 두 벌이었다. ① 빠진 쪽 — 다른 동사의 의지 어미
+    ("내일 물 줄 것", "plan.farmer", None),
+    ("모레 약 칠 것", "plan.farmer", None),
+    ("다음 주에 종구 심을 것", "plan.farmer", None),
+    ("비료 줄게", "plan.farmer", None),
+    ("약 칠게", "plan.farmer", None),
+    # ② 새는 쪽 — 같은 어미가 추측에도 쓰인다(확인하면 없는 할 일이 농가 계획 원장에 들어가고 계획 대 실제가 그것을 센다)
+    ("비가 오겠다", "observation.note", None),
+    ("잎이 노랗겠다", "observation.note", None),
+    ("힘들겠다", "observation.note", None),
+    ("물이 부족할 것 같다", "observation.note", None),
+    ("잎이 마를 것 같다", "observation.note", None),
+    # ③ 경계 — 의지 표지(야겠 · 야 할)나 작업 어휘가 있으면 그대로 계획이다
+    ("약을 쳐야겠다", "plan.farmer", None),
+    ("내일 물 줘야겠다", "plan.farmer", None),
+    ("이번 작기 끝낼게요", "subject.end", None),                                              # 선언은 의지 어미보다 앞선다(확인하면 재배 단위가 닫힌다)
+    ("고랑 손봐야 할 것 같다", "plan.farmer", None),                                           # 작업 어휘가 없고 의지 표지만 있는 말 — 주입 C 가 이 갈래의 미검사를 드러냈다
+    ("이랑을 다시 만들어야 할 것 같다", "plan.farmer", None),
 ]
 
 
@@ -247,7 +265,7 @@ def test_corpus_kind_and_topic(text, kind, topic):
         assert chat.topic_of(text) == topic, (text, chat.topic_of(text))
 
 
-CORPUS_MIN = 131   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
+CORPUS_MIN = 146 # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
 
 
 def test_corpus_is_append_only():
