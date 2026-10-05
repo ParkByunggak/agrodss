@@ -221,6 +221,21 @@ CORPUS = [
     ("아직 안 심었어요", "decision.noncompliance", None),
     ("종구 못 심었다", "decision.noncompliance", None),
     ("아직 안 뿌렸어요", "decision.noncompliance", None),                                     # 반대편 「비가 안 와서 물 줬다」 는 위에 이미 있다 — 다른 서술어의 부정은 그대로 한 일
+    # [문장 형태 점검 전수 2026-10-05] 종결 어미를 **어휘 조각**으로 세던 자리의 두 얼굴. ① 빠진 쪽 — 「-ㄴ가」 조각이 인가·는가·은가 셋뿐이라 같은 어미가 본 것으로 떨어졌다
+    ("관수가 필요한가", "question", "drought_alert"),
+    ("흙이 마른가", "question", None),
+    ("잎이 노란가", "question", None),                                                        # 증상 경로는 `topic_of` 가 아니라 증상 가름이 정한다(화면에서는 「증상 → 원인 좁히기」)
+    ("물이 모자란가", "question", None),
+    ("배수가 좋은가", "question", "drainage_alert"),                                          # 조각으로 이미 통과하던 꼴 — 어미 규칙으로 옮긴 뒤에도 그대로
+    # ② 새는 쪽 — 조각이 문장 **중간**에 있고 말은 과거 서술로 끝난다(한 일이 원장에 안 들어가고 답만 나간다)
+    ("오늘 할 일 다 했다", "observation.note", None),
+    ("무슨 일이 있었다", "observation.note", None),
+    ("언제인가 모르지만 물 줬다", "event", None),
+    ("어떻게 해야 할지 몰라서 그냥 관수했다", "event", None),                                   # C15 전수에서 등재해 둔 꼴 — 과거 서술 끝 가드가 닫는다
+    # ③ 경계 — 끝을 보는 판정(물음표 · 어미 규칙)은 그 가드를 안 받는다
+    ("물 줬는지 알려줘", "question", None),
+    ("뭘 해야 하는지 모르겠다", "question", "plan_vs_actual"),                                  # 「모르겠다」 의 ㅆ 은 과거가 아니다(정본 _NOT_PAST_SSANG)
+    ("할 일이 있나", "question", "plan_vs_actual"),                                           # 「있다」 도 같은 정본으로 빠진다
 ]
 
 
@@ -232,7 +247,7 @@ def test_corpus_kind_and_topic(text, kind, topic):
         assert chat.topic_of(text) == topic, (text, chat.topic_of(text))
 
 
-CORPUS_MIN = 118   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
+CORPUS_MIN = 131   # [발행자 2026-09-20] 말뭉치는 append-only — 문장을 빼지 않고 기대 종류만 고친다. 이 하한은 **위로만** 올린다(줄면 "왜 줄었나"를 못 묻는다)
 
 
 def test_corpus_is_append_only():
