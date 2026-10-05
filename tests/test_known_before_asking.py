@@ -92,7 +92,8 @@ def test_a_use_declaration_already_in_the_diary_raises_a_use_draft_and_confirmin
     prop = next(d for d in m["drafts"] if d["kind"] == "parcel.field")
     assert prop["field"] == "use" and prop["value"] == "종구 생산" and prop["why_key"] == "from_diary"
     rec = chat.confirm(m["id"], m["drafts"].index(prop), now=NOW)
-    assert rec["opens"] == ["ship_or_store"] and "종구 기준으로 읽습니다" in rec["opens_line"]
+    # 여는 판정은 정본에서 — 2026-10-05 재측정으로 하나(출하·저장)에서 다섯으로 늘었다(수확 시기 · 위험 경보 · 계획 대 실제 · 배수 경보 · 출하·저장)
+    assert rec["opens"] == list(parcels.FIELD_CONSUMERS["use"]) and "종구 기준으로 읽습니다" in rec["opens_line"]
     assert grid_schema.use_key(parcels.by_id("p001")["use"]) == "종구"
     envs = {e.decision_id: e for e in judge_run.judgments_for(SID, today=date(2026, 10, 19))}   # 55일째 — 수확 칸
     assert envs["ship_or_store"].kind == "해당 없음" and envs["risk_alert"].result.get("use_gap_stages")   # 결정이 채팅 길로 판정까지 닿았다

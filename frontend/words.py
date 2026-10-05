@@ -141,7 +141,10 @@ def fix_offer(names: list[str]) -> str:
 
 
 # [WO-ASK-01 §12 2026-10-03] "답했는데 아무것도 안 바뀌면 더 안 쓴다" — 답을 받은 직후 **그 답이 연 판단**을 말한다. 판단 이름은 사람 말 정본에서.
-DECISION_SAID = {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용", "plan_vs_actual": "계획 대 실제"}
+# [전수 2026-10-05] 여기 없으면 등록부 이름으로 떨어지는데, 그 이름 둘이 **안쪽 말**을 싣고 있었다(「배수 경보(칸 4)」 · 「병해충 경보(칸 3)」) —
+# 사람 말 표가 그것을 또 고쳐(「4단계」) 같은 문장이 plain() 전후로 달라졌다. 보이는 이름은 **여기가 정본**이다(검사가 등록 결정 전수를 본다).
+DECISION_SAID = {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용", "plan_vs_actual": "계획 대 실제",
+                 "drainage_alert": "배수 경보(4단계)", "pest_alert": "병해충 경보(3단계)"}
 
 
 def decision(decision_id: str) -> str:

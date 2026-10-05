@@ -27,13 +27,20 @@ CORE = {"harvest_timing", "risk_alert", "material_citation", "plan_vs_actual"}
 def test_every_field_a_judgment_reads_names_its_readers_and_they_are_real_decisions_that_read_it():
     assert tuple(parcels.FIELD_CONSUMERS) == parcels.FIELDS_READ_BY_JUDGMENT
     known = CORE | set(registry.all_decisions())
-    readers = {"ship_or_store": ("judge/stage_decisions.py", '"use"'), "base_fertilization": ("ingest/fertilizer.py", '"environment"'),
-               "risk_alert": ("judge/risk_alert.py", '"drainage"')}
+    # (필드, 결정) → 그 결정의 코드가 **그 필드를 읽는 자리**의 표지. 용도는 이름이 아니라 기구로 읽는다(격자 use_gap/use_key) — 2026-10-05 측정에서 셋으로 늘었다
+    readers = {("use", "ship_or_store"): ("judge/stage_decisions.py", '"use"'),
+               ("use", "harvest_timing"): ("judge/harvest_timing.py", "use_gap("),
+               ("use", "risk_alert"): ("judge/risk_alert.py", "use_gap("),
+               ("use", "plan_vs_actual"): ("judge/plan_vs_actual.py", "use_gap("),
+               ("use", "drainage_alert"): ("judge/stage_decisions.py", '_delegate_risk(subject, "drainage_alert"'),
+               ("environment", "base_fertilization"): ("ingest/fertilizer.py", '"environment"'),
+               ("drainage", "risk_alert"): ("judge/risk_alert.py", '"drainage"'),
+               ("drainage", "drainage_alert"): ("judge/stage_decisions.py", '_delegate_risk(subject, "drainage_alert"')}
     for field, ids in parcels.FIELD_CONSUMERS.items():
         assert ids, field
         for d in ids:
             assert d in known, (field, d)
-            rel, token = readers[d]
+            rel, token = readers[(field, d)]
             assert token in (ROOT / rel).read_text(encoding="utf-8"), (d, rel, token)      # 선언이 사실이다 — 그 코드가 그 필드 이름을 읽는다
             assert words.decision(d) != d, d                                               # 사람 말 이름이 있다
     for f in parcels.FIELDS_STORED_ONLY:
@@ -44,9 +51,11 @@ def test_the_reply_to_an_answer_says_which_judgment_it_opens_and_so_does_the_con
     _, r = chat.send(SID, "풀 뽑았다", today=T34, now=NOW)
     assert asks.pending(SID)["fields"] == ["drainage"]
     m, r2 = chat.send(SID, "나쁨", today=T34, now=NOW)
-    assert "이것으로 위험 경보 판단이 배수 값 '나쁨' 을 읽습니다" in r2["text"]                 # §12 — 답한 직후 연 판단을 말한다
+    # 문면은 **정본에서 만든다** — 이름 목록을 검사에 박으면 소비자를 재측정할 때마다 거짓 실패가 난다(2026-10-05 배수 1→2 에서 실제로 났다)
+    said = " · ".join(words.decision(d) for d in parcels.FIELD_CONSUMERS["drainage"])
+    assert f"이것으로 {said} 판단이 배수 값 '나쁨' 을 읽습니다" in r2["text"]                    # §12 — 답한 직후 연 판단을 말한다
     rec = chat.confirm(m["id"], 0, now=NOW)
-    assert rec["opens"] == ["risk_alert"] and rec["opens_line"].startswith("이것으로 위험 경보 판단이 배수 값 '나쁨' 을 읽습니다")
+    assert rec["opens"] == list(parcels.FIELD_CONSUMERS["drainage"]) and rec["opens_line"].startswith(f"이것으로 {said} 판단이 배수 값 '나쁨' 을 읽습니다")
     for text in (rec["opens_line"], words.opened("use", "종구 생산"), words.opened("use", "판매")):
         assert not [w for w in JARGON if w in text], text
         assert words.plain(text) == text
@@ -64,7 +73,8 @@ def test_the_parcel_form_is_the_third_place_an_answer_lands_and_it_speaks_the_sa
     import html
     st, body = _post(srv, "/me/parcel", {"id": "p001", "drainage": "나쁨"})
     body = html.unescape(body)
-    assert st == 200 and "이것으로 위험 경보 판단이 배수 값 '나쁨' 을 읽습니다" in body and "판정이 읽는 값 drainage" not in body and "배수" in body
+    said = " · ".join(words.decision(d) for d in parcels.FIELD_CONSUMERS["drainage"])
+    assert st == 200 and f"이것으로 {said} 판단이 배수 값 '나쁨' 을 읽습니다" in body and "판정이 읽는 값 drainage" not in body and "배수" in body
     st, body = _post(srv, "/me/parcel", {"id": "p001", "use": "종구 생산"})
     body = html.unescape(body)
     assert st == 200 and "용도 값 '종구 생산' 을 읽습니다" in body and "재배 달력도 종구 기준으로 읽습니다" in body

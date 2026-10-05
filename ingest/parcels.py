@@ -235,10 +235,18 @@ FIELDS_READ_BY_JUDGMENT = ("use", "environment", "drainage")
 # [WO-ASK-01 §12 2026-10-03] "답을 받은 직후 그 답이 연 판정을 말한다 — '이제 과습 판정이 섭니다'. 연 것이 없으면 그 질문은 애초에 하지 말았어야 한다(§5-1)."
 # 그래서 읽는 판정이 있는 필드마다 **누가 읽는가**를 이름으로 적는다 — 위 전수 주석을 코드로 옮긴 것이고, 검사가 (키 = FIELDS_READ_BY_JUDGMENT · 전부 비지 않음 ·
 # 이름이 실제 결정 id) 를 고정한다. 답을 넣은 화면이 이 이름을 사람 말로 부른다(frontend.words.opened).
+# [소비자 재측정 2026-10-05] 이 표는 **선언이 아니라 사실**이어야 한다 — 화면이 이것으로 「넣으면 어느 판단이 읽습니다」 를 말한다.
+# 값을 바꿔 가며 판정을 돌려 세니(10-07 기준) **적힌 것보다 많았다**: 용도 1→3→**5** · 배수 1→2.
+# (3 은 봉투의 종류·경보 수·요약만 본 수이고, **메모까지** 보니 5 였다 — 메모도 농가가 읽는 줄이다. 이 트랙의 "경로 전수 예측은 늘 과소" 가 또 맞았다.) 특히 용도는 가장 작은 것(출하·저장)만 적혀 있어,
+# 발행자에게 *"넣으면 출하·저장 판단이 읽습니다"* 라고 말하고 있었다 — 실제로는 **수확 시기**가 잎 기준을 멈추고 **위험 경보**가 둘 줄어든다
+# (그 둘이 10/07 부터 매일 나가는 경보다). 조건이 붙은 값을 덜 말하는 것은 축약이 아니라 **다른 사실**이다.
+# 아래 이름은 그 측정의 결과이고, 검사가 **같은 방식으로 다시 재서** 대조한다(선언을 믿지 않는다).
 FIELD_CONSUMERS: dict[str, tuple[str, ...]] = {
-    "use": ("ship_or_store",),                 # judge.stage_decisions.judge_ship_or_store — 자가·시험·종구면 해당 없음 · 종구는 grid.schema.use_key 로 재배 달력까지
+    # 측정 2026-10-05(10-07 기준 · 자가→종구): 수확 시기 판단 불가(지식) · 위험 경보 3→1 · 계획 대 실제 메모(그 칸 할 일 보류) · 배수 경보(위험 봉투를 칸 4 로 자른 카드) · 출하·저장 문면
+    "use": ("harvest_timing", "risk_alert", "plan_vs_actual", "drainage_alert", "ship_or_store"),      # grid.schema.use_key → apply_use/use_gap — 큰 것부터 적는다(화면이 이 순서로 말한다)
     "environment": ("base_fertilization",),    # ingest.fertilizer.crop_code(노지/시설) → 처방 수집 → judge.stage_decisions.judge_base_fertilization
-    "drainage": ("risk_alert",),               # judge.risk_alert — 과습 위험의 근거(WO-ASK-01 결정 ① 「가」)
+    # [측정 한계] 이 환경에서는 처방 원천(외부)이 없어 노지↔시설을 바꿔도 봉투가 안 변한다(0) — **소비자 0 이 아니라 못 잰 것**이다(죽은 원천의 0 을 사실로 읽지 않는다)
+    "drainage": ("risk_alert", "drainage_alert"),               # 측정 2026-10-05: 배수를 넣으니 둘이 달라졌다 — drainage_alert 는 risk_alert 봉투를 칸 4 로 잘라 낸 카드(_delegate_risk)라 농가에게는 **다른 카드**다
 }
 assert tuple(FIELD_CONSUMERS) == FIELDS_READ_BY_JUDGMENT and all(FIELD_CONSUMERS.values())    # 읽는 판정이 있다고 선언한 필드는 누가 읽는지도 적는다(§12 · §5-1 한 쌍)
 # [발행자 2026-09-21 — 절차를 장치로] *"새 입력 필드를 만들 때 그 값을 읽는 곳을 함께 세는 것. §7.5 전수와 같은 계열인데
