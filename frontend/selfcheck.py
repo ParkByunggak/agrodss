@@ -33,6 +33,7 @@ NO_SUBJECT = "심은 날이 적힌 목록이 없어 점검할 재료가 없다 �
 PROBES_PATH = str(_probes.PATH)
 PROBES_TITLE = "문장 형태 점검 — 같은 명사 × 다른 어미 · 같은 뜻 × 다른 표현"
 FILL_ME = "기대 종류 — 발행자가 붙일 것"
+FILL_HOW = "줄 끝 빈칸에 종류 하나만 적어 세션에 보내시면 됩니다 — 줄을 지우거나 고치지 않으셔도 됩니다."
 PROBES_BROKEN = "문장 목록 파일을 못 읽었다 — 다른 점검은 그대로 돈다"
 NO_ROUTE = "어느 판단으로도 안 간다"
 
@@ -111,7 +112,28 @@ def _utterance_html(u: dict[str, Any] | None, e) -> str:
             expected = (f'<div class="meta">기대: {e(r["expected_said"])}' + (f' · {e(r["expected_route_said"])}' if r["expected_route_said"] else "")
                         + (f' ({e(r["expected_note"])})' if r["expected_note"] else "") + "</div>") if r["expected"] else ""
             out.append(f'<div class="card utt"><b>{e(r["text"])}</b> · {verdict}<div>실제: <span title="{e(r["actual"] or "")}">{e(r["actual_said"])}</span>{route}</div>{expected}</div>')
+    out.append(_fill_block(u, e))
     return "".join(out)
+
+
+def _fill_block(u: dict[str, Any], e) -> str:
+    """기대가 없는 줄을 **그대로 복사해 쓸 수 있는** 묶음으로 낸다 — 발행자는 줄마다 종류만 채워 보낸다.
+
+    [2026-10-05] 이 항목은 열흘 가까이 발행자 몫으로 막혀 있었고, 비용의 대부분이 **문장 열넷을 다시 치는 것**이었다(화면에는 흩어져 있고 보내는 꼴은 「문장 — 종류」 다).
+    세션이 기대를 붙이면 채점자와 응시자가 같아지므로 **종류 자리는 비워 둔다** — 채우는 것은 사람이고, 여기서 주는 것은 종이뿐이다.
+    쓸 수 있는 종류 말은 화면이 쓰는 그 말 그대로다(`chat.KIND_PLAIN` 정본 — 목록을 두 벌 두지 않는다).
+    """
+    rows = [r["text"] for g in u["groups"] for r in g["rows"] if r["expected"] is None]
+    if not rows:
+        return ""
+    from ingest import chat
+    # **이 틀이 받는 종류만** 보인다(`probes.KINDS`) — 사람 말은 화면 정본(`chat.KIND_PLAIN`)에서 가져온다.
+    # 전부 보이면 틀이 거부하는 말(영상 · 새 목록)을 적게 되고, 그러면 목록 파일이 실리지 않는다(발행자가 왜 안 되는지 모른다)
+    kinds = " · ".join(dict.fromkeys(chat.KIND_PLAIN[k] for k in _probes.KINDS if k in chat.KIND_PLAIN))
+    lines = "\n".join(f"{t} — " for t in rows)
+    return ('<h3 style="font-size:13px;margin:14px 0 4px">그대로 복사해 쓰실 줄</h3>'
+            f'<p class="meta">{e(FILL_HOW)} 쓸 수 있는 말: {e(kinds)}</p>'
+            f'<pre style="white-space:pre-wrap;user-select:all">{e(lines)}</pre>')
 
 
 def subject() -> dict[str, Any] | None:
