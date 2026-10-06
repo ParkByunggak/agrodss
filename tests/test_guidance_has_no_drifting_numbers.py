@@ -67,11 +67,13 @@ def test_the_counts_that_do_not_drift_are_still_right():
     canon = sum(1 for v in inf if v.get("fixable_by") == "정본")
     assert f"{len(inf)}행" in said and f"농가 {farmer}" in said and f"기준 자료 {canon}" in said, (len(inf), farmer, canon)
     # [주입 E] 「열넷 in said」 만 보면 **다른 자리에 같은 말이 또 있어** 한쪽이 틀려도 통과한다(안내에 두 번 적혀 있다 · §7.1 4번).
-    # 그래서 **두 자리를 세어** 전부 맞는지 본다 — 열 이상 셈말은 이 수치에만 쓰이므로 그 집합이 기대 하나여야 한다
+    # [2026-10-06] 그 수를 이제 **생성기가 센다**(`probe_count`) — 셈말(열넷)이 아니라 숫자로 나간다. 그래서 축을 옮긴다(약화가 아니라 이동):
+    #   ① 두 자리가 다 **센 값**을 말하는가(손으로 적었으면 정본을 움직여도 안 따라온다 — 그 축은 test_page_counts_are_measured 가 본다)
+    #   ② 옛 셈말이 **다른 수**로 남아 있지 않은가(한 자리만 고치고 닫으면 두 수치가 어긋난다 — 이 검사가 원래 잡던 것)
     blank = selfcheck.utterances(date(2026, 10, 5), selfcheck.subject())["without_expected"]
-    TEENS = {"열": 10, "열하나": 11, "열둘": 12, "열셋": 13, "열넷": 14, "열다섯": 15, "열여섯": 16,
+    assert page.probe_count()["left"] == blank, (page.probe_count(), blank)
+    assert said.count(f"{blank}줄") >= 2, f"기대 없는 줄({blank})을 말하는 자리가 둘이어야 한다 — 센 값이 두 자리에 다 실린다"
+    TEENS = {"열하나": 11, "열둘": 12, "열셋": 13, "열넷": 14, "열다섯": 15, "열여섯": 16,
              "열일곱": 17, "열여덟": 18, "열아홉": 19, "스물": 20}
-    found = {w: n for w, n in TEENS.items() if w != "열" and w in said}
-    assert set(found.values()) == {blank}, f"기대 없는 줄은 {blank} 인데 안내는 {found} 라 쓴다"
-    word = next(w for w, n in TEENS.items() if n == blank)
-    assert said.count(word) >= 2, "안내 두 자리(머리 · 세션 몫 짝)가 같은 수치를 말해야 한다"
+    stale = {w: n for w, n in TEENS.items() if w in said and n != blank}
+    assert not stale, f"옛 셈말이 다른 수로 남아 있다 — {stale}(센 값은 {blank})"

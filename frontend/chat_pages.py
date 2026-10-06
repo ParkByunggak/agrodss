@@ -354,7 +354,10 @@ def decisions_main(message: str = "", error: str = "", form: dict[str, str] | No
         out.append(f'<p class="ok">{_e(message)}</p>')
     if unreadable:
         out.append(f'<p class="err">답 파일을 못 읽었다 — {_e(unreadable)}. 고치기 전까지 답은 저장되지 않는다(파일은 그대로 둔다 · 변경 로그 「읽다 버린 것」 에도 뜬다).</p>')
-    out.append(f'<p class="meta">답 {sm["answered"]}/{sm["total"]} · 맞다 {c["맞다"]} · 다르다 {c["다르다"]} · 모르겠다 {c["모르겠다"]}</p>')
+    # [낡음 대조 2026-10-06] 「답 0/15」 는 **닿을 수 없는 셈**이었다 — 그 15 안에 폼이 없는 결정됨 카드가 있어 끝까지 답해도 14/15 다. 셋으로 갈라 센다.
+    out.append(f'<p class="meta">남은 {sm["open"]} · 답 {sm["answered"]} · 결정됨 {sm["decided"]}'
+               f'{("(" + _e(" · ".join(sm["decided_ids"])) + ")") if sm["decided_ids"] else ""} · 전체 {sm["total"]}'
+               f' · 맞다 {c["맞다"]} · 다르다 {c["다르다"]} · 모르겠다 {c["모르겠다"]}</p>')
     if sm["unknown_ids"]:
         out.append(f'<p class="meta">모르겠다 {len(sm["unknown_ids"])}건({_e(" · ".join(sm["unknown_ids"]))}) — 모르겠다가 쌓이면 그 항목은 발행자만 답할 수 있는 것이 아니라 '
                    '아직 어디에도 없는 값이었다는 신호다(첫 시즌 실측을 기다린다). 세션이 그 갈래를 고친다.</p>')

@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "verify_claims.py"
-CLAIMS_MIN = 46          # 2026-10-05 첫 판 46줄 — **위로만** 간다
+CLAIMS_MIN = 47          # 2026-10-05 첫 판 46줄 — **위로만** 간다(10-06 결정 화면 셈 주장 +1)
 
 
 def _run() -> tuple[int, str]:

@@ -220,6 +220,14 @@ def check_screens(s: Sheet) -> None:
                 f"기대 {u['with_expected']} · 맞음 {u['ok']} · 다름 {u['differ']} · 전체 {sum(len(g['rows']) for g in u['groups'])}")
         st, dec = get("/me/decisions")
         s.check(st == 200 and "세션에 보낼 것" in dec, "결정 화면이 선다", st)
+        # [낡음 대조 2026-10-06] 「답 0/15」 는 그 15 안에 폼 없는 결정됨 카드(D-22)가 있어 **닿을 수 없는 셈**이었다 — 셋으로 갈랐고 폼 수가 남은 수와 같은지까지 본다
+        from ingest import decisions as _dc
+        sm = _dc.summary(_dc.load())
+        forms = dec.count('action="/me/decisions"')
+        shown = f"남은 {sm['open']}" in _text(dec) and f"결정됨 {sm['decided']}" in _text(dec)
+        s.check(st == 200 and shown and forms == sm["open"] and sm["open"] + sm["decided"] + sm["answered"] == sm["total"],
+                "결정 화면의 셈이 결정됨을 갈라 센다(저장 폼 수 = 남은 수)",
+                f"남은 {sm['open']} · 답 {sm['answered']} · 결정됨 {sm['decided']} · 전체 {sm['total']} · 폼 {forms}")
         seen = []
         for p in (f"/c/{SID}", "/judge", "/me", "/events", "/media", "/improve", f"/mall/{SID}", f"/diary/{SID}"):
             st, body = get(p)

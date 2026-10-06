@@ -151,8 +151,16 @@ def remove(id_: str, p: Path | None = None) -> dict[str, Any]:
 
 
 def summary(answers: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """답 수 · 모르겠다 목록(= P4 신호 — 갈래 판정을 사후에 교정하는 유일한 경로)."""
+    """답 수 · **결정됨** 수 · 남은 수 · 모르겠다 목록(= P4 신호 — 갈래 판정을 사후에 교정하는 유일한 경로).
+
+    [낡음 대조 2026-10-06] 「답 0/15」 를 내고 있었는데 그 15 안에 **이미 결정된 항목**(D-22 · 발행자 10-03 「맞다」 → 재배 달력에 반영)이 있었다.
+    그 카드에는 폼이 없으므로(답한 카드로 남는다) 그 수는 **15/15 에 닿을 수 없다** — 발행자가 끝까지 답해도 14/15 다. 셈이 끝낼 수 없는 일을 세고 있었던 것이다.
+    측정 스크립트(`measure_publisher_bottleneck`)는 D-22 를 이미 빼고 있었다 — 같은 사실이 한 소비자에만 닿아 있던 §7.5 지점 축이다.
+    그래서 셋으로 가른다: **결정됨**(세션이 반영한 답) · **답함**(이 PC 덮개) · **남은 것**. 남은 것이 0 이면 그 화면은 할 일이 없는 상태다.
+    """
     mine = {k: v for k, v in answers.items() if k in IDS}
+    decided = [i for i in IDS if i in DECIDED]
+    answered_open = [i for i in IDS if i not in DECIDED and i in mine]
     counts = {v: sum(1 for a in mine.values() if a.get("verdict") == v) for v in VERDICTS}
     # [발행자 2026-10-03 "상한에 닿은 항목이 '모르겠다'로 떨어지는 것과 같은 자리에 가도록"] 묻기 원장에서 반복 상한에 닿아 멈춘 물음도 같은 신호다 —
     # 농가 몫이 아니라 아직 어디에도 없는 값이었다는 것. 원장을 못 읽으면 0 이 아니라 이유를 함께 낸다(조용한 0 금지).
@@ -163,6 +171,8 @@ def summary(answers: dict[str, dict[str, Any]]) -> dict[str, Any]:
     except (OSError, ValueError) as e:
         stopped, stopped_why = [], f"{type(e).__name__}: {e}"
     return {"answered": len(mine), "total": len(IDS), "counts": counts,
+            "decided": len(decided), "decided_ids": decided,
+            "open": len(IDS) - len(decided) - len(answered_open),      # 아직 아무 답도 없는 줄 — 발행자가 **실제로 할 수 있는** 수
             "unknown_ids": [i for i in IDS if mine.get(i, {}).get("verdict") == UNKNOWN],
             "stopped_asks": stopped, "stopped_asks_why": stopped_why}
 
