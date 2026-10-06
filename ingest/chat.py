@@ -979,7 +979,30 @@ def answer(subject: dict[str, Any], text: str, today: date) -> str:
     return answer_with_asks(subject, text, today)[0]
 
 
-def answer_with_asks(subject: dict[str, Any], text: str, today: date) -> tuple[str, list[dict[str, Any]]]:
+def pending_value_line(subject: dict[str, Any], did: str, skip: frozenset[str] | set[str] | None = None) -> str:
+    """이 답을 **바꾸는** 값이 일지에서 읽히는데 아직 안 들어갔으면 한 줄. 없으면 빈 문자열.
+
+    [10/07~10/16 걷기 2026-10-06] 카드는 **처음 한 번만** 선다(같은 초안을 다시 올리지 않는다 — 옳다). 그런데 잎 기준 답은 날마다 나간다:
+    예순 답(열흘 × 물음 여섯)을 걸으니 용도 카드가 실린 것은 **하나**였고 나머지 쉰아홉은 잎 기준 사실을 **그 값과 잇지 않고** 말했다.
+    「아직 안 넣은 관수 기록 N건」 줄(바로 아래 drought_alert)의 **일반형**이다 — 그쪽은 미확인 *사건*, 이쪽은 미확인 *값*.
+    어느 판정이 그 값을 읽는지는 측정된 정본(`parcels.FIELD_CONSUMERS`)에서 오고, 읽히는지는 일지 정본(`known`)에서 온다. **적용하지 않는다**(넣기는 사람).
+    `skip` — 이 답에 그 값의 카드가 **함께** 서 있으면(card_line 이 「넣으면 …」 을 이미 말한다) 같은 말을 두 번 하지 않는다."""
+    from frontend import words as _w
+    from ingest import known
+    out = []
+    for field in parcels.FIELD_CONSUMERS:
+        if skip and field in skip:
+            continue
+        if did not in parcels.FIELD_CONSUMERS[field]:
+            continue                                        # 이 판정이 안 읽는 값이면 말하지 않는다(§5-1 과 같은 축 — 안 바뀌는 것을 바뀐다고 하지 않는다)
+        k = known.known_use_differs(subject) if field == "use" else known.known_field(subject, field)
+        if k and k.get("from") == "observation" and k.get("value"):
+            out.append(_w.waiting(field, str(k["value"]), str(k.get("observed_at") or "")))
+    return ("" if not out else " · " + " · ".join(out))
+
+
+def answer_with_asks(subject: dict[str, Any], text: str, today: date,
+                     skip_pending: frozenset[str] | set[str] | None = None) -> tuple[str, list[dict[str, Any]]]:
     """(답 문장, 그 답이 물은 것). 물은 것은 send 가 원장에 센다 — answer 는 버린다."""
     from judge import run as judge_run   # 4층 화면과 같은 규율 — 3층 봉투만 받는다
     from frontend import words as _w     # 문면은 4층 정본(모듈 수준 import 는 층을 뒤집는다)
@@ -1007,7 +1030,7 @@ def answer_with_asks(subject: dict[str, Any], text: str, today: date) -> tuple[s
     e = next((x for x in envs if x.decision_id == did), None)
     if e is None:
         return f"{_w.said('판단 불가(데이터)')} — 이 농사는 아직 판단을 낼 재료(심은 날 · 재배 달력)가 없습니다. {can}.", []     # [2026-10-04 전수] 종류 이름도 사람 말 정본으로
-    out = summarize_envelope(e)
+    out = summarize_envelope(e) + pending_value_line(subject, did, skip=skip_pending)
     if did == "drought_alert":
         # [U-40 둘째 2026-10-03 "오늘 관수가 반영 안 됐다 — 초안 미확인인지 배선인지"] 그 갈림을 답이 말한다: 일지에 넣지 않은 관수·비 기록이 있으면 판단은 그것을 못 읽는다
         n = len(unconfirmed_of(subject["id"], "관수"))
@@ -1307,7 +1330,9 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
     if media_refs and not drafts:
         reply_text = media_line + "무엇을 했는지 함께 적으시면 그것도 같이 적어 둡니다."
     elif drafts and drafts[0]["kind"] == "question":
-        reply_text, asked = answer_with_asks(s, text, today)         # 물은 것은 아래에서 원장에 센다(send 에서만)
+        # 이 답에 **함께 선 카드**의 값은 답 줄에서 다시 말하지 않는다 — 카드 줄(card_line)이 「넣으면 …」 을 이미 말한다(같은 말 두 번 금지)
+        here = {d.get("field") for d in drafts[1:] if d.get("kind") in ("parcel.field", "subject.field") and d.get("field")}
+        reply_text, asked = answer_with_asks(s, text, today, skip_pending=here)         # 물은 것은 아래에서 원장에 센다(send 에서만)
         if len(drafts) > 1:                  # 물음 안의 본 것 · 또는 일지에서 읽은 밭 정보 값 — 카드가 함께 섰다(확인은 사람)
             reply_text += " " + card_line(drafts[1])      # 문장은 card_line 하나 — 이 분기가 자기 문장을 쓰다 「영농일지」 라고 말하고 연 판단을 뺐다
     elif drafts and drafts[0]["kind"] in ("parcel.field", "subject.field"):

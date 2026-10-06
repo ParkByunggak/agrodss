@@ -156,6 +156,21 @@ def decision(decision_id: str) -> str:
     return d.name if d is not None else decision_id
 
 
+def waiting(field: str, value: str, observed_at: str = "") -> str:
+    """일지에서 읽혔는데 **아직 안 넣은 값**이 이 답을 바꾼다 — 그 사실 한 줄(행동은 카드가 말한다 · 여기서는 왜 이 답이 그 값 없이 나왔는지만).
+    [10/07 걷기 2026-10-06] 카드는 한 번만 서고 답은 날마다 나간다 — 그 사이를 이 줄이 메운다."""
+    from ingest import parcels, subjects
+    word = parcels.FIELD_WORDS.get(field) or subjects.SUBJECT_FIELD_WORDS.get(field, field)
+    when = f"일지 {observed_at} 에서" if observed_at else "일지에서"
+    return (f"이 답은 {word} 값 없이 낸 것입니다 — {when} 읽은 '{value}' {_records.josa(value, '이')} "
+            f"아직 안 들어갔습니다({_places()} 에서 넣으면 다시 답합니다)")
+
+
+def _places() -> str:
+    from schema import labels as _labels
+    return _labels.PLACES["parcel"]
+
+
 def opened(field: str, value: str, pending: bool = False) -> str:
     """밭 정보 값 하나를 넣은 직후의 한 줄 — 그 값을 읽는 판단의 이름(parcels.FIELD_CONSUMERS). 읽는 판단이 없으면 빈 문자열(열렸다고 말하지 않는다 · §5-1 한 쌍).
     [§7.5 지점 2026-10-03] 답을 넣는 자리가 셋(채팅 초안 줄 · 확인 직후 줄 · 밭 정보 폼)이라 문장은 여기 하나다.
