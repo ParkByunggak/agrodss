@@ -166,6 +166,14 @@ def waiting(field: str, value: str, observed_at: str = "") -> str:
             f"아직 안 들어갔습니다({_places()} 에서 넣으면 다시 답합니다)")
 
 
+def not_in_diary(kind: str, count: int, label: str) -> str:
+    """아직 일지에 **안 넣은 사건 초안**이 이 답을 바꾼다 — 그 사실 한 줄. `waiting`(안 넣은 *값*)의 사건 판이다.
+    문장이 2층에 박혀 있었다(가뭄 답 한 곳) — 자리가 늘면 사람 말이 갈라지므로 여기 하나로 둔다. 단추 말은 부르는 쪽 정본에서 받는다(`chat.confirm_label`)."""
+    if count < 1:
+        raise ValueError("안 넣은 기록이 없으면 그 말을 하지 않는다 — 0건을 말하는 자리는 없다")
+    return f"아직 일지에 넣지 않은 {kind} 기록 {count}건이 있습니다 — '{label}' {_records.josa(label, '를')} 누르면 판단이 읽습니다"
+
+
 def _places() -> str:
     from schema import labels as _labels
     return _labels.PLACES["parcel"]

@@ -21,6 +21,25 @@ SOURCE = "farmer"
 SEVERITIES = ("경미", "보통", "심함")
 DAMAGE_TYPE = "피해"
 
+# [사건 소비자 측정 2026-10-06] **어느 판정이 어느 사건을 읽는가** — 선언이 아니라 측정이다(밭 정보 값의 FIELD_CONSUMERS 와 같은 축).
+# 왜 필요한가: 아직 일지에 **안 넣은** 사건 초안이 있으면 판정은 그것을 못 읽는다. 그 사실을 답이 말해야 하는데, 그 줄이 **관수(가뭄 답) 한 곳**에만 있었다 —
+# 실측: 「10월 18일에 수확했다」 를 넣지 않은 채 「오늘 뭐 해야 하나」 를 물으면 「놓침 8 … 수확(뽑기) 다음 예정」 이 나가고 **그 초안을 말하지 않는다**(한 일이 놓침으로 읽힌다).
+# 재는 법: 사건 하나를 **그 날의 하루 전**으로 넣고 봉투 전부를 대조한다. 날 셋(09-20 · 10-07 · 10-20)을 합친 것이 아래 표다.
+#   측정이 두 번 틀렸다(둘 다 조건 축): ① 사건 날짜를 10-18 로 고정해 9월 측정에서는 **미래 사건**이 됐다 ② 10-20 은 수확 칸이라 가뭄 판정 자체가 없다(D-22 N/A).
+#   그래서 관수→가뭄이 두 번 안 보였다. **조건을 바꿔 세 날을 합쳐야** 관수 2 · 시비 2 가 나온다.
+#   그리고 처방 직후 전수를 재니(§7.5) 처음 쓴 표가 **일곱 줄**이었다 — 쟀던 일곱만 적은 것이다. 열여섯을 다 재니 **아홉 줄이 더** 나왔다(전부 계획 대 실제).
+#   빠진 줄은 "소비자 0" 으로 읽히고, 소비자 0 이면 답이 그 초안을 말하지 않는다 — 안 쟀던 것이 안 말하기로 한 것처럼 보이는 자리다. 그래서 **전수와 같은지**를 아래에서 못 박는다.
+#   측정 경계: 봉투(판정 결과·메모)만 대조한다. 화면·되먹임 쪽 소비(피해 → 경보 대조 U-16)는 이 측정이 못 본다 — 못 잰 것이고 소비자 0 이 아니다.
+EVENT_CONSUMERS: dict[str, tuple[str, ...]] = {
+    "관수": ("drought_alert", "plan_vs_actual"),
+    "시비": ("top_dressing_1", "plan_vs_actual"),
+    "파종": ("plan_vs_actual",), "정식": ("plan_vs_actual",), "방제": ("plan_vs_actual",), "제초": ("plan_vs_actual",),
+    "예찰": ("plan_vs_actual",), "보식": ("plan_vs_actual",), "배수": ("plan_vs_actual",), "수확": ("plan_vs_actual",),
+    "납품": ("plan_vs_actual",), "저장": ("plan_vs_actual",), "소독": ("plan_vs_actual",), "정리": ("plan_vs_actual",),
+    "피해": ("plan_vs_actual",), "기타": ("plan_vs_actual",),
+}
+assert set(EVENT_CONSUMERS) == set(EVENT_TYPES), sorted(set(EVENT_TYPES) ^ set(EVENT_CONSUMERS))   # 종류를 늘리면 재서 여기 적는다 — 안 적으면 그 사건은 말 없이 사라진다
+
 
 def events_dir() -> Path:
     return Path(os.environ.get("AGRODSS_EVENTS_DIR") or (ROOT / "data" / "events"))

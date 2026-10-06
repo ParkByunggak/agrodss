@@ -1001,6 +1001,24 @@ def pending_value_line(subject: dict[str, Any], did: str, skip: frozenset[str] |
     return ("" if not out else " · " + " · ".join(out))
 
 
+def unconfirmed_line(subject_id: str, did: str) -> str:
+    """아직 **일지에 안 넣은 사건 초안**이 이 답을 바꾸면 한 줄. 없으면 빈 문자열.
+
+    [U-40 둘째 2026-10-03 "오늘 관수가 반영 안 됐다 — 초안 미확인인지 배선인지"] 그 갈림을 답이 말하게 한 줄인데, **가뭄 답 한 곳**에만 있었다.
+    [사건 소비자 측정 2026-10-06] 어느 판정이 어느 사건을 읽는지 재서(`events.EVENT_CONSUMERS`) 그 전부로 넓혔다 — 특히 **계획 대 실제**:
+    「10월 18일에 수확했다」 를 넣지 않은 채 「오늘 뭐 해야 하나」 를 물으면 「놓침 8 … 수확(뽑기) 다음 예정」 이 나가면서 그 초안을 말하지 않았다
+    (한 일이 **놓침으로** 읽힌다 — 짐작이 이행으로 세어졌던 그 사고의 반대 방향). 값 쪽(pending_value_line)과 같은 꼴이고, 이쪽은 미확인 **사건**이다."""
+    from frontend import words as _w                        # 문면은 4층 정본(모듈 수준 import 는 층을 뒤집는다 — pending_value_line 과 같은 꼴)
+    out = []
+    for kind, ids in ev.EVENT_CONSUMERS.items():
+        if did not in ids:
+            continue                                        # 이 판정이 안 읽는 사건이면 말하지 않는다(안 바뀌는 것을 바뀐다고 하지 않는다)
+        n = len(unconfirmed_of(subject_id, kind))
+        if n:
+            out.append(_w.not_in_diary(kind, n, confirm_label("event")))
+    return ("" if not out else " · " + " · ".join(out))
+
+
 def answer_with_asks(subject: dict[str, Any], text: str, today: date,
                      skip_pending: frozenset[str] | set[str] | None = None) -> tuple[str, list[dict[str, Any]]]:
     """(답 문장, 그 답이 물은 것). 물은 것은 send 가 원장에 센다 — answer 는 버린다."""
@@ -1030,12 +1048,7 @@ def answer_with_asks(subject: dict[str, Any], text: str, today: date,
     e = next((x for x in envs if x.decision_id == did), None)
     if e is None:
         return f"{_w.said('판단 불가(데이터)')} — 이 농사는 아직 판단을 낼 재료(심은 날 · 재배 달력)가 없습니다. {can}.", []     # [2026-10-04 전수] 종류 이름도 사람 말 정본으로
-    out = summarize_envelope(e) + pending_value_line(subject, did, skip=skip_pending)
-    if did == "drought_alert":
-        # [U-40 둘째 2026-10-03 "오늘 관수가 반영 안 됐다 — 초안 미확인인지 배선인지"] 그 갈림을 답이 말한다: 일지에 넣지 않은 관수·비 기록이 있으면 판단은 그것을 못 읽는다
-        n = len(unconfirmed_of(subject["id"], "관수"))
-        if n:
-            out += f" · 아직 일지에 넣지 않은 관수 기록 {n}건이 있습니다 — '{CONFIRM_LABEL}' 를 누르면 판단이 읽습니다"
+    out = summarize_envelope(e) + pending_value_line(subject, did, skip=skip_pending) + unconfirmed_line(subject["id"], did)
     return out, asked_in(e)
 
 
@@ -1581,7 +1594,7 @@ def diary_lookup(subject_id: str, event_type: str, limit: int = 12) -> str:
     what = "한 일" if event_type == "전체" else event_type
     lines = [f"{str(e.get('observed_at') or '')[:10]} {e.get('type', '')}" + (f" — {e['note']}" if e.get("note") else "") for e in evts[:limit]]
     pend = unconfirmed_of(subject_id, event_type) if event_type != "전체" else [d for _, _, d in pending_drafts(subject_id) if d.get("kind") == "event"]
-    tail = f" · 아직 일지에 넣지 않은 {what} 기록 {len(pend)}건 — '{CONFIRM_LABEL}' 를 누르면 들어갑니다" if pend else ""
+    tail = (" · " + _w.not_in_diary(what, len(pend), confirm_label("event"))) if pend else ""     # [전수 2026-10-06] 같은 말이 두 곳에 손으로 적혀 있었다(조사도 손으로) — 문장은 4층 정본 하나
     if not evts:
         return f"{head} 일지에 {what} 기록이 없습니다{tail}. 판단이 아니라 기록을 그대로 찾은 것입니다."
     more = f" (최근 {limit}건만 — 전체는 영농일지 화면)" if len(evts) > limit else ""
