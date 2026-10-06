@@ -156,9 +156,11 @@ def decision(decision_id: str) -> str:
     return d.name if d is not None else decision_id
 
 
-def opened(field: str, value: str) -> str:
+def opened(field: str, value: str, pending: bool = False) -> str:
     """밭 정보 값 하나를 넣은 직후의 한 줄 — 그 값을 읽는 판단의 이름(parcels.FIELD_CONSUMERS). 읽는 판단이 없으면 빈 문자열(열렸다고 말하지 않는다 · §5-1 한 쌍).
-    [§7.5 지점 2026-10-03] 답을 넣는 자리가 셋(채팅 초안 줄 · 확인 직후 줄 · 밭 정보 폼)이라 문장은 여기 하나다."""
+    [§7.5 지점 2026-10-03] 답을 넣는 자리가 셋(채팅 초안 줄 · 확인 직후 줄 · 밭 정보 폼)이라 문장은 여기 하나다.
+    [2026-10-06] 넷째 자리가 생겼다 — **아직 안 넣은 카드**(일지에서 읽어 올린 초안). 그 자리에서 「이것으로」 는 이미 읽는다는 말이 되므로
+    `pending=True` 면 「넣으면」 으로 시작한다(조건 없는 안내는 다른 사실이다 — 같은 문장, 다른 때)."""
     from grid import schema as grid_schema
     from ingest import parcels, subjects
     ids = parcels.FIELD_CONSUMERS.get(field) or subjects.SUBJECT_FIELD_CONSUMERS.get(field) or ()   # 밭 정보 값 · 농사(재배 단위) 값 — 같은 문장
@@ -166,7 +168,8 @@ def opened(field: str, value: str) -> str:
         return ""
     names = " · ".join(decision(d) for d in ids)
     word = parcels.FIELD_WORDS.get(field) or subjects.SUBJECT_FIELD_WORDS.get(field, field)
-    line = f"이것으로 {names} 판단이 {word} 값 '{value}' {_records.josa(value, '을')} 읽습니다 — 다음 답부터 그 근거에 실립니다."      # 값이 들어오는 자리(유기 → 「를」 · 무농약 → 「을」)
+    head, tail = ("넣으면", "지금 답은 그 값 없이 낸 것입니다") if pending else ("이것으로", "다음 답부터 그 근거에 실립니다")
+    line = f"{head} {names} 판단이 {word} 값 '{value}' {_records.josa(value, '을')} 읽습니다 — {tail}."      # 값이 들어오는 자리(유기 → 「를」 · 무농약 → 「을」)
     if field == "use" and grid_schema.use_key(value):      # [종구 2026-10-03] 용도에 「종구」 — 재배 달력 자체가 종구 기준으로 읽힌다(grid.schema.use_key → apply_use · use_gap)
         line += " 용도에 「종구」 가 있어 재배 달력도 종구 기준으로 읽습니다 — 수확 단계부터는 종구 값이 올 때까지 잎 기준 경보를 내지 않습니다."
     return line

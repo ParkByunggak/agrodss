@@ -53,10 +53,12 @@ def test_the_reply_to_an_answer_says_which_judgment_it_opens_and_so_does_the_con
     m, r2 = chat.send(SID, "나쁨", today=T34, now=NOW)
     # 문면은 **정본에서 만든다** — 이름 목록을 검사에 박으면 소비자를 재측정할 때마다 거짓 실패가 난다(2026-10-05 배수 1→2 에서 실제로 났다)
     said = " · ".join(words.decision(d) for d in parcels.FIELD_CONSUMERS["drainage"])
-    assert f"이것으로 {said} 판단이 배수 값 '나쁨' 을 읽습니다" in r2["text"]                    # §12 — 답한 직후 연 판단을 말한다
+    # [2026-10-06] 카드는 **아직 안 넣은** 상태라 「넣으면 …」 이고, 넣은 뒤(확인 줄)가 「이것으로 …」 다 — 같은 문장, 다른 때(조건 없는 안내는 다른 사실)
+    assert f"넣으면 {said} 판단이 배수 값 '나쁨' 을 읽습니다 — 지금 답은 그 값 없이 낸 것입니다" in r2["text"], r2["text"][:200]
+    assert "이것으로" not in r2["text"]                                                        # 넣기 전에 이미 읽는다고 말하지 않는다
     rec = chat.confirm(m["id"], 0, now=NOW)
     assert rec["opens"] == list(parcels.FIELD_CONSUMERS["drainage"]) and rec["opens_line"].startswith(f"이것으로 {said} 판단이 배수 값 '나쁨' 을 읽습니다")
-    for text in (rec["opens_line"], words.opened("use", "종구 생산"), words.opened("use", "판매")):
+    for text in (rec["opens_line"], words.opened("use", "종구 생산"), words.opened("use", "종구 생산", pending=True), words.opened("use", "판매")):
         assert not [w for w in JARGON if w in text], text
         assert words.plain(text) == text
     assert "종구 기준으로 읽습니다" in words.opened("use", "종구 생산") and "종구" not in words.opened("use", "판매")
@@ -81,11 +83,14 @@ def test_the_parcel_form_is_the_third_place_an_answer_lands_and_it_speaks_the_sa
     st, body = _post(srv, "/me/parcel", {"id": "p001", "soil_texture": "양토"})
     body = html.unescape(body)
     assert st == 200 and "이것으로" not in body and "지금 판단이 읽는 값은 없습니다" in body and "토성" in body     # 소비자 0 — 열렸다고 말하지 않는다
-    # 셋이 한 문장을 부른다 — 사본이 없다
-    for rel, fn in (("frontend/chat_pages.py", "def handle_parcel_form"), ("ingest/chat.py", "def _confirm_locked"), ("ingest/chat.py", "def send")):
+    # 셋이 한 문장을 부른다 — 사본이 없다. [2026-10-06] `send` 는 카드 문장 정본(`chat.card_line`)을 거쳐 부른다(그 정본도 여기서 본다 — 한 겹 깊어진 것이지 느슨해진 것이 아니다)
+    for rel, fn, reach in (("frontend/chat_pages.py", "def handle_parcel_form", ("words.opened(", "_w.opened(")),
+                           ("ingest/chat.py", "def _confirm_locked", ("words.opened(", "_w.opened(")),
+                           ("ingest/chat.py", "def send", ("card_line(",)),
+                           ("ingest/chat.py", "def card_line", ("words.opened(", "_w.opened("))):
         src = (ROOT / rel).read_text(encoding="utf-8")
         body_ = src[src.index(fn):src.index("\ndef ", src.index(fn) + 10)]
-        assert "words.opened(" in body_ or "_w.opened(" in body_, (rel, fn)
+        assert any(t in body_ for t in reach), (rel, fn, reach)
     assert "이것으로 " not in (ROOT / "ingest" / "chat.py").read_text(encoding="utf-8") and "이것으로 " not in (ROOT / "frontend" / "chat_pages.py").read_text(encoding="utf-8")
 
 

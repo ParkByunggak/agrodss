@@ -346,6 +346,30 @@ CONFIRM_LABELS: dict[str, str] = {"feedback.request": "고쳐 달라는 말로 �
 
 def confirm_label(kind: str) -> str:
     return CONFIRM_LABELS.get(kind, CONFIRM_LABEL)
+
+
+def card_line(draft: dict[str, Any]) -> str:
+    """초안 카드 한 줄 — **왜 그렇게 읽었는지 · 넣으면 어디에 들어가는지 · 무엇이 달라지는지**.
+
+    [10/07 측정 2026-10-06] 이 문장이 **분기마다 따로** 쓰여 있어서, 물음과 카드가 **함께** 설 때는 둘이 빠졌다:
+      ① 넣는 자리를 틀리게 말했다 — 밭 정보 카드인데 「영농일지에 들어갑니다」(단추 말은 「밭 정보에 넣기」 인데 문장은 일지라고 한다 ·
+         항의 갈래에서 같은 결함을 이미 고쳤는데 이 분기에 안 닿은 §7.5 지점 축)
+      ② 「넣으면 어느 판단이 읽는지」(`words.opened`)가 없었다 — 발행자가 10/07 에 보는 그 줄이고, 그 값(용도)이 **다음 날 경보 둘을 멎게 한다**
+    그래서 문장을 **한 자리**에서 만든다. 분기는 이 함수를 부르기만 한다(두 벌로 쓰면 다음 분기에서 또 빠진다)."""
+    kind = draft.get("kind", "")
+    label = confirm_label(kind)
+    if kind in ("parcel.field", "subject.field"):
+        from frontend import words as _w
+        from schema import labels as _labels
+        field, value = draft.get("field", ""), draft.get("value", "")
+        word = parcels.FIELD_WORDS.get(field) or subjects.SUBJECT_FIELD_WORDS.get(field, field)
+        place = (f"밭 정보에 들어갑니다({_labels.PLACES['parcel']} 에서 언제든 고칠 수 있습니다)"
+                 if kind == "parcel.field" else "이 농사의 정보에 들어갑니다")
+        return (f"{plain_why(draft)} — {word}: {value}. '{label}' {sch.josa(label, '를')} 누르면 {place}. "
+                + _w.opened(field, value, pending=True))      # [§12] 이 답이 열 판단 — 문장은 words.opened 하나(폼 · 확인 줄과 같은 자리 · 여기는 아직 안 넣은 카드라 「넣으면」)
+    need = draft.get("needs") or []
+    return (f"{plain_why(draft)}. " + ("날짜를 넣고 " if need else "")
+            + f"'{label}' {sch.josa(label, '를')} 누르면 영농일지에 들어갑니다.")
 OTHER_KIND_LABEL = "다르게 적을까요?"     # 옛 문면 "다른 종류:"
 CHOSEN_WHY = "사람이 고름"               # 사람이 종류를 고른 초안의 표지 — 오분류 측정(ingest/misclassified.py · /changes 상시)이 이 표지를 읽는다(정본 하나)
 SAVED_LABEL = "일지에 넣었습니다"         # 옛 문면 "원장에 들어감"
@@ -1284,17 +1308,11 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         reply_text = media_line + "무엇을 했는지 함께 적으시면 그것도 같이 적어 둡니다."
     elif drafts and drafts[0]["kind"] == "question":
         reply_text, asked = answer_with_asks(s, text, today)         # 물은 것은 아래에서 원장에 센다(send 에서만)
-        if len(drafts) > 1:                  # 물음 안의 본 것 — 관찰 초안이 함께 섰다(확인은 사람)
-            reply_text += f" {plain_why(drafts[1])}. '{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
+        if len(drafts) > 1:                  # 물음 안의 본 것 · 또는 일지에서 읽은 밭 정보 값 — 카드가 함께 섰다(확인은 사람)
+            reply_text += " " + card_line(drafts[1])      # 문장은 card_line 하나 — 이 분기가 자기 문장을 쓰다 「영농일지」 라고 말하고 연 판단을 뺐다
     elif drafts and drafts[0]["kind"] in ("parcel.field", "subject.field"):
         # [§9 2026-10-03] 물음에 대한 답 — 어느 값을 어떻게 읽었는지 말하고, 넣기를 누르면 밭 정보(등록부)에 들어간다(영농일지가 아니다) · [2026-10-04] 농사 값(인증)도 같은 줄
-        d = drafts[0]
-        from frontend import words as _w
-        word = parcels.FIELD_WORDS.get(d["field"]) or subjects.SUBJECT_FIELD_WORDS.get(d["field"], d["field"])
-        from schema import labels as _labels
-        place = (f"밭 정보에 들어갑니다({_labels.PLACES['parcel']} 에서 언제든 고칠 수 있습니다)" if d["kind"] == "parcel.field" else "이 농사의 정보에 들어갑니다")   # 어디서 — 화면 이름 계약
-        reply_text = (f"{plain_why(d)} — {word}: {d['value']}. '{confirm_label(d['kind'])}' 를 누르면 {place}. "
-                      + _w.opened(d["field"], d["value"]))   # [§12] 이 답이 연 판단 — 문장은 words.opened 하나(폼 · 확인 줄과 같은 자리)
+        reply_text = card_line(drafts[0])
     elif drafts and drafts[0]["kind"] == "feedback.request":
         # [처방 직후 전수 2026-10-04] 항의 갈래를 넓힌(㉝) 뒤 나가는 쪽을 재니 답이 **틀린 자리**를 가리켰다 — 「영농일지에 들어갑니다」. 확인은 fb.add_request 로 가므로 일지가 아니다.
         # 그리고 「왜 자꾸 같은 걸 묻지」 에 대한 답이 **또 물었다**(아래 물음 블록) — 묻는 것 자체에 대한 항의면 그 답에는 안 묻는다.
@@ -1308,8 +1326,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         d = drafts[0]
         need = d.get("needs") or []
         # [발행자 2026-09-21] 옛 문면은 `{KIND_LABEL}(으)로 읽었다 — {why}` 였다 — 내부 이름과 개발자 사유를 그대로 내보냈다.
-        reply_text = (f"{plain_why(d)}. " + ("날짜를 넣고 " if need else "")
-                      + f"'{confirm_label(d['kind'])}' 를 누르면 영농일지에 들어갑니다. 아니면 아래에서 다르게 고르시면 됩니다.")
+        reply_text = card_line(d) + " 아니면 아래에서 다르게 고르시면 됩니다."      # 같은 문장 하나에서(날짜가 필요한 꼴도 card_line 이 안다)
         if len(drafts) > 1:
             reply_text += " 적을 것이 " + " · ".join(f"{n + 1}) {KIND_PLAIN.get(x['kind'], x['kind'])}"
                                                   for n, x in enumerate(drafts)) + " — 하나씩 넣습니다."
@@ -1322,8 +1339,7 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
                    "why_key": "undecided", "needs": []}]
         msg["drafts"] = drafts
         _append(dict(msg))
-        d = drafts[0]
-        reply_text = f"{plain_why(d)}. '{CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
+        reply_text = card_line(drafts[0])      # 네 번째 분기도 같은 문장 하나에서
     # [§12 2026-10-04] 밭 정보 값이 아닌 물음(비 온 날 · 물 준 날)에 답한 말 — 기록은 섰는데 답이 "본 것으로 적었습니다" 만 말했다. 묶인 초안이 없고 직전 물음에 이어진 말이면
     # 「방금 물었던 것에 대한 답으로도 읽었습니다 — 넣으면 어느 판단이 읽는지」 한 줄(판단 이름은 묻기 원장의 decision). 묶인 답(§9)은 그 문면이 이미 말하니 두 번 안 붙인다.
     # [처방 직후 전수 2026-10-04] after_ask 는 "물음 뒤 처음 온 말" 의 기록이고, 줄은 **그 말이 그 축의 답일 때만** — 배수를 물은 뒤 「오늘 대파도 심었어요」 에 「방금 물었던 것(토양 수분)에
