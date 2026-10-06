@@ -228,11 +228,20 @@ def user_tab_html(current: str) -> str:
 # 어휘 목록은 여기 두지 않는다 — 등록부(ingest.parcels.FIELD_CHOICES)가 정본이고 CLI 도 같은 것을 본다.
 READS_LABEL = "판정이 읽는 값"
 STORED_ONLY_LABEL = "지금은 등록부에만 쌓인다(읽는 판정 없음)"
+# [낡음 대조 2026-10-06] 표지가 둘뿐이라 **판정이 아닌 소비자**가 있는 값이 「읽는 판정 없음」 으로 나갔다 — 인증 근거가 그렇다(몰 상품의 인증 표기가 읽는다).
+# 적을 이유를 지우는 거짓 표지다. 셋째 표지를 둔다(소비자 이름은 등록부 정본에서 — 표지 글을 두 벌 만들지 않는다).
+OTHER_CONSUMER_LABEL = "{who}가 읽는 값({cond}) — 판정은 안 읽는다"
 
 
 def _parcel_note(key: str) -> str:
-    tag = READS_LABEL if key in parcels.FIELDS_READ_BY_JUDGMENT else STORED_ONLY_LABEL
-    return f' <span style="color:var(--muted)">— {tag}</span>'
+    if key in parcels.FIELDS_READ_BY_JUDGMENT:
+        tag = READS_LABEL
+    elif key in parcels.FIELD_OTHER_CONSUMERS:
+        who, cond = parcels.FIELD_OTHER_CONSUMERS[key]
+        tag = OTHER_CONSUMER_LABEL.format(who=who, cond=cond)
+    else:
+        tag = STORED_ONLY_LABEL
+    return f' <span style="color:var(--muted)">— {_e(tag)}</span>'
 
 
 def parcel_form(p: dict[str, Any]) -> str:

@@ -49,12 +49,18 @@ def _bodies(subject: dict) -> list[tuple[str, str]]:
 
 
 def test_every_input_field_is_declared_as_read_or_stored_only():
-    """분할 고정 — 새 입력 필드를 만들면 **어느 쪽인지 적기 전까지** 여기가 빨갛다(이것이 발행자가 말한 트리거다)."""
+    """분할 고정 — 새 입력 필드를 만들면 **어느 쪽인지 적기 전까지** 여기가 빨갛다(이것이 발행자가 말한 트리거다).
+
+    [낡음 대조 2026-10-06] 칸이 **둘**이라 판정이 아닌 소비자를 둘 자리가 없었고, 그래서 인증 근거가 「읽는 판정 없음」(거짓 표지)으로 나갔다 —
+    몰 상품의 인증 표기가 그 값을 읽는다. 칸을 셋으로 늘린다: 판정이 읽음 · **다른 것이 읽음**(이름과 조건을 함께) · 아무도 안 읽음."""
     fields = set(parcels.input_fields())
     read, stored = set(parcels.FIELDS_READ_BY_JUDGMENT), set(parcels.FIELDS_STORED_ONLY)
-    assert not (read & stored), sorted(read & stored)                     # 양쪽에 동시에 있을 수 없다
-    assert fields - (read | stored) == set(), f"선언 없는 입력 필드: {sorted(fields - (read | stored))} — 읽는 곳을 세고 적는다"
-    assert (read | stored) - fields == set(), f"입력 필드가 아닌 것을 선언했다: {sorted((read | stored) - fields)}"
+    other = set(parcels.FIELD_OTHER_CONSUMERS)
+    assert not (read & stored) and not (read & other) and not (stored & other), sorted((read & stored) | (read & other) | (stored & other))
+    assert fields - (read | stored | other) == set(), f"선언 없는 입력 필드: {sorted(fields - (read | stored | other))} — 읽는 곳을 세고 적는다"
+    assert (read | stored | other) - fields == set(), f"입력 필드가 아닌 것을 선언했다: {sorted((read | stored | other) - fields)}"
+    for f, v in parcels.FIELD_OTHER_CONSUMERS.items():                    # 이름만 적고 조건을 빼면 「조건 없는 값」 꼴이 된다(G1 반대형)
+        assert isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) and x.strip() for x in v), (f, v)
 
 
 @pytest.mark.parametrize("field", parcels.FIELDS_STORED_ONLY)

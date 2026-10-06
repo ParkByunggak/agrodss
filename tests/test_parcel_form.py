@@ -75,15 +75,26 @@ def _label_of(body: str, key: str) -> str:
 
 
 def test_the_screen_says_which_answers_a_judgment_actually_reads(srv):
-    """G1 전수의 화면 판 — 읽는 값과 쌓이기만 하는 값이 **양쪽 다** 표시된다(한쪽만이면 못 가른다)."""
+    """G1 전수의 화면 판 — 읽는 값과 쌓이기만 하는 값이 **양쪽 다** 표시된다(한쪽만이면 못 가른다).
+
+    [낡음 대조 2026-10-06] 표지가 **셋**이 됐다 — 「소비자 0」 여덟을 다시 재니 인증 근거는 판정이 아닌 소비자(몰 상품의 인증 표기)가 읽고 있었고,
+    둘뿐인 표지에서는 그 값이 「읽는 판정 없음」(거짓)으로 나갔다. 칸마다 **정확히 하나**의 표지가 붙는지를 셋 다에 대해 본다."""
     st, body = _get(srv, "/me")
     assert st == 200
     for key in list(parcels.FIELD_CHOICES) + [k for k, _ in parcels.FIELD_LABELS]:
-        want = chat_pages.READS_LABEL if key in parcels.FIELDS_READ_BY_JUDGMENT else chat_pages.STORED_ONLY_LABEL
-        other = chat_pages.STORED_ONLY_LABEL if want == chat_pages.READS_LABEL else chat_pages.READS_LABEL
         lab = _label_of(body, key)
-        assert want in lab and other not in lab, (key, lab)
+        if key in parcels.FIELDS_READ_BY_JUDGMENT:
+            want, others = chat_pages.READS_LABEL, (chat_pages.STORED_ONLY_LABEL,)
+        elif key in parcels.FIELD_OTHER_CONSUMERS:
+            who, cond = parcels.FIELD_OTHER_CONSUMERS[key]
+            want, others = who, (chat_pages.STORED_ONLY_LABEL, chat_pages.READS_LABEL)
+            assert cond in lab, (key, lab)                                   # 조건까지 실린다(조건 없는 값은 근거 없는 값처럼 보인다)
+        else:
+            want, others = chat_pages.STORED_ONLY_LABEL, (chat_pages.READS_LABEL,)
+        assert want in lab and not [o for o in others if o in lab], (key, lab)
     assert chat_pages.READS_LABEL in body and chat_pages.STORED_ONLY_LABEL in body   # 두 표지가 다 쓰인다(한쪽만이면 가르지 못한다)
+    for who, _cond in parcels.FIELD_OTHER_CONSUMERS.values():
+        assert who in body                                                   # 셋째 표지도 화면에 실제로 나간다
 
 
 # ── 받은 답이 어떻게 되는가 ──────────────────────────────────────────────────────

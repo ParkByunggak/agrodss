@@ -188,6 +188,15 @@ def opened(field: str, value: str, pending: bool = False) -> str:
     from ingest import parcels, subjects
     ids = parcels.FIELD_CONSUMERS.get(field) or subjects.SUBJECT_FIELD_CONSUMERS.get(field) or ()   # 밭 정보 값 · 농사(재배 단위) 값 — 같은 문장
     if not ids:
+        # [낡음 대조 2026-10-06] 판정이 아닌 소비자가 있는 값은 **빈 문장이 거짓**이다 — 인증 근거를 넣으면 몰 상품의 인증 표기가 그것을 읽는다(측정 정본).
+        # 빈 문자열은 「아무 일도 안 생긴다」 로 읽히고, 그러면 적을 이유가 사라진다. 판정 이름은 못 대지만 **무엇이 읽는지는** 말할 수 있다.
+        other = parcels.FIELD_OTHER_CONSUMERS.get(field)
+        if other:
+            who, cond = other
+            word = parcels.FIELD_WORDS.get(field, field)
+            head = "넣으면" if pending else "이것으로"
+            return (f"{head} {word} 값 '{value}' {_records.josa(value, '을')} {who}{_records.josa(who, '이')} 읽습니다 — "
+                    f"판정은 이 값을 읽지 않습니다({cond}).")
         return ""
     names = " · ".join(decision(d) for d in ids)
     word = parcels.FIELD_WORDS.get(field) or subjects.SUBJECT_FIELD_WORDS.get(field, field)
