@@ -21,6 +21,7 @@ from judge import plan, registry, units
 from judge.envelope import AxisUse, Envelope, weakest
 from judge.need import need_anchor
 from judge.harvest_timing import GRID_GRADE
+from schema import records as sch      # 조사 정본(sch.josa) — 조건 문면이 격자에서 오는 값이다
 
 DECISION_ID = "plan_vs_actual"
 
@@ -95,7 +96,7 @@ def conditional_of(task_name: str, notes: list[dict[str, Any]] | None = None,
         # 원장에 관찰이 없다는 것은 **조건이 없었다는 뜻이 아니라 아무도 안 적었다는 뜻**일 수 있다. 결주가 실제로 있었는데
         # 안 본 경우를 그 문장이 가린다. I-1 §2-6 의 '해당 없음' 은 *"아무리 채워도 안 바뀐다"* 인데 이쪽은 **채우면 바뀐다** —
         # 곧 계약상 '판단 불가(데이터)' 자리다. 그래서 문면도 그렇게 적는다: 없는 것은 관찰이고, 넣으면 답이 바뀐다.
-        return False, (f"{d.params.get('condition')}이 원장에 없다 — 안 했다고 보지 않고 사유도 묻지 않는다. "
+        return False, (f"{d.params.get('condition')}{sch.josa(d.params.get('condition'), '이')} 원장에 없다 — 안 했다고 보지 않고 사유도 묻지 않는다. "
                        f"보신 것이 있으면 적어 주시면(채팅 한 줄) 답이 바뀐다({d.params.get('condition_source')})")
     return None
 

@@ -18,6 +18,7 @@ from judge import registry, units
 from judge.envelope import AxisUse, Envelope, weakest
 from judge.harvest_timing import GRID_GRADE
 from judge.need import need_anchor
+from schema import records as sch      # 조사 정본(sch.josa) — 칸 이름 · 배수 등급이 값으로 들어오는 자리
 
 DECISION_ID = "risk_alert"
 DRAINAGE_NOTE_PREFIX = "배수"       # 배수 메모의 머리 — 칸 카드(stage_decisions._delegate_risk)가 과습 위험이 없는 칸에서 이 메모를 걷는다
@@ -192,7 +193,8 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
                 elif stage_open:
                     level, basis = "주의", f"달력 — 칸 '{s['name']}' 창 안(예보 신호 없음, 오경보 감수)"
                 else:
-                    level, basis = "예고", f"달력 — 칸 '{s['name']}' 가 {w['from_day'] - day}일 뒤 열린다"
+                    # 칸 이름이 값이라 조사를 손으로 적으면 반드시 어긋난다(「'수확' 가」) — 받침으로 고른다
+                    level, basis = "예고", f"달력 — 칸 '{s['name']}' {sch.josa(s['name'], '가')} {w['from_day'] - day}일 뒤 열린다"
             else:
                 watched += 1
                 if not basis:
@@ -249,7 +251,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     if wet_seen:
         if drainage:
             inputs.append(AxisUse("soil_water", None, "farmer", "parcel", "관측"))      # 필지 고정값 — 날짜 없는 속성(관측 기록이 생기면 그것이 보조)
-            notes.append(f"배수 {drainage} 는 밭 정보의 고정값 — 근거에 싣기만 한다(나쁨이면 경보로 올릴지는 발행자 규칙 대기 · 지어내지 않는다)")
+            notes.append(f"배수 {drainage} {sch.josa(drainage, '는')} 밭 정보의 고정값 — 근거에 싣기만 한다(나쁨이면 경보로 올릴지는 발행자 규칙 대기 · 지어내지 않는다)")
         else:
             notes.append("배수 등급 없음 — 밭 정보(/me)에 배수를 적으면 과습 근거에 실린다")
     order = {"경보": 0, "주의": 1, "예고": 2}

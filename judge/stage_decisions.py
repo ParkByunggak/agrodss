@@ -353,7 +353,7 @@ def _delegate_risk(subject, did: str, today: date, forecast, pest) -> Envelope:
         now_cells = " · ".join(r.result.get("stages") or []) or "없음"
         day = r.result.get("days_since_anchor")
         return Envelope("해당 없음", did, sid, as_of,
-                        result={"why": f"칸 '{tag}' 가 horizon 밖 — 오늘 {day}일째, 보는 칸 {now_cells}",
+                        result={"why": f"칸 '{tag}' {sch.josa(tag, '가')} horizon 밖 — 오늘 {day}일째, 보는 칸 {now_cells}",
                                 "summary": f"{tag} 칸의 경보는 지금 볼 때가 아닙니다 — 오늘은 파종 {day}일째라 {now_cells} 칸을 봅니다. 그 칸의 위험은 「위험 경보」 에 전부 있습니다"})
     alerts = [a for a in r.result.get("alerts", []) if a.get("stage") == tag]
     body = " / ".join(f"{a['level']} {a['risk']}" for a in alerts) or "이 칸에 경보 없음"
@@ -402,7 +402,7 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
     work_date, dl = (a + timedelta(days=wd)).isoformat(), (a + timedelta(days=deadline)).isoformat()
     # [B5] 판별 순서(I-1 §3): 해당하는가 → 지식 → 데이터. 창 지남을 먼저 본다 — 전에는 지식 미비가 먼저라 시즌 내내 그 상태로 남았다
     if day > deadline:
-        return Envelope("해당 없음", did, sid, as_of, result={"why": f"마감({dl})을 지났다", "summary": f"웃거름 때가 지났습니다 — 마감 {dl}"})
+        return Envelope("해당 없음", did, sid, as_of, result={"why": f"마감({dl}){sch.josa(dl, '을')} 지났다", "summary": f"웃거름 때가 지났습니다 — 마감 {dl}"})
     if did == "top_dressing_2":
         return Envelope("판단 불가(지식)", did, sid, as_of,
                         result={"why": "'필요 시' 의 필요 여부 판정 규칙이 격자에 미채움(생육 관찰 기준 없음)", "work_date": work_date, "deadline": dl,
@@ -468,7 +468,8 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
     a = date.fromisoformat(subject["anchor"])
     caps = []
     if target > a + timedelta(days=deadline):
-        caps.append({"name": "단기 저장 한계", "basis": f"칸 5 '출하 또는 단기 저장' 마감 {deadline}일({(a + timedelta(days=deadline)).isoformat()})을 계획일이 넘는다"})
+        _last = (a + timedelta(days=deadline)).isoformat()
+        caps.append({"name": "단기 저장 한계", "basis": f"칸 5 '출하 또는 단기 저장' 마감 {deadline}일({_last}){sch.josa(_last, '을')} 계획일이 넘는다"})
     notes = [grid_schema.source_note(unit)]
     h_to = int(stage["window"]["to_day"])
     if deadline < h_to:
@@ -546,7 +547,7 @@ def judge_symptom_triage(subject, today: date, observations: list[dict[str, Any]
         known = " · ".join(_rule_words(rules))
         if any(symptom_in(o.get("text") or "") for o in obs):
             return Envelope("판단 불가(지식)", did, sid, as_of,
-                            result={"why": f"최근 {lookback}일 관찰 {len(obs)}건에 증상이 있으나 {where} 어휘({known})와 안 맞는다 — D-18 · "
+                            result={"why": f"최근 {lookback}일 관찰 {len(obs)}건에 증상이 있으나 {where} 어휘({known}){sch.josa(known, '와')} 안 맞는다 — D-18 · "
                                            f"고칠 파일 {grid_schema.unit_file_name(uid)}",
                                     "summary": f"본 것이 기준이 아는 증상 말과 안 맞습니다 — 기준이 아는 말: {known}. 기준을 넓히면 원인 후보를 냅니다"})
         return Envelope("판단 불가(데이터)", did, sid, as_of,
@@ -686,7 +687,7 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         notes.append(f"단기예보는 못 받았다 — {short_reason}")
         parts.append(f"단기 — 못 받음: {plain_reason(short_reason)}")
     for g in gap_days:
-        notes.append(f"{g} 는 단기 창 뒤 · 중기 시작 전인데 두 원천 어느 쪽에도 값이 없다")
+        notes.append(f"{g} {sch.josa(g, '는')} 단기 창 뒤 · 중기 시작 전인데 두 원천 어느 쪽에도 값이 없다")      # 날짜가 값이다(끝 숫자의 읽는 소리로 조사가 갈린다)
         parts.append(f"{g[5:]} 값 없음 — 단기 창 뒤 · 중기 시작 전(두 원천 어느 쪽에도 없음)")
     mcit = None
     if mrows:

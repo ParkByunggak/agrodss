@@ -1141,7 +1141,7 @@ def _answered_line(subject_id: str, after_ask: dict[str, Any]) -> str:
         rows = {}
     decisions = list(dict.fromkeys(_w.decision(rows[a]["decision"]) for a in axes if rows.get(a, {}).get("decision")))
     who = " · ".join(decisions) if decisions else "판단"
-    return f" {ANSWERED_AS}({' · '.join(_w.axis(a) for a in axes)})에 대한 답으로도 읽었습니다 — '{CONFIRM_LABEL}' 를 누르면 {who}이 그 날을 읽습니다."
+    return f" {ANSWERED_AS}({' · '.join(_w.axis(a) for a in axes)})에 대한 답으로도 읽었습니다 — '{CONFIRM_LABEL}' 를 누르면 {who}{sch.josa(who, '이')} 그 날을 읽습니다."
 
 
 def _short_answer(text: str) -> bool:
@@ -1175,12 +1175,12 @@ def _drafts_from_answer(subject: dict[str, Any], text: str, pend: dict[str, Any]
             day = _bare_date(text, today or date.today())
             if day:
                 out.append({"kind": "event", "type": "파종", "observed_at": day, "note": text,
-                            "why": f"직전 물음(심은 날)에 대한 답 — 날짜만 적은 말을 파종일 {day} 로 읽었다 · 확인 뒤 심은 날(subjects.set_anchor)", "why_key": "answers_ask_anchor", "needs": []})
+                            "why": f"직전 물음(심은 날)에 대한 답 — 날짜만 적은 말을 파종일 {day} {sch.josa(day, '로')} 읽었다 · 확인 뒤 심은 날(subjects.set_anchor)", "why_key": "answers_ask_anchor", "needs": []})
         if ax in known.SUBJECT_AXES and ax == "cert":
             hits = [k for k, ws in subjects.CERT_WORDS.items() if k in text or any(w in text for w in ws)]
             if len(hits) == 1:
                 out.append({"kind": "subject.field", "subject": subject.get("id"), "field": "cert", "value": hits[0], "text": text,
-                            "why": f"직전 물음(인증)에 대한 답 — 어휘 '{hits[0]}' 를 읽었다 · 확인 뒤 subjects.set_cert", "why_key": "answers_ask_subject", "needs": []})
+                            "why": f"직전 물음(인증)에 대한 답 — 어휘 '{hits[0]}' {sch.josa(hits[0], '를')} 읽었다 · 확인 뒤 subjects.set_cert", "why_key": "answers_ask_subject", "needs": []})
     pid = subject.get("parcel")
     if not pid:
         return out
@@ -1194,7 +1194,7 @@ def _drafts_from_answer(subject: dict[str, Any], text: str, pend: dict[str, Any]
         if value not in text and not _short_answer(text):
             continue                                        # 일지 말로 읽은 값은 **짧은 답**일 때만 묶는다 — 긴 관찰 문장(발행자 10-03 일지 줄)은 본 것으로 남아 일지에 들어가고, 카드는 known 이 일지에서 올린다
         out.append({"kind": "parcel.field", "parcel": pid, "field": f, "value": value, "text": text,
-                    "why": f"직전 물음({parcels.FIELD_WORDS.get(f, f)})에 대한 답 — 어휘 '{value}' 를 읽었다 · 확인 뒤 parcels.set_fields", "why_key": "answers_ask", "needs": []})
+                    "why": f"직전 물음({parcels.FIELD_WORDS.get(f, f)})에 대한 답 — 어휘 '{value}' {sch.josa(value, '를')} 읽었다 · 확인 뒤 parcels.set_fields", "why_key": "answers_ask", "needs": []})
     return out
 
 

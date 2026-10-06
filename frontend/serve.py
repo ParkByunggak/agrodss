@@ -33,6 +33,7 @@ from ingest import dropped  # noqa: E402  — 읽다 버린 것(조용한 실패
 from ingest import misclassified  # noqa: E402  — [검토표 ③] 종류 고침 재료 건수를 /changes 가 상시로 말한다(읽기 전용 · 건수만)
 from grid import capture as grid_capture  # noqa: E402  — 촬영 시점 알림(격자 지식, 원장 아님)
 from judge import run as judge_run  # noqa: E402  — 4층은 3층 봉투만 받는다
+from schema import records  # noqa: E402  — 조사 정본(records.josa) · 붙일 묶음 꼴은 render 쪽
 
 
 def git_head_short() -> str:
@@ -317,7 +318,8 @@ def judge_page(only: str | None = None) -> tuple[int, str]:
            '<p class="meta"><a href="/judge">전체 보기</a></p>',
            "<p class=\"meta\">밭마다 판단이 어떻게 보이는지가 먼저 나오고, 무슨 자료를 봤는지가 그 다음입니다. 정확한 이름은 글자 위에 마우스를 올리면 보입니다.</p>"]
     if config.today_frozen():
-        out.append(f'<p class="err"><b>오늘이 {_e(config.today_frozen())} 로 고정돼 있다</b> ({config.TODAY_ENV} — 검사·재현용. 운영이면 .env 에서 지운다)</p>')
+        # 날짜가 값이다 — 끝 숫자의 읽는 소리로 「로/으로」 가 갈린다(10-05 는 「로」 · 10-06 은 「으로」)
+        out.append(f'<p class="err"><b>오늘이 {_e(config.today_frozen())} {records.josa(config.today_frozen(), "로")} 고정돼 있다</b> ({config.TODAY_ENV} — 검사·재현용. 운영이면 .env 에서 지운다)</p>')
     for s, envs, info in judge_run.all_judgments(config.today(), only=only or None):
         out.append(f"<h1 style=\"font-size:17px;margin-top:24px\">{_e(s['label'])}</h1>")
         for env in envs:

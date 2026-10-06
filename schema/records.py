@@ -313,6 +313,46 @@ def quote(text: Any, limit: int) -> str:
     return s if len(s) <= limit else s[:limit] + QUOTE_TAIL
 
 
+# ── 조사는 **앞말의 받침**이 고른다 ───────────────────────────────────────────────────
+# [전수 2026-10-06] 사람에게 보이는 문장이 조사를 **손으로** 적어 어긋난 자리를 셌다. 값이 들어오는 자리라 **고정 조사는 반드시 언젠가 틀린다**:
+#     「칸 '수확' 가 7일 뒤 열린다」(받침 ㄱ → 「이」)   「배수 나쁨 는 밭 정보의 고정값」(「은」)   「인증 유형 '유기' 은」(「는」)
+#     「오늘이 2026-10-06 로 고정돼 있다」(육 → 「으로」)   「'수확 시기' 은 검토 전 추론」(「는」)   「어휘 '무농약' 를 읽었다」(「을」)
+# 안쪽 낱말 표가 「재배 달력가」 를 고친 그 축의 **템플릿 판**이고, 고치는 길은 하나다 — 받침으로 고르는 정본.
+# 한계는 적어 둔다: 끝이 한글도 숫자도 아니면(영문·기호) **받침 없음** 쪽을 쓴다(지어내지 않는다 · 검사가 그 한계를 문서화한다).
+_JOSA_PAIRS: dict[str, tuple[str, str]] = {      # (받침 있음, 받침 없음)
+    "이": ("이", "가"), "가": ("이", "가"), "은": ("은", "는"), "는": ("은", "는"),
+    "을": ("을", "를"), "를": ("을", "를"), "과": ("과", "와"), "와": ("과", "와"),
+    "으로": ("으로", "로"), "로": ("으로", "로"),
+}
+# 숫자로 끝나는 말은 **읽는 소리**로 센다(영 ㅇ · 일 ㄹ · 삼 ㅁ · 육 ㄱ · 칠 ㄹ · 팔 ㄹ) — 2 · 4 · 5 · 9 는 받침이 없다.
+_DIGIT_FINAL: dict[str, int] = {"0": 21, "1": 8, "2": 0, "3": 16, "4": 0, "5": 0, "6": 1, "7": 8, "8": 8, "9": 0}
+_RIEUL = 8      # 받침 ㄹ — 「으로」 가 아니라 「로」(종구로 · 7일로)
+
+
+def _final(word: Any) -> int | None:
+    """끝의 받침 코드(0 = 없음) — 뒤에서부터 한글이나 숫자를 찾는다(따옴표·괄호로 끝나는 말이 흔하다). 둘 다 없으면 None."""
+    for ch in reversed(str("" if word is None else word).strip()):
+        if "가" <= ch <= "힣":
+            return (ord(ch) - 0xAC00) % 28
+        if ch in _DIGIT_FINAL:
+            return _DIGIT_FINAL[ch]
+    return None
+
+
+def josa(word: Any, pair: str) -> str:
+    """앞말에 맞는 조사 하나 — `pair` 는 짝 중 아무 꼴로나 준다(「가」 든 「이」 든 (이, 가) 짝을 뜻한다)."""
+    try:
+        with_final, without = _JOSA_PAIRS[pair]
+    except KeyError:
+        raise ValueError(f"짝을 모르는 조사: {pair!r} — {sorted(set(_JOSA_PAIRS))}") from None
+    f = _final(word)
+    if not f:                                   # 받침 없음 · 또는 한글·숫자가 아예 없음(위에 적은 한계)
+        return without
+    if with_final == "으로" and f == _RIEUL:     # ㄹ 받침만 예외
+        return without
+    return with_final
+
+
 def describe() -> list[dict[str, Any]]:
     """문서 생성용(scripts/build_schema_doc.py)."""
     return [{"kind": k.name, "layer": k.layer, "required": list(k.required), "optional": list(k.optional),

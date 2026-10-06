@@ -141,7 +141,7 @@ def judge(subject: dict[str, Any], today: date | None = None, psis_search=None) 
                                 "summary": f"{cert} 의 자재 기준이 아직 없습니다 — 지금은 유기 · 관행만 있습니다"})   # [사유 문면 전수 2026-09-29] 농가 말로
     if cert not in CERTS:
         return Envelope("해당 없음", DECISION_ID, sid, as_of,
-                        result={"why": f"인증 유형 {cert!r} 은 아는 갈래가 아니다 — 유기 · 무농약 · 관행 중 하나로 적는다"})
+                        result={"why": f"인증 유형 {cert!r} {sch.josa(cert, '은')} 아는 갈래가 아니다 — 유기 · 무농약 · 관행 중 하나로 적는다"})
     unit, miss = grid_schema.load_unit(subject)
     anchor = subject.get("anchor")
     if miss is not None:                                   # [U-23] 격자를 못 읽은 것은 '할 일 아님' 이 아니다
