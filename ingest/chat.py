@@ -147,6 +147,9 @@ def grid_symptom_words(subject: dict[str, Any] | None) -> tuple[str, ...]:
 _PLAN_WORDS_MERGED_INTO = "_PLAN_RE"      # 옛 `PLAN_WORDS` 는 여기로 합쳤다 — 되살리면 두 벌이 된다(래칫이 본다)
 # [시점 걷기 2026-09-20] 작기 종료 선언 — 사건 어휘('정리했' · '수확')보다 앞에서 본다. 명시 문구만(원문 '끝났다'류는 사건·관찰과 겹친다)
 END_WORDS = ("작기 종료", "작기 끝", "재배 종료", "농사 끝", "농사 종료", "올해 농사 마", "이번 작기 마", "작기를 마", "작기 마감")
+# [앞날 걷기 2026-10-07] 달력이 끝난 뒤의 답이 농가에게 **적을 말**을 보여 준다 — 그 예는 위 목록에서 고른 것이어야 한다(지어낸 예는 적어도 안 읽힌다).
+# 「작기」 는 농가 말이 아니므로(사람 말 정본의 걷어 낼 어휘) 목록 중 **쉬운 꼴**을 쓴다. 이 예가 정말 종료 선언으로 읽히는지는 검사가 분류를 돌려 본다.
+END_SAY = "농사 끝났어요"
 # 종료 문구가 **종속절**이면 선언이 아니다 — "작기 끝나기 전에 …" · "농사 끝날 때까지 …"(처방 직후 전수 2026-09-20)
 _END_SUBORDINATE = re.compile(r"(끝|종료|마감|마치|마무리)\w*\s*(전에|전까지|기\s*전|때까지|때쯤|무렵|하면)")
 
@@ -341,7 +344,22 @@ assert set(KIND_PLAIN) == set(KIND_LABEL)      # 종류가 늘면 사람 말도 
 CONFIRM_LABEL = "일지에 넣기"            # 옛 문면 "확인 → 원장" — 기본값(영농일지로 가는 종류)
 # [처방 직후 전수 2026-10-04] 일지로 **안 가는** 종류가 셋인데(고쳐 달라는 말 · 밭 정보 값 · 농사 값) 단추는 셋 다 「일지에 넣기」 였다 — 문장은 「밭 정보에 들어갑니다」 라면서
 # 단추는 일지라고 하면 농가는 어느 쪽이 참인지 모른다. 단추 말과 문장이 **같은 자리**에서 나온다(셋을 따로 고치면 다음 종류에서 또 어긋난다 · 지점 축).
-CONFIRM_LABELS: dict[str, str] = {"feedback.request": "고쳐 달라는 말로 넣기", "parcel.field": "밭 정보에 넣기", "subject.field": "농사 정보에 넣기"}
+CONFIRM_LABELS: dict[str, str] = {"feedback.request": "고쳐 달라는 말로 넣기", "parcel.field": "밭 정보에 넣기", "subject.field": "농사 정보에 넣기",
+                                  "subject.end": "농사 마친 것으로 넣기"}      # [앞날 걷기 2026-10-07] 일지에 넣는 것이 아니라 이 농사를 닫는다
+# 넣으면 **어디로 가는가** — 종류마다 한 번. `confirm()` 이 실제로 쓰는 곳을 재서 적었고(아래 표와 그 함수가 어긋나면 래칫이 깨진다),
+# 모르는 종류에는 **아무 말도 하지 않는다**(틀린 자리를 말하는 것이 침묵보다 나쁘다 — 2026-10-04 에 그 결함을 두 번 고쳤다).
+# [앞날 걷기 2026-10-07] 달력 끝 뒤의 답이 「농사를 마치셨으면 적어 주세요」 로 농가를 이 카드로 보내는데, 그 카드가 「영농일지에 들어갑니다」 라고
+# 했다 — 일지에는 아무것도 안 들어간다(등록부 상태가 바뀐다). 같은 자리에서 **고쳐 달라는 말**도 같은 거짓을 말하고 있었다(2026-10-04 전수가
+# 카드 분기까지 안 닿았다 · §7.5 지점). 일지로 가는 종류는 일지 화면이 스스로 펼친다고 적은 다섯(한 일 · 본 것 · 할 일 · 못 한 이유 · 영상)뿐이다.
+PLACE_SAID: dict[str, str] = {
+    "event": "영농일지에 들어갑니다",
+    "observation.note": "영농일지에 들어갑니다",
+    "plan.farmer": "영농일지의 할 일로 들어갑니다",
+    "plan.target_date": "납품 계획일로 들어갑니다",
+    "decision.noncompliance": "영농일지의 못 한 이유로 들어갑니다",
+    "feedback.request": "고쳐 달라는 말로 들어갑니다(왼쪽 메뉴에서 진행을 보실 수 있습니다)",
+    "subject.end": "이 농사를 마친 것으로 닫습니다 — 그 뒤 계획을 못 한 일로 세지 않습니다",
+}
 
 
 def confirm_label(kind: str) -> str:
@@ -368,8 +386,9 @@ def card_line(draft: dict[str, Any]) -> str:
         return (f"{plain_why(draft)} — {word}: {value}. '{label}' {sch.josa(label, '를')} 누르면 {place}. "
                 + _w.opened(field, value, pending=True))      # [§12] 이 답이 열 판단 — 문장은 words.opened 하나(폼 · 확인 줄과 같은 자리 · 여기는 아직 안 넣은 카드라 「넣으면」)
     need = draft.get("needs") or []
+    place = PLACE_SAID.get(kind)                       # 모르는 종류면 자리를 **말하지 않는다**(지어내면 농가가 없는 곳을 찾는다)
     return (f"{plain_why(draft)}. " + ("날짜를 넣고 " if need else "")
-            + f"'{label}' {sch.josa(label, '를')} 누르면 영농일지에 들어갑니다.")
+            + f"'{label}' {sch.josa(label, '를')} 누르면" + (f" {place}." if place else " 적습니다."))
 OTHER_KIND_LABEL = "다르게 적을까요?"     # 옛 문면 "다른 종류:"
 CHOSEN_WHY = "사람이 고름"               # 사람이 종류를 고른 초안의 표지 — 오분류 측정(ingest/misclassified.py · /changes 상시)이 이 표지를 읽는다(정본 하나)
 SAVED_LABEL = "일지에 넣었습니다"         # 옛 문면 "원장에 들어감"
@@ -418,7 +437,9 @@ def plain_why(draft: dict[str, Any]) -> str:
         return "이 농사를 끝내는 것으로 읽었습니다"
     if kind == "question":
         return "물음으로 읽었습니다"
-    return f"{KIND_PLAIN.get(kind, kind)}(으)로 읽었습니다"
+    # [앞날 걷기 2026-10-07] 「(으)로」 가 그대로 나갔다(납품 날짜 카드 — 「납품 날짜(으)로 읽었습니다」). 조사는 값이 고른다(정본 `sch.josa` · 열여섯 자리 처방의 열일곱째)
+    word = KIND_PLAIN.get(kind, kind)
+    return f"{word}{sch.josa(word, '으로')} 읽었습니다"
 
 
 class ChatError(ValueError):
@@ -1021,6 +1042,20 @@ def unconfirmed_line(subject_id: str, did: str) -> str:
     return ("" if not out else " · " + _w.not_in_diary_many(out, confirm_label("event")))
 
 
+def season_over_line(subject: dict[str, Any], today: date) -> str:
+    """재배 달력이 **끝난 뒤**면 그 사실과 다음 수 한 줄. 아니면 빈 문자열.
+
+    [앞날 걷기 2026-10-07] 심은 날 + 107일(달력 끝에서 17일 뒤)로 걸으니 답이 「놓침 12 — 사유를 묻는다: 종구 선별 … 출하 또는 단기 저장」 과
+    「경보 수확 지연」 을 **날마다** 냈다. 멎게 하는 길은 둘 다 있었고(수확 기록 · 마쳤다는 말) 어느 답도 그 길을 **말하지 않았다** — 길이 있는데
+    모르면 길이 없는 것과 같다(「0 은 두 가지다」 의 안내 판). 닫는 것은 사람 몫 그대로다: 여기서 하는 일은 그 수를 보이게 하는 것뿐이다.
+    조건은 달력 정본(`grid.schema.past_calendar`)이 정하고 문면은 4층 정본이 만든다 — 갈래마다가 아니라 답 **말미 1회**(§7.5 지점 축).
+    """
+    from grid import schema as grid_schema
+    from frontend import words as _w                        # 문면은 4층 정본(pending_value_line · unconfirmed_line 과 같은 자리 · 같은 이유)
+    over = grid_schema.past_calendar(subject, today)
+    return "" if over is None else " · " + _w.season_over(over[0], over[1], END_SAY)
+
+
 def answer_with_asks(subject: dict[str, Any], text: str, today: date,
                      skip_pending: frozenset[str] | set[str] | None = None) -> tuple[str, list[dict[str, Any]]]:
     """(답 문장, 그 답이 물은 것). 물은 것은 send 가 원장에 센다 — answer 는 버린다."""
@@ -1050,7 +1085,8 @@ def answer_with_asks(subject: dict[str, Any], text: str, today: date,
     e = next((x for x in envs if x.decision_id == did), None)
     if e is None:
         return f"{_w.said('판단 불가(데이터)')} — 이 농사는 아직 판단을 낼 재료(심은 날 · 재배 달력)가 없습니다. {can}.", []     # [2026-10-04 전수] 종류 이름도 사람 말 정본으로
-    out = summarize_envelope(e) + pending_value_line(subject, did, skip=skip_pending) + unconfirmed_line(subject["id"], did)
+    out = (summarize_envelope(e) + pending_value_line(subject, did, skip=skip_pending)
+           + unconfirmed_line(subject["id"], did) + season_over_line(subject, today))
     return out, asked_in(e)
 
 

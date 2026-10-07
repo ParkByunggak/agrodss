@@ -159,6 +159,24 @@ def check_alerts(s: Sheet) -> None:
     s.check(len(a7) == len(a5) + 2, "10/07 부터 잎 기준 경보 둘이 더 선다", f"10/05 {len(a5)} · 10/07 {len(a7)}")
     s.check(leaf(a7) == ["예고", "예고"] and leaf(a14) == ["주의", "주의"],
             "10/07~10/13 은 「예고」 · 10/14 부터 「주의」", f"10/07 {leaf(a7)} · 10/14 {leaf(a14)}")
+    # [앞날 걷기 2026-10-07] 달력이 끝난 뒤 — 「놓침 … 사유를 묻는다」 와 「수확 지연」 이 날마다 나가는 자리. 멎게 하는 길을 **답이** 말하는가
+    from datetime import timedelta
+    from frontend import words
+    from grid import schema as grid_schema
+    from ingest import chat as _chat, media
+    sub = next(x for x in media.load_subjects() if x["id"] == SID)
+    unit, _miss = grid_schema.load_unit(sub)
+    last = int(grid_schema.last_day(unit or {}) or 0)
+    anchor = date.fromisoformat(sub["anchor"])
+    said_after = _chat.answer(sub, "오늘 뭐 해야 하나", anchor + timedelta(days=last + 17))
+    said_last = _chat.answer(sub, "오늘 뭐 해야 하나", anchor + timedelta(days=last))
+    want = words.season_over(last + 17, last, _chat.END_SAY)
+    s.check(want in said_after and "재배 달력은 심은 날부터" not in said_last,
+            "달력이 끝난 뒤 답이 마치는 길을 말한다(마지막 날에는 말하지 않는다)",
+            f"달력 끝 {last}일 · +17일 {'말함' if want in said_after else '없음'} · 마지막 날 {'조용함' if '재배 달력은' not in said_last else '말함'}")
+    closed = dict(sub, status="종료", ended_at=(anchor + timedelta(days=last + 17)).isoformat())
+    s.check(want not in _chat.answer(closed, "오늘 뭐 해야 하나", anchor + timedelta(days=last + 17)),
+            "닫은 뒤에는 그 말을 다시 하지 않는다", f"상태 {closed['status']} · 마친 날 {closed['ended_at']}")
 
 
 def check_asking(s: Sheet) -> None:

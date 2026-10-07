@@ -50,10 +50,14 @@ def test_the_card_says_the_right_place():
                                "value": "종구 생산" if kind == "parcel.field" else "무농약", "why_key": "from_diary"})
         assert want in said and "영농일지" not in said, said
         assert f"'{chat.confirm_label(kind)}'" in said                   # 단추 말과 문장이 같은 자리에서 나온다
-    # 반대편 — 일지로 가는 종류는 그대로 영농일지라고 말한다(과잉 처방이 아니다)
-    for kind in ("event", "observation.note", "plan.farmer"):
-        said = chat.card_line({"kind": kind, "text": "물 줬다", "type": "관수"})
-        assert "영농일지에 들어갑니다" in said and "밭 정보에 들어갑니다" not in said, said
+    # 반대편 — 일지로 가는 종류는 그대로 일지라고 말한다(과잉 처방이 아니다)
+    # [축 이동 2026-10-07] 전에는 「영농일지에 들어갑니다」 를 **글자 그대로** 박아 두었는데, 자리 표(chat.PLACE_SAID)가 서면서 할 일·못 한 이유는
+    # 「영농일지의 할 일로 들어갑니다」 처럼 **더 자세히** 말한다 — 계약은 그대로다(일지라고 말한다 · 밭 정보라고 하지 않는다). 그래서 문면이 아니라
+    # **자리 정본에서 온 말인가**를 본다(약화가 아니라 형태 독립 — 꼴을 박으면 다음 처방이 또 이 검사를 깨뜨린다).
+    for kind in ("event", "observation.note", "plan.farmer", "decision.noncompliance"):
+        said = chat.card_line({"kind": kind, "text": "물 줬다", "type": "관수", "reason": "비가 와서", "task": "관수"})
+        assert "영농일지" in said and "밭 정보에 들어갑니다" not in said, said
+        assert chat.PLACE_SAID[kind] in said, (kind, said)                # 문면은 자리 표 하나에서 온다(분기가 제 문장을 다시 쓰지 않는다)
     # [주입 E 2026-10-06 — 아무 검사도 안 닿던 줄] 날짜가 비어 있는 초안은 **날짜를 넣고** 누르라고 말한다(그 말을 지워도 아무것도 안 터졌다)
     need = chat.card_line({"kind": "event", "type": "방제", "needs": ["observed_at"]})
     assert "날짜를 넣고" in need, need

@@ -322,6 +322,12 @@ def judge_page(only: str | None = None) -> tuple[int, str]:
         out.append(f'<p class="err"><b>오늘이 {_e(config.today_frozen())} {records.josa(config.today_frozen(), "로")} 고정돼 있다</b> ({config.TODAY_ENV} — 검사·재현용. 운영이면 .env 에서 지운다)</p>')
     for s, envs, info in judge_run.all_judgments(config.today(), only=only or None):
         out.append(f"<h1 style=\"font-size:17px;margin-top:24px\">{_e(s['label'])}</h1>")
+        # [앞날 걷기 2026-10-07] 달력이 끝난 뒤에도 이 화면은 「놓침 12」 와 「창을 넘긴 작업 — 안 한 이유가 조언보다 값지다」 를 **날마다 영구히** 냈다.
+        # 멎게 하는 길(마쳤다는 말)을 말하는 자리가 농가 쪽에 하나도 없었다 — 채팅 답과 **같은 조건 · 같은 문장**으로 여기도 말한다(두 지점 · 정본은 하나).
+        from grid import schema as grid_schema
+        over = grid_schema.past_calendar(s, config.today())
+        if over:
+            out.append(f'<p class="err">{_e(words.season_over(over[0], over[1], chat.END_SAY))}</p>')
         for env in envs:
             e = env.to_dict()
             # [칸 3 재측정 2026-09-20 · A13/D13] 여기 인라인 사전이 정본(`chat_pages.DECISION_LABEL`)을 **가리고** 있었다 —

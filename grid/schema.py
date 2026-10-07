@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import date as _date
 from pathlib import Path
 from typing import Any
 
@@ -154,6 +155,36 @@ def harvest_order(unit: dict[str, Any]) -> int | None:
         if "harvest_timing" in (s.get("decisions") or []):
             return s.get("order")
     return None
+
+
+def last_day(unit: dict[str, Any]) -> int | None:
+    """재배 달력이 **며칠째까지** 말하는가 — 칸들의 마지막 날. 칸이 없거나 창이 없으면 None.
+
+    [앞날 걷기 2026-10-07] 이 수를 두 곳이 각각 `max(...)` 로 돌면 칸이 늘거나 창이 바뀌는 날 한쪽만 따라온다 — 정본은 여기 하나다.
+    """
+    return max((s["window"]["to_day"] for s in unit.get("stages", [])
+                if isinstance(s.get("window"), dict) and isinstance(s["window"].get("to_day"), int)), default=None)
+
+
+def past_calendar(subject: dict[str, Any], today: _date) -> tuple[int, int] | None:
+    """달력의 **끝을 지났는가** — 지났으면 (오늘 며칠째, 달력 마지막 날), 아니면 None.
+
+    [앞날 걷기 2026-10-07] 심은 날 + 107일로 걸으니 「놓침 12 — 사유를 묻는다」 와 「수확 지연」 이 **날마다 영구히** 나갔다. 둘 다 멎게 하는 길은
+    있다(수확 기록 · 작기 종료 선언) — 그런데 그 길을 **농가에 말하는 자리가 없었다**(화면에는 상태 색 하나 · 답은 한 번도 말하지 않는다). 시스템이
+    대신 닫지 않는 것은 2026-09-20 의 결정이고 그대로 둔다 — 없던 것은 **그 결정을 농가가 알 길**이다. 조건은 달력(정본)에서 오고 문면은 4층이 만든다.
+    상태가 이미 '종료'면 None — 닫힌 뒤에 그 말을 다시 할 자리는 없다.
+    """
+    if subject.get("status") == "종료":
+        return None
+    anchor = subject.get("anchor")
+    unit, miss = load_unit(subject)
+    if not anchor or unit is None or miss is not None:
+        return None
+    last = last_day(unit)
+    if last is None:
+        return None
+    day = (today - _date.fromisoformat(str(anchor))).days
+    return (day, last) if day > last else None
 
 
 def apply_use(unit: dict[str, Any], use: str | None) -> dict[str, Any]:

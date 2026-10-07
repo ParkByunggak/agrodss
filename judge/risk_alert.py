@@ -156,7 +156,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     day = (today - anchor_d).days
     horizon = int(d.params["horizon_days"])
     stages = _stages_in_scope(unit, day, horizon)
-    last_to = max((s["window"]["to_day"] for s in unit["stages"] if isinstance(s.get("window"), dict)), default=None)
+    last_to = grid_schema.last_day(unit)      # 달력의 마지막 날은 정본 하나에서(grid.schema) — 여기서 또 max 를 돌면 칸이 늘 때 한쪽만 따라온다
     if not stages and (last_to is None or day <= last_to):
         return Envelope("해당 없음", DECISION_ID, sid, as_of,
                         result={"why": f"기준점 후 {day}일 — 오늘과 {horizon}일 안에 여는 격자 칸이 없다"})
