@@ -714,7 +714,8 @@ def diary_main(s: dict[str, Any], today: date) -> str:
         if it["day"] != cur:
             cur = it["day"]
             out.append(f'<div class="day">{_e(cur or "날짜 없음")}</div>')
-        src = "채팅" if it["from_chat"] else _e(it["source"])
+        # [내부 값 전수 2026-10-07] 출처를 **날것으로** 냈다 — 「farmer」 가 농가 일지 줄마다 붙어 있었다(역할은 사람 말 정본 `words.role` 이 있는데 이 자리에 안 닿았다 · §7.5 지점).
+        src = "채팅" if it["from_chat"] else f'<span title="{_e(it["source"] or "")}">{_e(words.role(it["source"]))}</span>'
         out.append(f'<div class="it"><span class="k" title="{_e(it.get("label_exact") or "")}">{_e(it["label"])}</span> {_e(it["text"])} <span style="color:var(--muted);font-size:11px">· {src}</span></div>')
     out.append("</div>")
     return "".join(out)

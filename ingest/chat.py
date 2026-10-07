@@ -1690,9 +1690,10 @@ def diary(subject_id: str) -> list[dict[str, Any]]:
         elif k == "observation.note":
             txt = r.get("text", "")
         elif k == "plan.farmer":
-            txt = f"할 일: {r.get('task')} — {r.get('note') or ''}".strip(" —")
+            txt = f"{r.get('task')} — {r.get('note') or ''}".strip(" —")      # [중복 전수 2026-10-07] 줄머리가 이미 「할 일」 이다(「할 일 할 일: 웃거름」 이었다)
         elif k == "plan.target_date":
-            txt = f"{KIND_PLAIN['plan.target_date']} {r.get('target_date')} — {r.get('note') or ''}".strip(" —")
+            # [처방 직후 전수 2026-10-07] 앞 회차에 여기 종류 이름을 넣었는데 줄머리가 이미 그 이름이라 「납품 날짜 납품 날짜 2026-10-30」 이 됐다 — 날짜만 싣는다
+            txt = f"{r.get('target_date')} — {r.get('note') or ''}".strip(" —")
         elif k == "decision.noncompliance":
             txt = f"{r.get('planned_task')} 안 한 이유: {r.get('reason')}"
         else:

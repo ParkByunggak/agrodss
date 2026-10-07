@@ -122,7 +122,8 @@ def changes_page() -> tuple[int, str]:
             f"<table><thead><tr><th>커밋</th><th>날짜</th><th>제목</th></tr></thead><tbody>{rows or '<tr><td colspan=3>git 이력을 읽지 못했다</td></tr>'}</tbody></table>"
             # [U-26 2026-09-26] 커밋 제목은 **인용된 기록**이라 낱말 표를 대지 않는다(농가 글과 같은 축) — 화면의 제 문장만 사람 말로
             "<p style='color:var(--muted)'>저장소 <code>git log</code> 의 제목 20건 — 무엇이 언제 바뀌었는지. 반영 상태는 위 한 줄이다(커밋 완료 ≠ 반영 완료).</p>")
-    meta = "실행 중 코드와 저장소 HEAD 를 대조한다 — 뒤처지면 자동 재기동(run_frontend.bat) 뒤 새로고침"
+    # [내부 값 전수 2026-10-07] 파일 이름이 **제 문장**에 섞여 있었다 — 기계 문자열은 인용으로 싼다(이 쪽의 `git log` 가 이미 그 꼴이다)
+    meta = "실행 중 코드와 저장소 HEAD 를 대조한다 — 뒤처지면 자동 재기동(<code>run_frontend.bat</code>) 뒤 새로고침"
     footer = footer_text()
     return 200, render.page("AGRODSS —변경 로그", nav_html("/changes"), body, meta, footer)
 
@@ -307,7 +308,10 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
                    "".join(f'<tr><td title="{_e(i["axis"])}">{_e(words.axis(i["axis"]))}</td><td>{_e(render.when(i["observed_at"]))}</td><td>{_e(i["source"])}</td>'
                            f'<td>{_e(i["resolution"])}</td><td>{_e(words.grade(i["grade"]))}</td></tr>' for i in e["inputs"]) + "</table>")
     if e["notes"]:
-        out.append("<ul>" + "".join(f"<li class=\"meta\">{_e(n)}</li>" for n in e["notes"]) + "</ul>")
+        # [내부 값 전수 2026-10-07] 메모도 **설정 꼬리**를 그대로 냈다(「… [설정: 주소→좌표는 ingest.soil_exam 지오코딩]」) — 정본(`need.plain_reason`)이
+        # 3층 요약에만 닿아 있었다. 사람에게는 떼고 원문은 title 에(예보 줄과 같은 처방 · 같은 자리에서).
+        from judge.need import plain_reason
+        out.append("<ul>" + "".join(f"<li class=\"meta\" title=\"{_e(n)}\">{_e(plain_reason(str(n)))}</li>" for n in e["notes"]) + "</ul>")
     # 이 판단 블록이 낸 시스템 문장 전부에 사람 말 표를 댄다(기준점 → 심은 날 · 재판정 → 다시 보는 날 · 칸 N → N단계).
     out[start:] = [words.plain(x) for x in out[start:]]
 
@@ -334,7 +338,13 @@ def judge_page(only: str | None = None) -> tuple[int, str]:
             # 사본이 먼저 걸리니 정본을 고쳐도 이 화면만 안 바뀐다(정본 역전). 그리고 실제로 어긋나 있었다: 사본의
             # "자재 인용(유기 공시)" 는 PSIS(관행 등록약제)가 붙기 전 이름이라, 관행 인용까지 싣는 지금은 틀린 말이다.
             _render_env(out, e, chat_pages.DECISION_LABEL.get(e["decision_id"], e["decision_id"]))
-        out.append(words.plain(f"<p class=\"meta\">예보: {_e(info['forecast'])} · 중기: {_e(info.get('mid', ''))} · 장기: {_e(info.get('outlook', ''))} · 예찰: {_e(info.get('pest', ''))}</p>"))    # 3층 사유 문장 — 사람 말로만 옮긴다
+        # [내부 값 전수 2026-10-07] 이 줄이 **설정 꼬리를 그대로** 냈다(「[설정: 주소→좌표는 ingest.soil_exam …]」 · 파일 이름 · 환경변수 이름).
+        # 그 꼬리는 사람에게 뗀다는 정본이 이미 있었다(`need.plain_reason` — 3층 요약이 그것을 쓴다) — 이 화면에만 안 닿았다(§7.5 지점).
+        # 정확함은 안 버린다: 꼬리를 포함한 원문은 title 에 남는다.
+        from judge.need import plain_reason
+        said = {k: (plain_reason(info.get(k)) or "") for k in ("forecast", "mid", "outlook", "pest")}
+        out.append(words.plain(f"<p class=\"meta\" title=\"{_e(' · '.join(str(info.get(k) or '') for k in ('forecast', 'mid', 'outlook', 'pest')))}\">"
+                               f"예보: {_e(said['forecast'])} · 중기: {_e(said['mid'])} · 장기: {_e(said['outlook'])} · 예찰: {_e(said['pest'])}</p>"))    # 3층 사유 문장 — 사람 말로만 옮긴다
     footer = footer_text()
     return 200, render.page("AGRODSS —판단", nav_html("/judge"), "".join(out), "판단은 여덟 가지 말 중 하나로 답합니다", footer)
 
@@ -367,7 +377,10 @@ def events_page(message: str = "", error: str = "", subject: str | None = None) 
     out.append(f"<h2>기록 ({len(recs)})</h2>")
     if recs:
         out.append("<table><tr><th>종류</th><th>농사</th><th>일어난 날</th><th>내용</th><th>기록 시각</th></tr>" + "".join(
-            f"<tr><td>{_e(r.get('type') or r.get('kind'))}</td><td title=\"{_e(r.get('subject'))}\">{_e(words.subject_label(r.get('subject')))}</td><td>{_e(r.get('observed_at'))}</td>"
+            # [내부 값 전수 2026-10-07] 종류 칸이 `kind` 를 **날것으로** 냈다(「decision.noncompliance」) — 작업 이름이 없는 기록(불이행 사유 · 납품 날짜)은
+            # 전부 그랬다. 사람 말 정본(chat.KIND_PLAIN)으로 내고 정확한 값은 title 로(이 표의 농사 칸이 이미 그 꼴이다).
+            f"<tr><td title=\"{_e(r.get('kind') or '')}\">{_e(r.get('type') or chat.KIND_PLAIN.get(str(r.get('kind')), r.get('kind')))}</td>"
+            f"<td title=\"{_e(r.get('subject'))}\">{_e(words.subject_label(r.get('subject')))}</td><td>{_e(r.get('observed_at'))}</td>"
             f"<td>{_e(r.get('reason') or r.get('note') or '')} {_e(', '.join(r.get('materials') or []))}</td><td>{_e(render.local_time(r.get('recorded_at')))}</td></tr>"
             for r in reversed(recs)) + "</table>")
     else:

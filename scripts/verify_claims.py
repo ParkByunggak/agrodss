@@ -275,6 +275,18 @@ def check_screens(s: Sheet) -> None:
         s.check(st == 200 and len(rows) >= 2 and not exact and _c2.KIND_PLAIN["event"] in text,
                 "일지에 줄이 있을 때 줄머리가 사람 말이다(원장의 이름은 글에 없다)",
                 f"줄 {len(rows)} · 원장 이름 {exact or 0} · 「{_c2.KIND_PLAIN['event']}」 {'있음' if _c2.KIND_PLAIN['event'] in text else '없음'}")
+        # [내부 값 전수 2026-10-07] 점 찍힌 내부 이름(kind 꼴) · 영문 역할이 농가 화면의 **글**에 남아 있나 — 기록이 있는 상태로 전수
+        # 파일 이름(`…json` · `…bat`)은 **일부러 둔다** — 발행자 몫 문장은 고칠 파일을 짚어야 한다(judge.need.DEV_TOKENS 의 기록된 결정 · test_grid_unit_miss 가 그것을 지킨다)
+        dotted = re.compile(r"(?<![\w/.])[a-z][a-z_]{2,}\.(?!json|jsonl|bat|py|md|csv|env|html|js|cjs|txt|yml|toml)[a-z][a-z_]{2,}(?![\w/])")
+        code = re.compile(r"<code>.*?</code>", re.S)
+        leaks: dict[str, list[str]] = {}
+        for p in (f"/c/{SID}", f"/diary/{SID}", "/judge", "/me", "/events", "/media", "/improve", "/changes", f"/mall/{SID}"):
+            st2, b2 = get(p)
+            t2 = _text(code.sub(" ", b2))
+            hits = sorted(set(dotted.findall(t2)) | {w for w in ("farmer", "publisher") if re.search(rf"(?<![A-Za-z_]){w}(?![A-Za-z_])", t2)})
+            if st2 != 200 or hits:
+                leaks[p] = hits or [str(st2)]
+        s.check(not leaks, "농가 화면의 글에 내부 이름(점 찍힌 종류 · 영문 역할)이 없다", leaks or "아홉 화면 전부")
     finally:
         srv.shutdown()
         srv.server_close()

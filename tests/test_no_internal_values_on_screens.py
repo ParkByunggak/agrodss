@@ -35,6 +35,7 @@ def _fill():
     m2, _ = chat.send(SID, "답이 이상한데", today=T, now=NOW)
     chat.confirm(m2["id"], 0, now=NOW)
     ev.add_noncompliance(SID, "예찰", "트랩을 못 구했다", "2026-09-20")
+    ev.add_target_date(SID, "2026-10-30", note="납품")      # [2026-10-07] 작업 이름이 **없는** 기록 — /events 표의 종류 칸이 그때 `kind` 를 날것으로 냈다
     media.register(media.save_upload("c.mp4", make_mp4(datetime(2026, 10, 3, 1, 0, tzinfo=timezone.utc))), SID, note="두둑")
 
 
@@ -61,12 +62,22 @@ def test_the_ids_are_still_there_exactly_in_the_title(srv):
 
 
 def test_no_screen_shows_the_raw_request_target_or_role(srv):
+    """[전수 넓힘 2026-10-07] 전에는 **두 화면**(/improve · /me)만 봤다 — 처방(`words.target` · `words.role`)이 그 둘에만 닿았기 때문이다.
+
+    농가 화면 전부로 재니 셋이 더 있었다(§7.5 지점): `/diary` 의 줄마다 붙은 출처 「farmer」 와 `/events` 표의 종류 칸 「decision.noncompliance」.
+    **기록이 있어야 보이는 자리**라 빈 상태로는 보이지 않았다(일지 줄머리와 같은 형태 — 가드가 보는 상태를 먼저 확인한다).
+    """
     _fill()
-    for p in ("/improve", "/me"):
+    inner = tuple(records.TARGETS) + tuple(profile.ROLES)
+    bad = {}
+    for tmpl in list(FARMER_PAGES) + ["/changes"]:
+        p = tmpl.format(sid=quote(SID))
         st, body = _get(srv, p)
-        seen = _said(body)
-        raw = sorted({v for v in tuple(records.TARGETS) + tuple(profile.ROLES) if re.search(rf"(?<![A-Za-z_]){re.escape(v)}(?![A-Za-z_])", seen)})
-        assert raw == [], f"{p}: 내부 어휘가 그대로 — {raw}"
+        assert st == 200, p
+        raw = sorted({v for v in inner if re.search(rf"(?<![A-Za-z_]){re.escape(v)}(?![A-Za-z_])", _said(body))})
+        if raw:
+            bad[p] = raw
+    assert bad == {}, f"내부 어휘가 그대로 — {bad}"
     st, body = _get(srv, "/improve")
     seen = _visible(body)
     assert words.target("other") in seen and words.target("grid") in seen        # 사람 말로는 보인다(값을 숨기는 것이 아니다)
