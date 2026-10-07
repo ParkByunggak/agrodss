@@ -17,6 +17,7 @@ from datetime import date, datetime
 from typing import Any
 
 from ingest import probes as _probes      # 문장 목록은 ingest 가 읽는다 — 4층은 파일을 직접 열지 않는다
+from schema import labels                 # 화면 이름·단추 말은 한 목록에서(없는 이름은 요구 문장·보고에 못 들어온다)
 
 # 발행자 몫 ① 의 그 두 문장(대장 페이지 「① 확인 셋」 과 같은 문면) — 다른 말로 물어도 같은 답이어야 한다
 SYMPTOM_QUESTIONS = ("잎 끝이 누렇게 되는데 왜 그런가요", "잎이 노래지는데 어떻게 해야 하나")
@@ -36,6 +37,13 @@ FILL_ME = "기대 종류 — 발행자가 붙일 것"
 FILL_HOW = "줄 끝 빈칸에 종류 하나만 적어 세션에 보내시면 됩니다 — 줄을 지우거나 고치지 않으셔도 됩니다."
 PROBES_BROKEN = "문장 목록 파일을 못 읽었다 — 다른 점검은 그대로 돈다"
 NO_ROUTE = "어느 판단으로도 안 간다"
+# [손 노릇 2026-10-07] 기대를 붙이는 길이 **채팅뿐**이었다(복사 → 종류 적기 → 세션에 보내기 → 세션 커밋) — 왕복이 한 번 더 붙고 이 항목은 열흘 넘게 막혀 있었다.
+# 그래서 화면에서 **고르고 한 번 저장**한다(결정 화면과 같은 꼴 · 쓰기는 덮개에만 · 정본은 세션 커밋으로만). 세션은 고르지 않는다 — 미리 고른 것 0 이 그 계약이다.
+SAVE_FORM = "exp"
+SAVE_HOW = "고른 줄만 이 PC 에 저장됩니다 — 저장소에는 세션이 커밋으로 옮깁니다"
+SEND_HOW = "붙여 보내시면 세션이 저장소로 옮깁니다 — 보내기 전에도 이 화면의 셈은 이미 발행자 답으로 돕니다."
+FROM_LOCAL = "발행자가 붙임 — 이 PC 에만(저장소에는 아직)"
+# 위 셋은 **그 자체로 사람 말**이어야 한다(낱말 표가 「정본」 을 「기준」 으로 고쳐 문장이 plain() 전후로 달라졌다 — 보이는 말 래칫과 같은 자리)
 
 
 def probes() -> dict[str, Any]:
@@ -89,9 +97,10 @@ def utterances(today: date, subject: dict[str, Any] | None) -> dict[str, Any]:
             rows.append({"text": text, "actual": actual, "actual_said": chat.KIND_PLAIN.get(actual, actual or ""), "route": route,
                          "route_said": _route_said(route) if actual == "question" else "", "expected": exp,
                          "expected_said": chat.KIND_PLAIN.get(exp, exp) if exp else "", "expected_route": exp_route,
-                         "expected_route_said": _route_said(exp_route) if exp_route else "", "expected_note": r.get("expected_note") or "", "ok": ok})
+                         "expected_route_said": _route_said(exp_route) if exp_route else "", "expected_note": r.get("expected_note") or "", "ok": ok,
+                         "from_local": bool(r.get("from_local")), "by": r.get("by") or ""})      # 덮개에서 온 줄인가 — 화면이 「아직 정본 아님」 을 말한다(안 실으면 그 표지가 영영 안 뜬다)
         groups.append({"name": g.get("name", ""), "rows": rows})
-    return {"groups": groups, "with_expected": with_e, "without_expected": without_e, "ok": ok_n, "differ": differ}
+    return {"groups": groups, "with_expected": with_e, "without_expected": without_e, "ok": ok_n, "differ": differ, "doc": doc}
 
 
 def _mine(said: str) -> str:
@@ -118,9 +127,44 @@ def _utterance_html(u: dict[str, Any] | None, e) -> str:
             # 물음 문장과 발행자 메모는 **쓴 그대로**(words.mine) · 종류·갈래 말은 시스템 말이라 표를 거친다
             expected = (f'<div class="meta">기대: {e(r["expected_said"])}' + (f' · {e(r["expected_route_said"])}' if r["expected_route_said"] else "")
                         + (f' ({_mine(e(r["expected_note"]))})' if r["expected_note"] else "") + "</div>") if r["expected"] else ""
-            out.append(f'<div class="card utt"><b>{_mine(e(r["text"]))}</b> · {verdict}<div>실제: <span title="{e(r["actual"] or "")}">{e(r["actual_said"])}</span>{route}</div>{expected}</div>')
+            # [손 노릇 2026-10-07] 기대가 없는 줄에는 **고르는 칸**이 선다 — 칸들은 `form=` 로 맨 아래 저장 하나에 붙는다(결정 화면과 같은 꼴 · 미리 고른 것 0)
+            pick = _pick_html(r["text"], e) if r["expected"] is None else ""
+            mark = f'<div class="meta">{e(FROM_LOCAL)}</div>' if r.get("from_local") else ""
+            out.append(f'<div class="card utt"><b>{_mine(e(r["text"]))}</b> · {verdict}<div>실제: <span title="{e(r["actual"] or "")}">{e(r["actual_said"])}</span>{route}</div>{expected}{mark}{pick}</div>')
+    out.append(_save_block(u, e))
+    out.append(_send_block(u, e))
     out.append(_fill_block(u, e))
     return "".join(out)
+
+
+def _pick_html(text: str, e) -> str:
+    """그 줄의 기대를 고르는 칸 — 값은 틀이 받는 안쪽 이름이고 보이는 말은 화면 정본(`chat.KIND_PLAIN`)에서 온다(목록을 두 벌 두지 않는다)."""
+    from ingest import chat
+    opts = "".join(f'<option value="{e(k)}">{e(chat.KIND_PLAIN.get(k, k))}</option>' for k in _probes.KINDS)
+    # 칸 **이름**에 발행자가 쓴 문장이 들어간다 — 이 쪽은 통째로 낱말 표를 거치므로(`plain_outside`) 싸 두지 않으면 「격자를 보여줘」 가 「재배 달력을 보여줘」 로
+    # 바뀌어 나가고, 그러면 그 이름으로 온 저장이 **목록에 없는 문장**으로 거부된다(사람 말이 바뀌면 기능이 깨지는 첫 자리 — 실측 2026-10-07).
+    return (f'<div style="margin-top:4px"><select form="{SAVE_FORM}" name="k:{_mine(e(text))}">'
+            f'<option value="">— 고르지 않음</option>{opts}</select></div>')
+
+
+def _save_block(u: dict[str, Any], e) -> str:
+    """고른 것을 **한 번에** 저장 — 열넷을 열네 번 누르지 않는다(결정 화면과 같은 처방). 쓰기는 덮개에만."""
+    left = sum(1 for g in u["groups"] for r in g["rows"] if r["expected"] is None)
+    if not left:
+        return ""
+    return (f'<form id="{SAVE_FORM}" method="post" action="/selfcheck/expected" style="margin:10px 0">'
+            f'<button class="btn pri" type="submit">{e(labels.PROBES_SAVE)}</button>'
+            f' <span class="meta">{e(SAVE_HOW)}(남은 {left}줄 · 하나만 골라도 됩니다)</span></form>')
+
+
+def _send_block(u: dict[str, Any], e) -> str:
+    """발행자가 붙인 줄을 세션에 보낼 묶음 — **정본은 세션 커밋으로만** 바뀐다(덮개는 이 PC 것이다)."""
+    from frontend import render, words
+    text = _probes.to_session_text(u.get("doc") or {})
+    if not text:
+        return ""
+    return ('<h3 style="font-size:13px;margin:14px 0 4px">세션에 보낼 것</h3>'
+            f'<p class="meta">{e(SEND_HOW)}</p>' + words.mine(render.paste_block(text)))
 
 
 def _fill_block(u: dict[str, Any], e) -> str:

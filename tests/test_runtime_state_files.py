@@ -57,6 +57,7 @@ WRITE_ACCESSORS = {
     "ingest.outlook": ("local_path",),                   # [⑤b 2026-09-28] 장기 전망 덮개 — /me/outlook 폼의 append_local · remove_local 이 여기 쓴다(git 밖)
     "ingest.decisions": ("local_path",),                 # [WO-PB-01 다음 한 수 2026-09-29] 결정 답 덮개 — /me/decisions 의 answer · remove 가 여기 쓴다(git 밖)
     "ingest.asks": ("path",),                            # [WO-ASK-01 §8 2026-10-03] 묻기 원장 — chat.send 의 record · mark_replied 가 여기 쓴다(채팅 폴더 안 · git 밖)
+    "ingest.probes": ("local_path",),                    # [손 노릇 2026-10-07] 문장 형태 점검의 기대 덮개 — /selfcheck 의 set_expected_all 이 여기 쓴다(정본 utterance_probes.json 은 세션 커밋으로만)
 }
 READ_ONLY = {
     "ingest.outlook": ("path",),                         # 씨앗 climate_outlook.json — 세션 커밋으로만(읽기 전용)

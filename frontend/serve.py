@@ -519,12 +519,14 @@ def decisions_page(message: str = "", error: str = "", form: dict[str, str] | No
     return (400 if error else 200), _shell("/me/decisions", chat_pages.decisions_main(message, error, form), None, "결정 — 한 화면에서 답하기")
 
 
-def selfcheck_page() -> tuple[int, str]:
-    """[검토표 ①⑤a 2026-09-29] 자기 점검 — 읽기 전용. 카드 존재는 /judge 화면 그대로에서 본다(판정 목록이 아니라 화면 — 배선까지)."""
+def selfcheck_page(message: str = "", error: str = "") -> tuple[int, str]:
+    """[검토표 ①⑤a 2026-09-29] 자기 점검 — 점검 자체는 읽기 전용. 카드 존재는 /judge 화면 그대로에서 본다(판정 목록이 아니라 화면 — 배선까지).
+    [손 노릇 2026-10-07] 기대 종류만 쓴다(덮개) — 틀리면 저장하지 않고 이유(400 · 결정 화면과 같은 꼴)."""
     from frontend import selfcheck
     today = config.today()
     report = selfcheck.run(today, judge_page()[1])
-    return 200, _shell("/selfcheck", selfcheck.main_html(report, today), None, "자기 점검")
+    said = (f'<p class="err">{html.escape(error)}</p>' if error else "") + (f'<p class="ok">{html.escape(message)}</p>' if message else "")
+    return (400 if error else 200), _shell("/selfcheck", said + selfcheck.main_html(report, today), None, "자기 점검")
 
 
 def improve_page(message: str = "", error: str = "", cycle=None, subject: str | None = None) -> tuple[int, str]:
@@ -801,6 +803,15 @@ class Handler(BaseHTTPRequestHandler):
                 status, body = decisions_page(message=f"적었다 — {len(r['written'])}줄({said}) · {' · '.join(r['written'])}" + (f" — {notes}" if notes else ""))
             except ValueError as e:
                 status, body = decisions_page(error=f"저장하지 않았다 — {e}", form=echo)
+        elif p == "/selfcheck/expected":
+            # [손 노릇 2026-10-07] 문장 형태 점검의 기대 — 화면에서 고르고 **한 번** 저장. 쓰기는 덮개에만(정본은 세션 커밋으로) · 검증이 먼저(한 줄 틀리면 아무것도 안 쓴다)
+            from ingest import probes as _pr
+            pairs = [(k[2:], v) for k, v in form.items() if k.startswith("k:")]
+            try:
+                r = _pr.set_expected_all(pairs)
+                status, body = selfcheck_page(message=f"적었다 — {len(r['written'])}줄(이 PC 에만 · 아래 묶음을 세션에 보내면 정본이 된다)")
+            except ValueError as e:
+                status, body = selfcheck_page(error=f"저장하지 않았다 — {e}")
         elif p == "/me/decisions/delete":
             from ingest import decisions as _dc
             try:

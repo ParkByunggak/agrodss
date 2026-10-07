@@ -22,3 +22,5 @@ data/_local_backup/
 data/kma/climate_outlook_local.json
 # [WO-PB-01 다음 한 수 2026-09-29] 결정 화면(/me/decisions)의 답 — 덮개에만. 세션이 답을 받아 작업 기록을 커밋으로 고친다
 data/decisions_local.json
+# [손 노릇 2026-10-07] 문장 형태 점검의 기대 종류 — 발행자가 화면에서 붙인 것은 덮개에만(정본 data/utterance_probes.json 은 세션 커밋으로만)
+data/utterance_probes_local.json

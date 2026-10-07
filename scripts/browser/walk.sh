@@ -31,6 +31,7 @@ export AGRODSS_NAMES_LOCAL_CSV="$W/crop_names_local.csv" AGRODSS_NAMES_BACKUP_CS
 export AGRODSS_OUTLOOK_PATH="$W/climate_outlook.json" AGRODSS_OUTLOOK_LOCAL_PATH="$W/climate_outlook_local.json"
 export AGRODSS_DECISIONS_LOCAL_PATH="$W/decisions_local.json"
 export AGRODSS_ASKS_PATH="$W/chat/asks.json"       # [WO-ASK-01 §8 2026-10-03] 묻기 원장 — conftest 와 같은 이름
+export AGRODSS_PROBES_LOCAL_PATH="$W/utterance_probes_local.json"   # [손 노릇 2026-10-07] 문장 형태 점검 기대 덮개 — 걷기가 운영 덮개에 쓰지 않게(검사가 이 짝을 요구한다)
 export AGRODSS_AUTO_PULL_SEC="0"
 cd "$ROOT"
 PYTHONDONTWRITEBYTECODE=1 python -B frontend/serve.py --no-browser > "$W/server.log" 2>&1 &

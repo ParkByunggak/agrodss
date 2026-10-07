@@ -59,6 +59,7 @@ def isolate() -> pathlib.Path:
         "AGRODSS_ORGANIC_PATH": str(w / "organic_materials_public.json"),
         "AGRODSS_OUTLOOK_PATH": str(w / "climate_outlook.json"), "AGRODSS_OUTLOOK_LOCAL_PATH": str(w / "climate_outlook_local.json"),
         "AGRODSS_ASKS_PATH": str(w / "chat" / "asks.json"), "AGRODSS_DECISIONS_LOCAL_PATH": str(w / "decisions_local.json"),
+        "AGRODSS_PROBES_LOCAL_PATH": str(w / "utterance_probes_local.json"),      # [손 노릇 2026-10-07] 기대 덮개 — 보고 확인이 운영 덮개에 쓰지 않게(검사가 이 짝을 요구한다)
     })
     return w
 
