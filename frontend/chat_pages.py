@@ -226,6 +226,7 @@ def user_tab_html(current: str) -> str:
 #         미기상은 격자 칸 3 축에 이름만 있고 값을 읽는 코드가 없다 — 채워도 오늘은 병해충 판정이 달라지지 않는다.
 #         그래서 화면이 그렇게 **말한다**. 열리지 않을 판정을 열린다고 하면 밭에 헛걸음을 시킨다.
 # 어휘 목록은 여기 두지 않는다 — 등록부(ingest.parcels.FIELD_CHOICES)가 정본이고 CLI 도 같은 것을 본다.
+BATCH_FORM = "dec"      # 결정 화면의 저장 폼 id — 칸들이 `form=` 로 여기 붙는다(폼을 겹쳐 넣을 수 없어서)
 READS_LABEL = "판정이 읽는 값"
 STORED_ONLY_LABEL = "지금은 등록부에만 쌓인다(읽는 판정 없음)"
 # [낡음 대조 2026-10-06] 표지가 둘뿐이라 **판정이 아닌 소비자**가 있는 값이 「읽는 판정 없음」 으로 나갔다 — 인증 근거가 그렇다(몰 상품의 인증 표기가 읽는다).
@@ -389,13 +390,18 @@ def decisions_main(message: str = "", error: str = "", form: dict[str, str] | No
             out.append(f'<div class="ok">답: {_e(a.get("verdict", ""))}{(" — " + words.mine(_e(a["note"]))) if a.get("note") else ""} <span class="meta">{_e(render.local_time(a.get("at")))}</span></div>'     # 시각은 local_time 으로만(C16 — [:10] 은 UTC 날짜를 잘라 저녁 답이 어제로 뜬다) · 메모는 쓴 그대로(words.mine — 낱말 표를 대면 쓰지 않은 말이 된다)
                        f'<form method="post" action="/me/decisions/delete" style="margin-top:4px"><input type="hidden" name="id" value="{_e(it["id"])}"><button class="btn" type="submit">이 답 지우기</button></form>')
         else:
-            mine = f.get("id") == it["id"]
-            picked = (f.get("verdict") or "") if mine else ""
-            radios = " ".join(f'<label style="display:inline-block;margin-right:10px"><input type="radio" name="verdict" value="{v}"{" checked" if picked == v else ""} required> {v}</label>' for v in dc.VERDICTS)
-            out.append(f'<form method="post" action="/me/decisions" style="margin-top:6px"><input type="hidden" name="id" value="{_e(it["id"])}">{radios}'
-                       f'<input name="note" placeholder="다르다면 → 무엇" value="{words.mine(_e((f.get("note") or "") if mine else ""))}" style="width:60%;max-width:420px">'     # 되돌려 주는 칸도 쓴 그대로(틀린 줄을 다시 쳐야 하면 안 된다)
-                       f' <button class="btn pri" type="submit">저장</button></form>')
+            # [손 노릇 2026-10-07] 줄마다 폼이 따로여서 열넷을 답하려면 열네 번 눌렀다(누를 때마다 30KB 쪽을 위에서 다시 그리고 돌아갈 자리가 없다 · 측정 2026-10-05).
+            # 칸들은 `form=` 로 **맨 아래 저장 하나**에 붙는다(폼을 겹쳐 넣을 수 없으므로 — 답한 줄의 「지우기」 폼이 그 안에 들어가면 안 된다).
+            # **미리 고른 것은 없다**(세션이 답을 보이면 채점자와 응시자가 같아진다) · `required` 는 없다(열넷 중 셋만 답해도 저장된다 — 그 전제가 이 처방이다).
+            picked = (f.get(f"v:{it['id']}") or "").strip()      # 틀린 저장에서 돌아올 때만 고른 것을 되돌려 준다(발행자가 다시 고르지 않게)
+            radios = " ".join(f'<label style="display:inline-block;margin-right:10px"><input type="radio" form="{BATCH_FORM}" name="v:{_e(it["id"])}" value="{v}"{" checked" if picked == v else ""}> {v}</label>' for v in dc.VERDICTS)
+            out.append(f'<div style="margin-top:6px">{radios}'
+                       f'<input form="{BATCH_FORM}" name="n:{_e(it["id"])}" placeholder="다르다면 → 무엇" value="{words.mine(_e(f.get("n:" + it["id"]) or ""))}" style="width:60%;max-width:420px"></div>')     # 되돌려 주는 칸도 쓴 그대로(틀린 줄을 다시 쳐야 하면 안 된다)
         out.append('</div>')
+    if sm["open"]:
+        out.append(f'<form id="{BATCH_FORM}" method="post" action="/me/decisions" style="margin:10px 0">'
+                   f'<button class="btn pri" type="submit">{_e(labels.DECISIONS_SAVE)}</button>'
+                   f' <span class="meta">고른 줄만 저장된다 — 하나만 골라도 된다(남은 {sm["open"]}줄을 한 번에 저장할 수 있다).</span></form>')
     text = dc.to_session_text(answers)
     out.append('<h2 style="font-size:14px">세션에 보낼 것</h2><p class="meta">답한 것만 · 항목 순서 · 한 줄씩. 한 번 누르면 전체가 잡힌다 — 이 글을 세션에 붙이면 세션이 작업 기록에 옮기고 항목을 닫는다.</p>')
     # 묶음 꼴은 정본 하나(render.paste_block) · 안의 글은 발행자가 쓴 답이라 낱말 표를 대지 않는다(words.mine — 바뀐 말이 작업 기록에 들어가면 쓰지 않은 말이 기록된다)

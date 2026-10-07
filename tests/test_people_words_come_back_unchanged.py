@@ -115,7 +115,7 @@ def test_the_decision_note_comes_back_exactly(answers_file):
     assert body.count(esc) >= 3, [body.count(esc), esc]
     assert f"답: 다르다 — {esc}" in body                                   # 답 줄
     assert f"D-2 다르다 — {esc}</pre>" in body                             # 보낼 것 묶음(세션이 읽는 글)
-    assert f"적었다 — D-2 다르다 — {esc}" in body                          # 확인 줄
+    assert f"적었다 — 1줄(다르다 1) · D-2 — {esc}" in body                 # 확인 줄([손 노릇 2026-10-07] 여러 줄을 한 번에 저장하므로 줄 수 · 답 수 · 어느 줄 순으로)
     assert "재배 달력" in body and words.MINE_OPEN not in body             # 표는 여전히 산다 · 표시 문자는 안 나간다
 
 

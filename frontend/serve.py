@@ -785,14 +785,22 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as e:
                 status, body = outlook_page(error=str(e))
         elif p == "/me/decisions":
-            # [WO-PB-01 다음 한 수 2026-09-29] 답 하나 — 검증(ingest.decisions)이 먼저, 틀리면 아무것도 안 쓰고 이유. 같은 답은 한 번만(멱등)
+            # [WO-PB-01 다음 한 수 2026-09-29] 검증(ingest.decisions)이 먼저, 틀리면 아무것도 안 쓰고 이유. 같은 답은 한 번만(멱등)
+            # [손 노릇 2026-10-07] 한 번에 여러 줄 — 폼이 `v:<id>` · `n:<id>` 로 보낸다. **쓰는 길은 하나**(`answer_all`)이고 입력 꼴만 둘이다(옛 한 줄 꼴도 받는다).
             from ingest import decisions as _dc
+            pairs = [(k[2:], v, form.get(f"n:{k[2:]}", "")) for k, v in form.items() if k.startswith("v:")]
+            if not pairs and form.get("id"):
+                pairs = [(form["id"], form.get("verdict", ""), form.get("note", ""))]
+            # 되돌려 줄 꼴은 **하나**다 — 두 입력 꼴을 여기서 줄마다 칸 이름으로 맞춘다(안 그러면 옛 꼴로 보낸 글이 되돌아오지 않는다 · 실측)
+            echo = {**form, **{f"v:{i}": v for i, v, _n in pairs}, **{f"n:{i}": n for i, _v, n in pairs}}
             try:
-                r = _dc.answer(form.get("id", ""), form.get("verdict", ""), note=form.get("note", ""))
-                # 적은 메모는 **쓴 그대로** 되읽어 준다(words.mine — 확인 줄이 낱말 표를 거치면 「격자」 가 「재배 달력」 으로 바뀌어 되읽힌다)
-                status, body = decisions_page(message=f"적었다 — {form.get('id', '')} {r['verdict']}" + (f" — {words.mine(r['note'])}" if r.get("note") else ""))
+                r = _dc.answer_all(pairs)
+                said = " · ".join(f"{k} {n}" for k, n in r["counts"].items() if n)
+                # 적은 메모는 **쓴 그대로** 되읽어 준다(words.mine — 낱말 표를 거치면 「격자」 가 「재배 달력」 으로 바뀌어 되읽힌다)
+                notes = " · ".join(words.mine(a["note"]) for a in (_dc.load().get(i) for i in r["written"]) if a and a.get("note"))
+                status, body = decisions_page(message=f"적었다 — {len(r['written'])}줄({said}) · {' · '.join(r['written'])}" + (f" — {notes}" if notes else ""))
             except ValueError as e:
-                status, body = decisions_page(error=f"저장하지 않았다 — {e}", form=form)
+                status, body = decisions_page(error=f"저장하지 않았다 — {e}", form=echo)
         elif p == "/me/decisions/delete":
             from ingest import decisions as _dc
             try:

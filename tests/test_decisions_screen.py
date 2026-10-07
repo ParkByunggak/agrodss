@@ -145,11 +145,12 @@ def test_the_screen_flow_get_answer_refuse_delete_and_the_ledger_stays_untouched
     pos = [body.index(f"{i} · ") for i in dc.IDS]
     assert pos == sorted(pos) and body.count('class="card dec"') == len(dc.IDS)                  # 전부 · 화면 순서 = 항목 순서(맨 위 D-2)
     assert body.count('value="모르겠다"') == len(dc.IDS) - len(dc.DECIDED) and "아직 답이 없다" in body     # 결정된 카드에는 폼이 없다(답한 카드로만 남는다)
+    # [손 노릇 2026-10-07] 저장은 **한 폼**이고 칸 이름이 줄마다다(`v:<id>` · `n:<id>`) — 옛 한 줄 꼴도 같은 쓰기 길로 받는다(입력 꼴만 둘)
     status, body = _post(srv, "/me/decisions", {"id": "D-2", "verdict": "맞다", "note": ""})
-    assert status == 200 and "적었다 — D-2 맞다" in body and "답: 맞다" in body
-    status, body = _post(srv, "/me/decisions", {"id": "D-3", "verdict": "다르다", "note": ""})
+    assert status == 200 and "적었다 — 1줄(맞다 1)" in body and "답: 맞다" in body
+    status, body = _post(srv, "/me/decisions", {"v:D-3": "다르다", "n:D-3": ""})
     assert status == 400 and "저장하지 않았다" in body and "무엇" in body and "D-3" not in dc.to_session_text(dc.load())
-    assert 'value="다르다" checked' in body                                                       # 친 것은 남는다
+    assert 'name="v:D-3" value="다르다" checked' in body                                          # 친 것은 남는다(그 줄만)
     status, body = _post(srv, "/me/decisions", {"id": "D-3", "verdict": "다르다", "note": "첫 시즌부터 받는다"})
     assert status == 200 and "D-2 맞다\nD-3 다르다 — 첫 시즌부터 받는다" in _text(body)
     status, body = _post(srv, "/me/decisions/delete", {"id": "D-2"})

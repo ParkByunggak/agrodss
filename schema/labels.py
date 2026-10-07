@@ -44,6 +44,7 @@ def crop_screen_href(key: str, sid: str) -> str:
 ME_SECTIONS = {"outlook": "장기 전망", "decisions": "결정", "parcel": "밭 정보", "sync": "설정 · 동기화"}
 ME_TITLE = "사용자 정보"
 PARCEL_SAVE = "밭 정보 저장"
+DECISIONS_SAVE = "고른 답 저장"      # [손 노릇 2026-10-07] 줄마다 단추 열넷 → 맨 아래 하나. 이름도 한 목록에서(없는 이름은 요구 문장·보고에 못 들어온다)
 # 사용자 탭 메뉴(계정 메뉴 형식) — /me 항목은 왼쪽 메뉴와 같은 이름
 USER_MENU_ME = ("/me", "밭 정보 · 설정", "밭 정보 · 사용자 · 동기화")
 

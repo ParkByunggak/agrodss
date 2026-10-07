@@ -223,11 +223,13 @@ def check_screens(s: Sheet) -> None:
         # [낡음 대조 2026-10-06] 「답 0/15」 는 그 15 안에 폼 없는 결정됨 카드(D-22)가 있어 **닿을 수 없는 셈**이었다 — 셋으로 갈랐고 폼 수가 남은 수와 같은지까지 본다
         from ingest import decisions as _dc
         sm = _dc.summary(_dc.load())
+        # [손 노릇 2026-10-07] 저장 폼은 하나(열넷 → 1)이고 줄마다 **칸**이 있다 — 셈과 맞춰 보는 것은 그 칸 수다
+        groups = len(re.findall(r'name="v:[^"]+"\s+value="맞다"', dec))
         forms = dec.count('action="/me/decisions"')
         shown = f"남은 {sm['open']}" in _text(dec) and f"결정됨 {sm['decided']}" in _text(dec)
-        s.check(st == 200 and shown and forms == sm["open"] and sm["open"] + sm["decided"] + sm["answered"] == sm["total"],
-                "결정 화면의 셈이 결정됨을 갈라 센다(저장 폼 수 = 남은 수)",
-                f"남은 {sm['open']} · 답 {sm['answered']} · 결정됨 {sm['decided']} · 전체 {sm['total']} · 폼 {forms}")
+        s.check(st == 200 and shown and groups == sm["open"] and forms == 1 and sm["open"] + sm["decided"] + sm["answered"] == sm["total"],
+                "결정 화면의 셈이 결정됨을 갈라 센다(답 칸 수 = 남은 수 · 저장은 한 폼)",
+                f"남은 {sm['open']} · 답 {sm['answered']} · 결정됨 {sm['decided']} · 전체 {sm['total']} · 칸 {groups} · 저장 폼 {forms}")
         seen = []
         for p in (f"/c/{SID}", "/judge", "/me", "/events", "/media", "/improve", f"/mall/{SID}", f"/diary/{SID}"):
             st, body = get(p)

@@ -139,6 +139,34 @@ def answer(id_: str, verdict: str, note: str = "", p: Path | None = None, now: d
     return rec
 
 
+def answer_all(pairs: list[tuple[str, str, str]], p: Path | None = None, now: datetime | None = None) -> dict[str, Any]:
+    """여러 줄을 **한 번에** — 전부 검증한 뒤에 쓴다(한 줄이 틀리면 아무것도 안 쓰고 그 줄을 말한다 · `answer` 와 같은 규율).
+
+    [손 노릇 2026-10-07] 전까지는 줄마다 폼이 따로여서 열넷을 답하려면 **열네 번** 눌렀고, 누를 때마다 30KB 쪽이 위에서 다시 그려지고
+    돌아갈 자리(앵커)가 없어 마지막 카드는 28,753번째 글자였다(측정 2026-10-05). 판단은 발행자 몫 그대로이고 **손 노릇만** 줄인다.
+    고른 줄만 쓴다(빈 줄은 건너뛴다 — 안 고른 것은 답이 아니다) · 같은 답은 다시 안 쓴다(`answer` 의 멱등을 그대로 쓴다).
+    """
+    rows = [(i, (v or "").strip(), (n or "").strip()) for i, v, n in pairs if (v or "").strip()]
+    if not rows:
+        raise ValueError("고른 줄이 없다 — 하나 이상 고르고 저장한다(빈 저장은 아무것도 안 쓴다)")
+    seen: set[str] = set()
+    for i, v, n in rows:                        # ① 전부 검증(쓰기 전에) — 한 줄이 틀리면 나머지도 안 쓴다
+        it = item(i)
+        if it["id"] in seen:
+            raise ValueError(f"{it['id']}: 같은 줄이 두 번 왔다")
+        seen.add(it["id"])
+        if v not in VERDICTS:
+            raise ValueError(f"{it['id']}: 답은 {' / '.join(VERDICTS)} 중 하나여야 한다 — {v!r}")
+        if v == "다르다" and len(n) < 2:
+            raise ValueError(f"{it['id']}: 「다르다」 는 무엇이 다른지(→ 무엇)를 함께 적는다 — 빈 「다르다」 는 답이 아니다")
+    out: dict[str, Any] = {"written": [], "counts": {k: 0 for k in VERDICTS}}
+    for i, v, n in rows:                        # ② 쓴다
+        rec = answer(i, v, note=n, p=p, now=now)
+        out["written"].append(item(i)["id"])
+        out["counts"][rec["verdict"]] += 1
+    return out
+
+
 def remove(id_: str, p: Path | None = None) -> dict[str, Any]:
     it = item(id_)
     p = p or local_path()

@@ -111,13 +111,15 @@ def test_the_page_does_not_report_a_number_the_session_cannot_see():
 def test_the_decided_card_has_no_form_which_is_why_the_count_had_to_split():
     """[⑤ 양방향] 전제부터 — 결정됨 카드에는 저장 폼이 없고(답한 카드로 남는다), 남은 줄에는 있다."""
     html = chat_pages.decisions_main()
-    forms = html.count('action="/me/decisions"')
-    assert forms == dc.summary(dc.load())["open"], (forms, dc.summary(dc.load())["open"])
+    # [손 노릇 2026-10-07] 저장 폼은 **하나**가 됐다(열넷 → 1) — 그래서 「남은 수」 와 맞춰 보는 것은 폼이 아니라 **줄마다의 칸**이다
+    assert html.count('action="/me/decisions"') == 1, html.count('action="/me/decisions"')
+    groups = len(re.findall(r'name="v:[^"]+"\s+value="맞다"', html))
+    assert groups == dc.summary(dc.load())["open"], (groups, dc.summary(dc.load())["open"])
     for i in dc.DECIDED:
-        assert f'value="{i}"' not in html, i                       # 결정된 줄에는 보낼 폼이 없다
+        assert f'name="v:{i}"' not in html, i                      # 결정된 줄에는 보낼 칸이 없다
         assert "결정됨:" in html
     other = next(x for x in dc.IDS if x not in dc.DECIDED)
-    assert f'value="{other}"' in html                              # 남은 줄에는 있다
+    assert f'name="v:{other}"' in html                             # 남은 줄에는 있다
 
 
 def test_external_measurements_carry_the_day_they_were_made():
