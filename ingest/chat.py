@@ -1127,8 +1127,13 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
         caps = " · ".join(f"상한: {c.get('name')}({c.get('basis')})" for c in (e.caps or []))
         return f"{head} {r['summary']} · 등급 {e.grade}" + (f" · {caps}" if caps else "")
     if e.decision_id == "harvest_timing":
-        return (f"{head} 수확 창 {r.get('window_start')} ~ {r.get('window_end')} (±{r.get('error_days')}일) · 등급 {e.grade} · "
-                f"{r.get('basis', '')} · {r.get('final_say', '')}")
+        # [앞날 걷기 2026-10-07] 오늘이 그 기간의 어디인지(3층 `position`)를 **창 바로 뒤에** 말한다. 문장은 4층 정본에서.
+        # 소비자를 세어 보니 **농가 줄만 0** 이었다 — 발행자 화면은 그 날말을 그대로 찍고 있었다. "소비자 0" 으로 적었던 첫 판독이 틀렸다(§7.1 도구 의심).
+        from frontend import words as _w
+        where = _w.where_in_window(r)
+        return (f"{head} 수확 창 {r.get('window_start')} ~ {r.get('window_end')} (±{r.get('error_days')}일)"
+                + (f" — {where}" if where else "")
+                + f" · 등급 {e.grade} · {r.get('basis', '')} · {r.get('final_say', '')}")
     if e.decision_id == "risk_alert":
         al = r.get("alerts") or []
         body = " / ".join(f"{a.get('level')} {a.get('risk')}({a.get('stage')})" for a in al) or "지금 창에 경보 없음"

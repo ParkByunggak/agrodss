@@ -184,6 +184,39 @@ def waiting_many(items: list[tuple[str, str, str]]) -> str:
             f"{_records.josa(reads[-1] if reads[-1] != ')' else '것', '이')} 아직 안 들어갔습니다({_places()} 에서 넣으면 다시 답합니다)")
 
 
+WINDOW_SAID = {"창 이전": "아직 그 기간 전입니다", "창 안": "오늘은 그 기간 안입니다", "창 지남": "그 기간은 이미 지났습니다"}
+
+
+def where_in_window(result: dict) -> str:
+    """수확 기간 안에서 **오늘이 어디인가** — 3층이 잰 자리(`position`)와 날수를 사람 말로.
+
+    [앞날 걷기 2026-10-07] 11/10 로 미리 걸으니 답이 「수확 기간 2026-10-14 ~ 2026-11-03」 을 그대로 냈다 — 틀린 말은 아니지만 **이미 지난 기간이
+    앞일처럼** 읽힌다(그날 위험 쪽은 「수확 창을 7일 넘겼다」 를 알고 있었다). `position` 은 3층에서 줄곧 계산됐고 **농가 줄이 읽지 않았다**(G1).
+    발행자 화면은 그 날말을 그대로 찍고 있었으니 소비자가 0 은 아니었다 — 「소비자 0」 으로 적었던 첫 판독을 전수로 고쳤다.
+    상대 날수는 글이 아니라 계산이다 — 절대 날짜가 먼저, 상대 말은 괄호에(대장 페이지의 `when()` 과 같은 규율).
+    """
+    pos = (result or {}).get("position")
+    if pos not in WINDOW_SAID:
+        return ""
+    said = WINDOW_SAID[pos]
+    if pos == "창 이전":
+        n = int(result.get("days_to_start") or 0)
+        return f"{said}({_short_day(result.get('window_start'))} 에 열립니다" + (f" · {_in_days(n)})" if n else ")")
+    if pos == "창 지남":
+        n = int(result.get("days_past_end") or 0)
+        return f"{said}({_short_day(result.get('window_end'))} 에 끝났습니다" + (f" · {n}일 전)" if n else ")")
+    return f"{said}({_short_day(result.get('window_end'))} 까지)"
+
+
+def _short_day(iso: str | None) -> str:
+    s = str(iso or "")
+    return f"{int(s[5:7])}/{int(s[8:10])}" if len(s) >= 10 else s
+
+
+def _in_days(n: int) -> str:
+    return {1: "내일", 2: "모레"}.get(n) or f"{n}일 뒤"
+
+
 def not_in_diary(kind: str, count: int, label: str) -> str:
     """아직 일지에 **안 넣은 사건 초안**이 이 답을 바꾼다 — 그 사실 한 줄. `waiting`(안 넣은 *값*)의 사건 판이다.
     문장이 2층에 박혀 있었다(가뭄 답 한 곳) — 자리가 늘면 사람 말이 갈라지므로 여기 하나로 둔다. 단추 말은 부르는 쪽 정본에서 받는다(`chat.confirm_label`)."""

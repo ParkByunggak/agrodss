@@ -97,6 +97,11 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         notes.append("품종 미확인 — 범위로 제시(격자 judge_without_variety=range)")
     day = (today - anchor_d).days
     position = "창 이전" if today < start else ("창 안" if today <= end else "창 지남")
+    # [앞날 걷기 2026-10-07] `position` 은 여기서 줄곧 계산됐는데 **농가 줄에 소비자가 0** 이었다(G1 — 정본이 있는데 안 흐른다. 발행자 화면은 그 날말을
+    # 그대로 찍고 있었다 — 전수를 다시 재서 고친 판독이다). 그래서 11/10 로 미리 걸으니
+    # 농가 답이 「수확 기간 2026-10-14 ~ 2026-11-03」 을 그대로 내서 **이미 지난 기간이 앞일처럼** 읽혔다(위험 쪽은 「수확 창을 7일 넘겼다」 를 알고 있었다).
+    # 문장은 4층이 만들고(`words.where_in_window`) 3층은 **날수만** 준다 — 층을 지키면서 농가 줄이 오늘을 말할 수 있게.
+    days_to_start, days_past_end = max(0, (start - today).days), max(0, (today - end).days)
 
     # 선택 축: 예보 → 상한 제약(첫 서리)
     caps: list[dict[str, str]] = []
@@ -130,6 +135,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         result={
             "window_start": start.isoformat(), "window_end": end.isoformat(), "center": center.isoformat(),
             TOLERANCE_DAYS_KEY: half, "days_since_anchor": day, "position": position,
+            "days_to_start": days_to_start, "days_past_end": days_past_end,      # 농가 줄이 오늘을 말하는 재료(문장은 4층)
             "basis": f"기준점 {anchor}({unit['unit'].get('anchor_kind')}) + 격자 창 {w['from_day']}~{w['to_day']}일",
             "final_say": "잎 길이·상태는 농가 관찰이 최종 심급(격자 수확 작업 출처)",
         },
