@@ -208,8 +208,21 @@ def set_status(sid: str, status: str, ended_at: str | None = None) -> dict[str, 
 CERT_WORDS: dict[str, tuple[str, ...]] = {"유기": ("유기 인증", "유기농", "유기 재배", "유기다", "유기이", "유기입", "유기 "), "무농약": ("무농약",), "관행": ("관행",)}
 CERT_DECLARE_WORDS = ("인증", "재배다", "재배이다", "재배입니다", "농법", "이다", "입니다", "받았", "받음")
 SUBJECT_FIELD_WORDS = {"cert": "인증", "anchor": "심은 날"}
-# 누가 읽는가(§12) — 인증: 자재 인용(공시 자재 · 등록 약제 갈래) · 밑거름(자재 갈래) / 심은 날: 날짜를 세는 판단 전부 가운데 농가가 바로 보는 셋
-SUBJECT_FIELD_CONSUMERS: dict[str, tuple[str, ...]] = {"cert": ("material_citation", "base_fertilization"), "anchor": ("harvest_timing", "risk_alert", "plan_vs_actual")}
+# 누가 읽는가(§12) — 화면이 이 이름으로 「넣으면 어느 판단이 읽습니다」 를 말한다.
+# [소비자 재측정 2026-10-07] 밭 정보 쪽(`parcels.FIELD_CONSUMERS`)은 10-05 에 다시 재서 늘었는데(용도 1→5 · 배수 1→2) **농사 값 쪽은 선언 그대로**였다.
+# 같은 방법으로 쟀다(값을 바꿔 날 셋 09-20 · 10-07 · 10-20 의 봉투 전부 대조 · 합집합):
+#     인증     적힌 2 → 측정 **4**(자재 인용 · 웃거름 1회 · 웃거름 2회 · 계획 대 실제)   ※ 밑거름은 측정에 안 나왔다 — 아래 못 잼
+#     심은 날   적힌 3 → 측정 **11**(날짜를 세는 판단이 사실상 전부다)
+# 심은 날이 특히 나빴다 — 농가가 그 값을 넣을 때 화면은 셋만 말했는데 실제로는 가뭄 · 병해충 · 보식 · 파종 창 · 웃거름 둘 · 자재 인용 · 배수 경보가 함께 달라진다.
+# 조건을 덜 말하는 것은 축약이 아니라 **다른 사실**이다(G1 반대형). 순서는 농가가 먼저 묻는 것부터(앞 셋이 전에 적혀 있던 그 셋이다).
+SUBJECT_FIELD_CONSUMERS: dict[str, tuple[str, ...]] = {
+    "cert": ("material_citation", "top_dressing_1", "top_dressing_2", "plan_vs_actual", "base_fertilization"),
+    "anchor": ("harvest_timing", "risk_alert", "plan_vs_actual", "drought_alert", "pest_alert", "drainage_alert",
+               "material_citation", "top_dressing_1", "top_dressing_2", "replant", "sowing_window"),
+}
+# [측정 한계] 인증 → 밑거름은 **못 잰 것**이고 소비자 0 이 아니다 — 처방 원천(외부)이 이 환경에 없어 인증을 바꿔도 봉투가 안 변한다
+# (밭 정보 쪽 `environment` 와 같은 자리 · 죽은 원천의 0 을 사실로 읽으면 소비자를 지우게 된다). 재측정 래칫이 이 짝만 빼고 대조한다.
+SUBJECT_CONSUMERS_UNMEASURABLE: dict[str, tuple[str, ...]] = {"cert": ("base_fertilization",)}
 
 
 def cert_declared(text: str) -> str | None:

@@ -179,6 +179,17 @@ def _places() -> str:
     return _labels.PLACES["parcel"]
 
 
+NAMES_SHOWN = 5      # 이보다 길면 앞 다섯과 **전체 수**로 말한다 — 열한 이름을 한 줄에 늘어놓으면 농가가 읽지 않는다(다섯까지는 그대로 센다 — 용도 다섯이 그 경계다)
+# [재측정 2026-10-07] 심은 날 소비자가 3 → **11** 로 늘었다(선언이 아니라 측정). 전부 늘어놓으면 한 줄이 160자가 되고, 줄이면 「조건을 덜 말하는」 그 결함이 된다 —
+# 그래서 **수를 함께** 말한다(줄이되 몇인지를 숨기지 않는다). 수는 정본의 길이에서 세므로 표가 늘면 문장도 따라 늘어난다.
+def _names_said(ids: tuple[str, ...]) -> str:
+    names = [decision(d) for d in ids]
+    if len(names) <= NAMES_SHOWN:
+        return " · ".join(names)
+    shown = names[:NAMES_SHOWN]
+    return f"{' · '.join(shown)}{_records.josa(shown[-1], '을')} 비롯해 {len(names)}가지"      # 조사도 정본에서(인용 → 을 · 단계) → 를)
+
+
 def opened(field: str, value: str, pending: bool = False) -> str:
     """밭 정보 값 하나를 넣은 직후의 한 줄 — 그 값을 읽는 판단의 이름(parcels.FIELD_CONSUMERS). 읽는 판단이 없으면 빈 문자열(열렸다고 말하지 않는다 · §5-1 한 쌍).
     [§7.5 지점 2026-10-03] 답을 넣는 자리가 셋(채팅 초안 줄 · 확인 직후 줄 · 밭 정보 폼)이라 문장은 여기 하나다.
@@ -198,7 +209,7 @@ def opened(field: str, value: str, pending: bool = False) -> str:
             return (f"{head} {word} 값 '{value}' {_records.josa(value, '을')} {who}{_records.josa(who, '이')} 읽습니다 — "
                     f"판정은 이 값을 읽지 않습니다({cond}).")
         return ""
-    names = " · ".join(decision(d) for d in ids)
+    names = _names_said(ids)
     word = parcels.FIELD_WORDS.get(field) or subjects.SUBJECT_FIELD_WORDS.get(field, field)
     head, tail = ("넣으면", "지금 답은 그 값 없이 낸 것입니다") if pending else ("이것으로", "다음 답부터 그 근거에 실립니다")
     line = f"{head} {names} 판단이 {word} 값 '{value}' {_records.josa(value, '을')} 읽습니다 — {tail}."      # 값이 들어오는 자리(유기 → 「를」 · 무농약 → 「을」)

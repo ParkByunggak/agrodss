@@ -193,8 +193,11 @@ def test_a_cert_declaration_in_the_diary_raises_a_subject_draft_and_confirming_o
     assert prop["field"] == "cert" and prop["value"] == "무농약" and prop["why_key"] == "from_diary" and prop["subject"] == sid
     assert "인증" not in _question_in(r["text"])
     rec = chat.confirm(m["id"], m["drafts"].index(prop), now=NOW)
-    assert rec["kind"] == "subject" and subjects.by_id(sid)["cert"] == "무농약" and rec["opens"] == ["material_citation", "base_fertilization"]
-    assert "자재 인용 · 밑거름" in rec["opens_line"] and "인증 값 '무농약' 을 읽습니다" in rec["opens_line"]
+    # [재측정 2026-10-07] 인증 소비자가 2 → 5(측정 4 + 못 잼 1) 로 늘었다 — 이름을 검사에 박으면 재측정마다 거짓 실패다. **정본에서 받는다**(그 표가 측정 결과다)
+    assert rec["kind"] == "subject" and subjects.by_id(sid)["cert"] == "무농약"
+    assert rec["opens"] == list(subjects.SUBJECT_FIELD_CONSUMERS["cert"])
+    from frontend import words as _w
+    assert _w.decision("material_citation") in rec["opens_line"] and "인증 값 '무농약' 을 읽습니다" in rec["opens_line"]
     m2, r2 = chat.send(sid, "인증은 유기다", today=T34, now=NOW)                          # 선언은 처음부터 농사 값 초안
     assert m2["drafts"][0]["kind"] == "subject.field" and m2["drafts"][0]["value"] == "유기" and "이 농사의 정보에 들어갑니다" in r2["text"]
     with pytest.raises(subjects.SubjectError):
