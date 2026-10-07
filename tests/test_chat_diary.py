@@ -171,7 +171,10 @@ def test_diary_is_ledgers_by_day_not_a_new_ledger():
     ev.add_noncompliance(SID, "예찰(트랩 · 육안)", "비가 왔다", "2026-09-08", now=NOW)
     items = chat.diary(SID)
     assert [i["day"] for i in items] == ["2026-09-10", "2026-09-08"]
-    assert items[0]["label"] == "사건" and items[0]["from_chat"] and items[1]["label"] == "불이행 사유"
+    # [축 이동 2026-10-07] 전에는 줄머리가 **원장의 이름**(「사건」 · 「불이행 사유」)이었고 그것이 농가 화면에 그대로 나갔다 — 이제 사람 말이고
+    # 정확한 이름은 `label_exact`(화면의 title)에 남는다. 계약은 「일지는 원장을 날짜로 모은 것」 이고 그대로다.
+    assert items[0]["label"] == chat.KIND_PLAIN["event"] and items[0]["label_exact"] == "사건" and items[0]["from_chat"]
+    assert items[1]["label"] == chat.KIND_PLAIN["decision.noncompliance"] and items[1]["label_exact"] == "불이행 사유"
     assert not (Path(chat.chat_dir()) / "diary.jsonl").exists()
 
 

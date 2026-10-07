@@ -360,6 +360,16 @@ PLACE_SAID: dict[str, str] = {
     "feedback.request": "고쳐 달라는 말로 들어갑니다(왼쪽 메뉴에서 진행을 보실 수 있습니다)",
     "subject.end": "이 농사를 마친 것으로 닫습니다 — 그 뒤 계획을 못 한 일로 세지 않습니다",
 }
+# 채팅에 **적을 수 있는 것** — 읽는 순서는 흔한 것부터(편집), 목록의 **범위**는 정본이다: `confirm()` 이 받는 종류 전부 + 물음(저장하지 않고 답한다).
+# [목록 전수 2026-10-07] 화면 셋이 이 목록을 **손으로** 적고 있었고 셋이 다 달랐다 — 채팅 머리말 여섯(농사 끝 빠짐) · 입력칸 밑 다섯(못 한 이유도 빠짐) ·
+# 일지 머리 다섯(납품 날짜 빠짐). 「적을 수 있는 것」 은 능력 목록이라 손으로 적는 순간 낡는다(앞 회차 「답할 수 있는 것」 과 같은 꼴).
+WRITABLE: tuple[str, ...] = ("event", "observation.note", "plan.farmer", "decision.noncompliance", "feedback.request",
+                             "question", "plan.target_date", "parcel.field", "subject.field", "subject.end")
+
+
+def writable_said() -> list[str]:
+    """적을 수 있는 것의 **사람 말** — 화면 셋이 이 하나를 쓴다(두 벌이면 한쪽만 는다)."""
+    return [KIND_PLAIN[k] for k in WRITABLE]
 
 
 def confirm_label(kind: str) -> str:
@@ -1665,6 +1675,11 @@ def diary_lookup(subject_id: str, event_type: str, limit: int = 12) -> str:
 
 
 # ── 영농일지 — 원장을 날짜로 펼친다 ─────────────────────────────────────────────────
+DIARY_SHOWS: tuple[str, ...] = ("event", "observation.note", "plan.farmer", "plan.target_date", "decision.noncompliance", "observation.video")
+# 일지가 **실제로 펼치는** 종류 — 사건 원장이 쓰는 다섯(ev.WRITTEN_KINDS)과 영상. 화면 머리의 목록이 이것을 세어 말한다(손으로 적어 두었더니
+# 납품 날짜가 빠져 있었다 — 흐르는 목록의 세 번째 자리). 원장이 쓰는 종류가 늘면 래칫이 여기와 `diary()` 의 갈래를 함께 본다.
+
+
 def diary(subject_id: str) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for r in ev.list_records(subject_id):
@@ -1677,12 +1692,17 @@ def diary(subject_id: str) -> list[dict[str, Any]]:
         elif k == "plan.farmer":
             txt = f"할 일: {r.get('task')} — {r.get('note') or ''}".strip(" —")
         elif k == "plan.target_date":
-            txt = f"납품 계획일 {r.get('target_date')} — {r.get('note') or ''}".strip(" —")
+            txt = f"{KIND_PLAIN['plan.target_date']} {r.get('target_date')} — {r.get('note') or ''}".strip(" —")
         elif k == "decision.noncompliance":
             txt = f"{r.get('planned_task')} 안 한 이유: {r.get('reason')}"
         else:
-            txt = json.dumps(r, ensure_ascii=False)[:120]
-        items.append({"day": (r.get("observed_at") or "")[:10], "kind": k, "label": KIND_LABEL.get(k, k), "text": txt,
+            # [전수 2026-10-07] 전에는 여기서 **레코드를 날것(JSON)으로** 농가 화면에 냈다. 지금은 닿지 않는 갈래지만(원장이 쓰는 다섯에 갈래가 다 있다)
+            # 쓰는 종류가 하나 늘면 그날 농가가 그 JSON 을 읽는다 — 래칫이 전수를 보고, 여기서는 날것을 내지 않는다.
+            txt = f"{KIND_PLAIN.get(k, '기록')} — 아직 사람 말로 옮기지 않은 기록입니다"
+        # 줄머리 이름은 **사람 말**(KIND_PLAIN)이다 — 전에는 원장의 이름(KIND_LABEL: 사건 · 관찰 · 계획 · 불이행 사유)이 그대로 나갔고,
+        # 그것이 2026-09-21 발행자 지적("이런 답변을 보여 주는 것을 이해할 사람이 얼마나 될까?")의 그 말이다. 정확한 이름은 버리지 않고 `label_exact`(화면의 title)로.
+        items.append({"day": (r.get("observed_at") or "")[:10], "kind": k, "label": KIND_PLAIN.get(k, KIND_LABEL.get(k, k)),
+                      "label_exact": KIND_LABEL.get(k, k), "text": txt,
                       "id": r.get("id"), "source": r.get("source"), "from_chat": bool(r.get("chat_ref"))})
     from frontend import words as _w                     # 일지 줄의 말은 4층 정본(모듈 수준 import 는 층을 뒤집는다)
     for v in media.list_records(subject_id):
@@ -1691,6 +1711,7 @@ def diary(subject_id: str) -> list[dict[str, Any]]:
         when = str(v.get("observed_at") or "")[11:16]
         txt = f"찍은 때 {when} — {_w.shot_time(v.get('observed_at_source'))}" + (f" · {v.get('note')}" if v.get("note") else "")
         items.append({"day": (v.get("observed_at") or "")[:10], "kind": v.get("kind") or "observation.video",
-                      "label": "사진" if is_img else "영상", "text": txt, "id": v.get("id"), "source": v.get("source"), "from_chat": False})
+                      "label": "사진" if is_img else "영상", "label_exact": str(v.get("kind") or "observation.video"),
+                      "text": txt, "id": v.get("id"), "source": v.get("source"), "from_chat": False})
     items.sort(key=lambda x: (x["day"], x["id"] or ""), reverse=True)
     return items

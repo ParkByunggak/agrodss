@@ -39,10 +39,27 @@ FARMER_PAGES = ("/c/{sid}", "/diary/{sid}", "/me", "/judge", "/improve", "/selfc
 TODAY = "2026-09-19"      # 화면의 오늘을 고정 — 실제 날짜로 걸으면 창 밖이 되어 문장이 달라진다(시점 축)
 
 
+def _records(sid: str) -> None:
+    """화면에 **기록이 있게** 한다(격리된 tmp 원장 — conftest 가 환경을 돌려 놓았다).
+
+    [가드가 자고 있었다 2026-10-07] 이 검사는 여태 **빈 화면**을 걸었다 — 운영 원장에 사건·관찰·계획이 0 이라 일지·한 일 화면에 **줄이 하나도 없었다**.
+    기록을 넣고 다시 재니 농가 화면 둘이 안쪽 말을 했다(일지 줄머리가 원장의 이름이었다 — 「사건」 · 「관찰」 · 「계획」 · 「불이행 사유」).
+    *화면이 비어 있으면 가드는 아무것도 보지 않는다* — 있다고 믿는 것이 없는 것보다 나쁘다(가드 창 계열).
+    """
+    from ingest import events as ev, feedback as fb
+    ev.add_event(sid, "관수", "2026-09-18", note="물 줬다")
+    ev.add_observation(sid, "잎 끝이 노랗다", "2026-09-18")
+    ev.add_farmer_plan(sid, "웃거름", "2026-09-20", note="모레")
+    ev.add_target_date(sid, "2026-10-30", note="납품")
+    ev.add_noncompliance(sid, "예찰", "비가 와서", "2026-09-17")
+    fb.add_request("답이 이상해요", target="other", subject=sid, source="farmer")
+
+
 @pytest.fixture
 def srv(monkeypatch):
     monkeypatch.setattr(config, "PORT", 0)
     monkeypatch.setenv(config.TODAY_ENV, TODAY)
+    _records(media.load_subjects()[0]["id"])      # 빈 화면을 걸으면 이 검사는 눈을 감는다
     s = serve.make_server()
     threading.Thread(target=s.serve_forever, daemon=True).start()
     yield s.server_address[1]

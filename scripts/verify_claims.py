@@ -264,6 +264,17 @@ def check_screens(s: Sheet) -> None:
             if st != 200 or SID in _text(body):
                 seen.append((p, st))
         s.check(not seen, "화면의 **글**에 재배 단위 id 가 없다(속성에는 그대로 — 정확함을 안 버린다)", seen or "여덟 화면 전부")
+        # [목록 전수 2026-10-07] 일지에 **줄이 있는 상태**로 — 줄머리가 원장의 이름(사건 · 관찰 · 계획 · 불이행 사유)이면 농가가 그것을 읽는다
+        from ingest import chat as _c2, events as _ev2
+        _ev2.add_event(SID, "관수", T.isoformat(), note="물 줬다")
+        _ev2.add_farmer_plan(SID, "웃거름", T.isoformat(), note="모레")
+        st, body = get(f"/diary/{SID}")
+        text = _text(body)
+        rows = _c2.diary(SID)
+        exact = sorted({_c2.KIND_LABEL[k] for k in _c2.DIARY_SHOWS if _c2.KIND_LABEL[k] != _c2.KIND_PLAIN[k]} & set(re.findall(r"[가-힣 ]+", text)))
+        s.check(st == 200 and len(rows) >= 2 and not exact and _c2.KIND_PLAIN["event"] in text,
+                "일지에 줄이 있을 때 줄머리가 사람 말이다(원장의 이름은 글에 없다)",
+                f"줄 {len(rows)} · 원장 이름 {exact or 0} · 「{_c2.KIND_PLAIN['event']}」 {'있음' if _c2.KIND_PLAIN['event'] in text else '없음'}")
     finally:
         srv.shutdown()
         srv.server_close()

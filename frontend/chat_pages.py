@@ -514,7 +514,12 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
         out.append(f'<p class="ok">{_e(message)}</p>')
     msgs = chat.list_messages(s["id"])
     if not msgs:
-        out.append('<div class="msg sys"><div class="av">a</div><div class="bub">여기에 그날 밭에서 있었던 일을 그냥 적으시면 됩니다 — <b>한 일</b>(오늘 물 줬다) · <b>본 것</b>(잎이 누렇다) · <b>할 일</b>(내일 웃거름) · 못 한 이유 · 고쳐 달라는 말 · 물음. 읽어서 어디에 적을지 <b>먼저 골라 보여 드립니다</b>. <b>넣기를 누르셔야</b> 영농일지에 들어갑니다 — 저절로 적히지 않습니다.</div></div>')
+        # [목록 전수 2026-10-07] 적을 수 있는 것은 **정본에서 센다**(`chat.writable_said()`) — 손으로 적어 두었더니 「농사 끝」 이 빠져 있었다(화면 셋이 다 다른 목록이었다).
+        # 보기(예)는 흔한 셋에만 붙인다 — 열 가지에 다 붙이면 읽히지 않는다(길이 측정의 그 규율).
+        shown = {"한 일": "오늘 물 줬다", "본 것": "잎이 누렇다", "할 일": "내일 웃거름"}
+        says = " · ".join(f"<b>{_e(w)}</b>({_e(shown[w])})" if w in shown else _e(w) for w in chat.writable_said())
+        out.append('<div class="msg sys"><div class="av">a</div><div class="bub">여기에 그날 밭에서 있었던 일을 그냥 적으시면 됩니다 — '
+                   + says + '. 읽어서 어디에 적을지 <b>먼저 골라 보여 드립니다</b>. <b>넣기를 누르셔야</b> 영농일지에 들어갑니다 — 저절로 적히지 않습니다.</div></div>')
     by_id = {m["id"]: m for m in msgs}
     for m in msgs:
         if m.get("role") == "system":
@@ -543,7 +548,7 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
                '<input type="hidden" name="input_mode" id="input_mode" value="text"><input type="hidden" name="edit_of" id="edit_of" value="">'
                '<textarea name="text" id="text" title="엔터로 보냅니다 — 줄바꿈은 Shift+Enter" placeholder="예) 오늘 물 줬다 / 잎 끝이 누렇다 / 9월 25일에 웃거름 주려고 한다 / 수확 창이 너무 넓다 / 언제 캐면 되나?"></textarea>'
                '<div class="files" id="files" hidden><span id="filenames"></span> <label>찍은 날 <input name="observed_at" id="observed_at" placeholder="적으시면 이 날짜로 (2026-09-19) — 비우셔도 됩니다" size="30"></label></div>'
-               '<div class="row"><span class="hint" id="hint">한 일 · 본 것 · 할 일 · 고쳐 달라는 말 · 물음 — 날짜는 "9월 20일" · "어제" · "2026-09-20"</span>'
+               f'<div class="row"><span class="hint" id="hint">{_e(" · ".join(chat.writable_said()))} — 날짜는 "9월 20일" · "어제" · "2026-09-20"</span>'
                '<span><input type="file" name="file" id="file" accept="image/*,video/*" multiple hidden>'
                '<button class="btn" type="button" id="attach" title="사진 · 영상 올리기 — 찍은 때는 적어 주신 날짜 → 사진 속 시각 → 파일 이름 → 올리신 때 순으로 정합니다">📎 사진·영상</button> '
                # [칸 3 재측정 2026-09-20 · D15] 툴팁만 '5초' 가 박혀 있었다 — 설정(AGRODSS_VOICE_SILENCE_MS)을 바꾸면 화면이 거짓말을 한다
@@ -689,13 +694,15 @@ def thread_panel(s: dict[str, Any], today: date) -> str:
     if not items:
         out.append('<div class="it">아직 없다 — 대화에서 확인한 것이 여기 쌓인다</div>')
     for it in items[:8]:
-        out.append(f'<div class="it"><span class="k">{_e(it["day"])}</span> <span class="k">{_e(it["label"])}</span> {_e(it["text"])}</div>')
+        out.append(f'<div class="it"><span class="k">{_e(it["day"])}</span> <span class="k" title="{_e(it.get("label_exact") or "")}">{_e(it["label"])}</span> {_e(it["text"])}</div>')
     out.append("</div>")
     return "".join(out)
 
 
 def diary_main(s: dict[str, Any], today: date) -> str:
-    out = [f'<div class="thead"><div><h1>영농일지 — {_e(s.get("label"))}</h1><div class="meta">넣으신 것(한 일 · 본 것 · 할 일 · 못 한 이유 · 영상)을 날짜순으로 펼친 것입니다. 따로 적는 곳이 아닙니다.</div></div><div><a href="/c/{quote(s["id"])}">대화로</a></div></div><div class="msgs diary">']
+    # 머리의 목록도 **세어서** — 일지가 펼치는 종류(`chat.DIARY_SHOWS`)에서 온다(손으로 적어 두었더니 납품 날짜가 빠져 있었다)
+    shows = " · ".join(dict.fromkeys(chat.KIND_PLAIN.get(k, k) for k in chat.DIARY_SHOWS))
+    out = [f'<div class="thead"><div><h1>영농일지 — {_e(s.get("label"))}</h1><div class="meta">넣으신 것({_e(shows)})을 날짜순으로 펼친 것입니다. 따로 적는 곳이 아닙니다.</div></div><div><a href="/c/{quote(s["id"])}">대화로</a></div></div><div class="msgs diary">']
     pend = chat.pending_drafts(s["id"])
     if pend:
         out.append(f'<p class="err">{_e(chat.PENDING_LABEL)} {len(pend)} — 대화에서 넣기를 누르셔야 일지에 들어갑니다</p>')
@@ -708,7 +715,7 @@ def diary_main(s: dict[str, Any], today: date) -> str:
             cur = it["day"]
             out.append(f'<div class="day">{_e(cur or "날짜 없음")}</div>')
         src = "채팅" if it["from_chat"] else _e(it["source"])
-        out.append(f'<div class="it"><span class="k">{_e(it["label"])}</span> {_e(it["text"])} <span style="color:var(--muted);font-size:11px">· {src}</span></div>')
+        out.append(f'<div class="it"><span class="k" title="{_e(it.get("label_exact") or "")}">{_e(it["label"])}</span> {_e(it["text"])} <span style="color:var(--muted);font-size:11px">· {src}</span></div>')
     out.append("</div>")
     return "".join(out)
 
