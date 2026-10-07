@@ -92,10 +92,12 @@ def test_the_plan_answer_carries_every_pending_kind():
         _draft(kind, said, T)
     s = subjects.by_id(SID)
     line = chat.unconfirmed_line(SID, "plan_vs_actual")
-    assert line.count(SAID) == 3, line
+    # [길이 측정 2026-10-07] 셋을 **세 문장**으로 말하니 꼬리가 세 번 똑같이 나가 답이 651자였다 — 한 문장으로 합쳤다(종류·건수는 그대로 · 꼬리는 한 번).
+    assert line.count(SAID) == 1 and line.count("누르면 판단이 읽습니다") == 1, line
     said_text, _asks = chat.answer_with_asks(s, "오늘 뭐 해야 하나", T)
     for kind in ("관수", "수확", "방제"):
-        assert f"{SAID} {kind} 기록 1건" in said_text, (kind, said_text[-400:])
+        assert f"{kind} 1건" in said_text, (kind, said_text[-400:])        # 덜 말하지는 않는다 — 셋이 다 이름과 건수로 남는다
+    assert SAID in said_text
 
 
 def test_the_sentence_is_one_canon_and_speaks_plainly():
@@ -110,5 +112,5 @@ def test_the_sentence_is_one_canon_and_speaks_plainly():
     src = (chat.ROOT / "ingest" / "chat.py").read_text(encoding="utf-8")
     body = src[src.index("def unconfirmed_line"):]
     body = body[:body.index("\ndef ", 10)]
-    assert "_w.not_in_diary(" in body and SAID not in body.split('"""')[2]   # 문면을 2층에서 다시 적지 않는다(독스트링 밖)
+    assert "_w.not_in_diary_many(" in body and SAID not in body.split('"""')[2]   # 문면을 2층에서 다시 적지 않는다(독스트링 밖) · 합치는 일도 4층 정본이 한다
     assert src.count(f'f" · {SAID}') == 0                                    # 일지 조회 꼬리도 같은 정본을 쓴다(손으로 적힌 조사가 거기 있었다)

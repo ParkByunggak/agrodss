@@ -166,12 +166,43 @@ def waiting(field: str, value: str, observed_at: str = "") -> str:
             f"아직 안 들어갔습니다({_places()} 에서 넣으면 다시 답합니다)")
 
 
+def waiting_many(items: list[tuple[str, str, str]]) -> str:
+    """기다리는 값이 **여러 개**면 한 문장으로 — 꼬리(자리 안내)는 한 번만.
+
+    [길이 측정 2026-10-07] 다섯 회차 동안 처방을 쌓고 **농가가 오늘 읽는 길이**를 쟀다: 위험 물음의 답이 502자였고 그 안에서
+    「… 아직 안 들어갔습니다(왼쪽 메뉴 … 에서 넣으면 다시 답합니다)」 가 **두 번** 똑같이 나왔다(용도 · 배수 둘 다 기다리는 값이라서).
+    늘어난 것은 **정보가 아니라 꼬리**다 — 값 이름과 읽은 값만 다르고 나머지는 같은 말이다. 그래서 값은 다 말하고 꼬리는 한 번만 말한다.
+    """
+    if not items:
+        return ""
+    if len(items) == 1:
+        return waiting(*items[0])
+    from ingest import parcels, subjects
+    words_ = [parcels.FIELD_WORDS.get(f) or subjects.SUBJECT_FIELD_WORDS.get(f, f) for f, _v, _d in items]
+    reads = " · ".join(f"'{v}'({d})" if d else f"'{v}'" for _f, v, d in items)      # 읽은 날은 그 값의 출처다 — 합치면서 버리지 않는다
+    return (f"이 답은 {' · '.join(words_)} 값 없이 낸 것입니다 — 일지에서 읽은 {reads}"
+            f"{_records.josa(reads[-1] if reads[-1] != ')' else '것', '이')} 아직 안 들어갔습니다({_places()} 에서 넣으면 다시 답합니다)")
+
+
 def not_in_diary(kind: str, count: int, label: str) -> str:
     """아직 일지에 **안 넣은 사건 초안**이 이 답을 바꾼다 — 그 사실 한 줄. `waiting`(안 넣은 *값*)의 사건 판이다.
     문장이 2층에 박혀 있었다(가뭄 답 한 곳) — 자리가 늘면 사람 말이 갈라지므로 여기 하나로 둔다. 단추 말은 부르는 쪽 정본에서 받는다(`chat.confirm_label`)."""
-    if count < 1:
+    return not_in_diary_many([(kind, count)], label)
+
+
+def not_in_diary_many(counts: list[tuple[str, int]], label: str) -> str:
+    """안 넣은 기록이 **여러 종류**면 한 문장으로 — 단추 안내는 한 번만.
+
+    [길이 측정 2026-10-07] 같은 자리의 사건 판이다. 미확인 초안이 셋이면 「'일지에 넣기' 를 누르면 판단이 읽습니다」 가 **세 번** 똑같이 나갔고
+    할 일 답이 651자가 됐다. 종류와 건수는 다 말하고(덜 말하면 다른 사실이다) 꼬리는 한 번만 말한다.
+    """
+    rows = [(k, int(n)) for k, n in counts if int(n) > 0]
+    if not rows:
         raise ValueError("안 넣은 기록이 없으면 그 말을 하지 않는다 — 0건을 말하는 자리는 없다")
-    return f"아직 일지에 넣지 않은 {kind} 기록 {count}건이 있습니다 — '{label}' {_records.josa(label, '를')} 누르면 판단이 읽습니다"
+    said = " · ".join(f"{k} {n}건" for k, n in rows)
+    head = (f"아직 일지에 넣지 않은 기록이 있습니다({said})" if len(rows) > 1
+            else f"아직 일지에 넣지 않은 {rows[0][0]} 기록 {rows[0][1]}건이 있습니다")      # 한 종류면 전과 **같은 문장**이다(바꿀 이유가 없는 쪽은 안 바꾼다)
+    return f"{head} — '{label}' {_records.josa(label, '를')} 누르면 판단이 읽습니다"
 
 
 def _places() -> str:

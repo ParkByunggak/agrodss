@@ -997,8 +997,9 @@ def pending_value_line(subject: dict[str, Any], did: str, skip: frozenset[str] |
             continue                                        # 이 판정이 안 읽는 값이면 말하지 않는다(§5-1 과 같은 축 — 안 바뀌는 것을 바뀐다고 하지 않는다)
         k = known.known_use_differs(subject) if field == "use" else known.known_field(subject, field)
         if k and k.get("from") == "observation" and k.get("value"):
-            out.append(_w.waiting(field, str(k["value"]), str(k.get("observed_at") or "")))
-    return ("" if not out else " · " + " · ".join(out))
+            out.append((field, str(k["value"]), str(k.get("observed_at") or "")))
+    # [길이 측정 2026-10-07] 기다리는 값이 둘이면 꼬리(자리 안내)가 두 번 똑같이 나갔다(위험 물음의 답 502자) — 값은 다 말하고 꼬리는 한 번(`waiting_many`)
+    return ("" if not out else " · " + _w.waiting_many(out))
 
 
 def unconfirmed_line(subject_id: str, did: str) -> str:
@@ -1015,8 +1016,9 @@ def unconfirmed_line(subject_id: str, did: str) -> str:
             continue                                        # 이 판정이 안 읽는 사건이면 말하지 않는다(안 바뀌는 것을 바뀐다고 하지 않는다)
         n = len(unconfirmed_of(subject_id, kind))
         if n:
-            out.append(_w.not_in_diary(kind, n, confirm_label("event")))
-    return ("" if not out else " · " + " · ".join(out))
+            out.append((kind, n))
+    # [길이 측정 2026-10-07] 종류가 셋이면 단추 안내가 **세 번** 똑같이 나갔다(할 일 답 651자) — 종류·건수는 다 말하고 꼬리는 한 번(`not_in_diary_many`)
+    return ("" if not out else " · " + _w.not_in_diary_many(out, confirm_label("event")))
 
 
 def answer_with_asks(subject: dict[str, Any], text: str, today: date,
