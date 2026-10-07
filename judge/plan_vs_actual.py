@@ -208,7 +208,11 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
         revisit_at=(today + timedelta(days=d.revisit_days)).isoformat(),
         result={"days_since_anchor": (today - anchor_d).days, "counts": counts, "rows": rows,
                 "ask_reason": ask, "prep_now": prep,
-                "events_used": len(evts) - 1, "videos_used": len(videos), "reasons_used": len(reasons)},
+                "events_used": len(evts) - 1, "videos_used": len(videos), "reasons_used": len(reasons),
+                # [앞날 걷기 2026-10-07] 용도를 넣으면 「다음 예정」 이 **조용히** 비워졌다(4 → 0 실측). 그 사실이 메모에만 있어 농가 답은 아무 말도 못 했다 —
+                # 구조로도 싣는다(risk_alert 과 **같은 키** · 2층이 메모 문장을 파싱하면 어휘가 두 벌이 된다)
+                "use_gap_stages": [f"{s.get('order')}. {s.get('name')}" for s in unit.get("stages", []) if grid_schema.use_gap(unit, s)],
+                "use_gap_use": unit.get("_use") if any(grid_schema.use_gap(unit, s) for s in unit.get("stages", [])) else None},
         notes=[grid_schema.source_note(unit), f"작업↔사건 대응: {d.params['source']}",
                "사건 원장·영상 원장은 축이 아니라 기록 — inputs 에 축으로 싣지 않는다",
                # [종구 2026-10-03] 용도 기준이 없는 칸의 할 일은 계획표에 없다(plan.from_unit 이 걷는다) — 비어 있는 이유를 말한다(조용한 빈칸 금지)

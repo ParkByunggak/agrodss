@@ -260,7 +260,9 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         "판단함", DECISION_ID, sid, as_of, inputs=inputs,
         revisit_at=(today + timedelta(days=d.revisit_days)).isoformat(), grade=weakest(grades),
         result={"days_since_anchor": day, "horizon_days": horizon, "stages": [f"{s['order']}. {s['name']}" for s in stages],
+                # [앞날 걷기 2026-10-07] 안 낸 것을 **농가 답도 말하게** 하려고 용도 이름을 함께 싣는다 — 메모 문장을 2층이 파싱하면 어휘가 두 벌이 된다(구조로 넘긴다)
                 "alerts": alerts, "watched_recoverable": watched, "watch": watch, "use_gap_stages": gapped,
+                "use_gap_use": unit.get("_use") if gapped else None,
                 "signals": sig or {"note": "예보 없음"}},
         notes=notes,
     )

@@ -45,7 +45,9 @@ echo "HEAD $H"
 if grep -q "이 커밋 X" docs/handover_20260919.md; then
   step "핸드오버 해시 기재 → $H"
   sed -i "s/(이 커밋 X)/$H/; s/이 커밋 X\b/$H/g" docs/handover_20260919.md
-  printf 'docs: 핸드오버 — %s 해시 기재(%s)\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QP3adTM3PKy9M3tMgSUL4L\n' "$H" "$LABEL" > "$LOG"
+  # 꼬리말(공동 작성 · 세션)은 **본 커밋 메시지에서 그대로** 가져온다 — 스크립트에 박아 두면 꼬리말이 바뀌는 날 두 커밋이 서로 다른 말을 한다(정본 하나)
+  printf 'docs: 핸드오버 — %s 해시 기재(%s)\n\n' "$H" "$LABEL" > "$LOG"
+  grep -E '^(Co-Authored-By|Claude-Session):' "$MSG" >> "$LOG" || { echo "!! 커밋 메시지에 꼬리말이 없다 — $MSG"; exit 1; }
   git commit -q -am "$(cat "$LOG")"
   echo "docs $(git rev-parse --short HEAD)"
 fi

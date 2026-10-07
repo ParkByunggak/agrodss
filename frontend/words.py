@@ -196,6 +196,30 @@ def decision_table() -> dict[str, str]:
     return out
 
 
+USE_GAP_WHAT = {"risk_alert": "위험", "plan_vs_actual": "할 일"}      # 그 칸에서 **안 낸 것** — 판정마다 다르다(검사가 전수를 본다: 빈칸을 내는 판정이 늘면 여기도 는다)
+
+
+def use_gap_said(use: str, stages: list[str], did: str) -> str:
+    """용도 기준이 없어 **그 칸의 것을 안 냈다**는 한 줄 — 빈칸을 조용히 두지 않는다.
+
+    [앞날 걷기 2026-10-07] 발행자가 지금 하라고 안내받은 한 수(용도 = 종구 생산)를 격리로 넣어 보니 약속대로 잎 기준 경보 둘이 멎었다(3 → 1). 그런데
+    「서리 오나」 의 답에서 **서리가 통째로 사라졌다** — 그 위험은 칸 5(수확)의 것이고 종구 기준이 없어 **안 낸 것**인데 답은 그 말을 하지 않는다.
+    같은 자리에서 「다음 예정」 도 4 → 0 으로 비었다. 3층은 그 사실을 **메모에 적어 두고** 있었고(화면은 보여 준다) 농가 답만 침묵했다(G1 셋째 형태).
+    수확 시기 쪽은 이미 정직하게 말한다(「종구 재배의 수확 때는 재배 달력에 아직 없습니다」) — 그 문면과 **같은 결**로 맞춘다.
+    """
+    what = USE_GAP_WHAT.get(did)
+    if not use or not stages or not what:
+        return ""
+    where = " · ".join(_stage_said(s) for s in stages)
+    return (f"{use} 재배 기준이 재배 달력의 {where}에 아직 없어 그 칸의 {what}{_records.josa(what, '은')} 내지 않습니다 — 기준이 오면 냅니다")
+
+
+def _stage_said(stage: str) -> str:
+    """3층이 쓰는 칸 표기(「5. 수확」)를 농가가 읽는 꼴(「수확(5단계)」)로 — 화면의 할 일 줄이 쓰는 그 꼴과 같다(`chat._with_stage` → plain)."""
+    num, _, name = str(stage).partition(". ")
+    return f"{name}({num}단계)" if name and num.strip().isdigit() else str(stage)
+
+
 def can_say(names: list[str]) -> str:
     """**지금 이 농사에서** 답할 수 있는 판단 이름들 — 서는 것이 없으면 그 사실을 말한다.
 

@@ -1052,6 +1052,18 @@ def unconfirmed_line(subject_id: str, did: str) -> str:
     return ("" if not out else " · " + _w.not_in_diary_many(out, confirm_label("event")))
 
 
+def use_gap_line(e: Any) -> str:
+    """이 판정이 **용도 기준이 없어 안 낸 것**이 있으면 한 줄. 없으면 빈 문자열.
+
+    [앞날 걷기 2026-10-07] 3층은 그 사실을 구조로 싣고(`use_gap_stages` · `use_gap_use`) 화면은 메모로 보여 주는데 **농가 답만 침묵**했다 —
+    「서리 오나」 에서 서리가 사라지고 「다음 예정」 이 비는데 답이 그 말을 안 한다. 문장은 4층 정본(`words.use_gap_said`) · 자리는 답 **말미 1회**.
+    """
+    from frontend import words as _w
+    r = getattr(e, "result", None) or {}
+    said = _w.use_gap_said(str(r.get("use_gap_use") or ""), list(r.get("use_gap_stages") or []), getattr(e, "decision_id", ""))
+    return f" · {said}" if said else ""
+
+
 def season_over_line(subject: dict[str, Any], today: date) -> str:
     """재배 달력이 **끝난 뒤**면 그 사실과 다음 수 한 줄. 아니면 빈 문자열.
 
@@ -1115,7 +1127,7 @@ def answer_with_asks(subject: dict[str, Any], text: str, today: date,
     e = next((x for x in envs if x.decision_id == did), None)
     if e is None:
         return f"{_w.said('판단 불가(데이터)')} — 이 농사는 아직 판단을 낼 재료(심은 날 · 재배 달력)가 없습니다. {can}.", []     # [2026-10-04 전수] 종류 이름도 사람 말 정본으로
-    out = (summarize_envelope(e) + pending_value_line(subject, did, skip=skip_pending)
+    out = (summarize_envelope(e) + use_gap_line(e) + pending_value_line(subject, did, skip=skip_pending)
            + unconfirmed_line(subject["id"], did) + season_over_line(subject, today))
     return out, asked_in(e)
 
