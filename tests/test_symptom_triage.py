@@ -95,7 +95,9 @@ def test_the_chat_answer_comes_from_the_envelope_not_a_fixed_sentence(srv):
     e = next(x for x in judge_run.judgments_for(s["id"], today=TODAY, said=[ev.said_observation(s["id"], q, TODAY.isoformat())])
              if x.decision_id == "symptom_triage")
     assert a.startswith(f"[{words.said(e.kind)}]") and words.plain(e.result["summary"]) in a and "다음 예정" not in a, a
-    assert ". 지어내지 않습니다. " in a and "짐작 지어내지" not in a and "냅니다 지어내지" not in a, a   # 문장 경계(D-18 반영 실측 — 마침표 없이 이어졌다)
+    # 문장 경계(D-18 반영 실측 — 마침표 없이 이어졌다). [축 이동 2026-10-07] 전에는 뒤의 **공백까지** 박아 두었는데 그 공백은 뒤에 붙던 메뉴
+    # (「지금 답할 수 있는 것: …」)의 것이었다 — 답한 자리에서 그 메뉴를 떼자 깨졌다. 계약은 **앞의 마침표**다(이어 붙지 않는가).
+    assert ". 지어내지 않습니다" in a and "짐작 지어내지" not in a and "냅니다 지어내지" not in a, a
     # /judge 에 그 카드가 선다 — 결정 이름은 등록부에서 · 비었으면 왜 비었는지(키 · D-18)가 화면에
     c = http.client.HTTPConnection("127.0.0.1", srv, timeout=10)
     c.request("GET", "/judge")

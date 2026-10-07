@@ -1056,13 +1056,30 @@ def season_over_line(subject: dict[str, Any], today: date) -> str:
     return "" if over is None else " · " + _w.season_over(over[0], over[1], END_SAY)
 
 
+STANDS = ("판단함", "사실 인용")      # 「답할 수 있다」 는 이 둘뿐이다 — 판단 불가·해당 없음은 답이 아니라 **못 하는 사유**다
+
+
+def can_say_line(subject: dict[str, Any], today: date) -> str:
+    """이 농사에서 **지금 실제로 서는** 판단의 이름들 — 손으로 적지 않고 봉투를 세어 말한다.
+
+    [앞날 걷기 2026-10-07] 둘째 작목(재배 달력 없음)으로 걸으니 물음 여섯이 **한 글자도 다르지 않은** 답을 냈고 그 끝에 「지금 답할 수 있는 것: 수확 시기 ·
+    위험 경보 · 약제와 자재 · 할 일」 이 붙어 있었다 — 그 작목은 **그 넷 다 못 답한다**(봉투 15 전부 판단 불가(지식)). 쪽파 쪽도 틀렸다: 서는 것이
+    다섯인데(배수 경보 포함) 넷만 적혀 있었다. 손으로 적은 목록은 작목이 둘이 되는 날 거짓이 된다(흐르는 숫자의 **목록 판**).
+    이름은 낱말 정본에서(`words.decision` — 화면이 쓰는 그 표) · 문장도 4층 하나(`words.can_say`).
+    """
+    from judge import run as judge_run
+    from frontend import words as _w
+    names = [_w.decision(e.decision_id) for e in judge_run.judgments_for(subject["id"], today=today) if e.kind in STANDS]
+    return _w.can_say(list(dict.fromkeys(names)))
+
+
 def answer_with_asks(subject: dict[str, Any], text: str, today: date,
                      skip_pending: frozenset[str] | set[str] | None = None) -> tuple[str, list[dict[str, Any]]]:
     """(답 문장, 그 답이 물은 것). 물은 것은 send 가 원장에 센다 — answer 는 버린다."""
     from judge import run as judge_run   # 4층 화면과 같은 규율 — 3층 봉투만 받는다
     from frontend import words as _w     # 문면은 4층 정본(모듈 수준 import 는 층을 뒤집는다)
     dont_know = _w.said("판단 불가(지식)")
-    can = "지금 답할 수 있는 것: 수확 시기 · 위험 경보 · 약제와 자재 · 할 일"
+    can = can_say_line(subject, today)
     if symptom_in(text, grid_symptom_words(subject)):      # 정본 목록 + 이 격자 규칙이 아는 말(어휘 한 벌)
         # [발행자 2026-09-26 "잎 끝이 노란 형상을 어떻게 대처해야 하는가?" → 계획표가 나갔다] 증상 물음은 증상 결정으로 간다 —
         # 가진 것(계획표)을 꺼내면 답한 것처럼 보인다(들깨 응답과 같은 형태). 주제 어휘(웃거름 · 약)가 함께 있어도 같은 규칙.
@@ -1075,7 +1092,10 @@ def answer_with_asks(subject: dict[str, Any], text: str, today: date,
         if e is None:
             return f"{dont_know}. 이 농사는 아직 판단을 낼 재료(심은 날 · 재배 달력)가 없습니다. {can}.", []     # [2026-10-04 전수] 농가 문장 — 안쪽 말(기준점 · 격자) 금지
         # [D-18 반영 2026-09-28 실측] 봉투 줄 뒤에 마침표 없이 이어 붙어 "근거: 짐작 지어내지 않습니다" 로 읽혔다 — 문장 경계를 둔다
-        return f"{summarize_envelope(e).rstrip('.')}. 지어내지 않습니다. {can}.", asked_in(e)
+        # [답할 수 있는 것 2026-10-07] **답했으면 메뉴를 붙이지 않는다**: 목록을 세기 시작하자 이 자리가 「… 지금 답할 수 있는 것: 수확 시기 · … · 계획 대 실제 · …」 로
+        # 길어졌고, 2026-09-26 가드(「증상 물음에 계획표를 꺼내지 않는다」)가 그 이름을 보고 터졌다. 손 목록일 때도 이미 군더더기였다 — 답을 받은 사람에게
+        # 「제가 답할 수 있는 것은」 을 읽히는 자리다. 못 했을 때만 말한다(가드를 약화시키지 않고 원 결함도 안 되살린다).
+        return (f"{summarize_envelope(e).rstrip('.')}. 지어내지 않습니다." + ("" if e.kind in STANDS else f" {can}.")), asked_in(e)
     did = topic_of(text)
     if did == LOOKUP_ID:
         return diary_lookup(subject["id"], lookup_of(text) or "전체"), []      # [U-40] 조회 — 판정이 아니라 기록 그대로(사실 인용)

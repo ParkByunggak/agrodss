@@ -177,6 +177,15 @@ def check_alerts(s: Sheet) -> None:
     closed = dict(sub, status="종료", ended_at=(anchor + timedelta(days=last + 17)).isoformat())
     s.check(want not in _chat.answer(closed, "오늘 뭐 해야 하나", anchor + timedelta(days=last + 17)),
             "닫은 뒤에는 그 말을 다시 하지 않는다", f"상태 {closed['status']} · 마친 날 {closed['ended_at']}")
+    # [둘째 작목 걷기 2026-10-07] 「지금 답할 수 있는 것」 은 손으로 적던 넷이었고 실제로는 다섯이 선다 — 세어서 말하는지 라이브로 본다
+    stands = [e.decision_id for e in judge_run.judgments_for(SID, today=T) if e.kind in _chat.STANDS]
+    line = _chat.can_say_line(sub, T)
+    missing = [words.decision(d) for d in stands if words.decision(d) not in line]
+    extra = [words.decision(e.decision_id) for e in judge_run.judgments_for(SID, today=T)
+             if e.kind not in _chat.STANDS and words.decision(e.decision_id) in line]
+    s.check(not missing and not extra and len(stands) >= 5,
+            "「지금 답할 수 있는 것」 은 서는 봉투를 세어 말한다(못 하는 것은 안 넣는다)",
+            f"서는 것 {len(stands)} · 빠진 이름 {missing or 0} · 잘못 든 이름 {extra or 0}")
 
 
 def check_asking(s: Sheet) -> None:

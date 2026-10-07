@@ -17,8 +17,7 @@ from judge import evolve, registry, run as judge_run
 
 BRAND = "AGRODSS"
 BRAND_HTML = f'<a class="brand" href="/" id="brand" title="홈 — 첫 채팅으로">{BRAND} <small>내부 화면</small></a>'
-DECISION_LABEL = {"harvest_timing": "수확 시기", "risk_alert": "위험 경보", "material_citation": "자재 인용", "plan_vs_actual": "계획 대 실제"}
-DECISION_LABEL.update({k: d.name for k, d in registry.all_decisions().items() if k not in DECISION_LABEL})   # M-10 등록분은 등록부 이름
+DECISION_LABEL = words.decision_table()      # [답할 수 있는 것 2026-10-07] 정본은 낱말 표(`words.decision_said`) — 답(2층)도 같은 이름을 쓴다(여기 사본을 두면 한쪽만 바뀐다)
 # [발행자 2026-09-21 "이런 답변을 보여 주는 것을 이해할 사람이 얼마나 될까?"] 단추의 말은 **사람 말 정본**에서 온다 —
 # 내부 이름(사건 · 관찰 · 불이행 사유)을 단추에 그대로 쓰면 고르는 사람이 무엇을 고르는지 모른다.
 CHOOSABLE = tuple((k, chat.KIND_PLAIN[k]) for k in

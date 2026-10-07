@@ -184,6 +184,31 @@ def waiting_many(items: list[tuple[str, str, str]]) -> str:
             f"{_records.josa(reads[-1] if reads[-1] != ')' else '것', '이')} 아직 안 들어갔습니다({_places()} 에서 넣으면 다시 답합니다)")
 
 
+def decision_table() -> dict[str, str]:
+    """보이는 판단 이름 **전부** — 위 `DECISION_SAID` 정본 + 등록부 이름. 화면이 쓰던 표(`chat_pages.DECISION_LABEL`)가 이것을 가리킨다.
+
+    [두 벌 적발 2026-10-07] 화면에는 **같은 표가 따로** 있었고 네 자리만 적혀 있어서 배수·병해충이 등록부 이름으로 떨어졌다 —
+    화면은 「배수 경보(칸 4)」, 답은 「배수 경보(4단계)」. 2026-10-05 에 고친 그 자리가 **여기 한 곳뿐**이었다(§7.5 지점). 표는 하나다.
+    """
+    from judge import registry, stage_decisions  # noqa: F401 — 등록은 stage_decisions 적재 때(decision() 과 같은 자리 · 같은 이유)
+    out = dict(DECISION_SAID)
+    out.update({k: d.name for k, d in registry.all_decisions().items() if k not in out})
+    return out
+
+
+def can_say(names: list[str]) -> str:
+    """**지금 이 농사에서** 답할 수 있는 판단 이름들 — 서는 것이 없으면 그 사실을 말한다.
+
+    [앞날 걷기 2026-10-07] 둘째 작목(재배 달력 없음)으로 걸으니 물음 여섯이 **한 글자도 다르지 않은 답** 하나를 냈고, 그 끝에 「지금 답할 수 있는 것:
+    수확 시기 · 위험 경보 · 약제와 자재 · 할 일」 이 붙어 있었다 — 그 작목은 **그 넷 다 못 답한다**(봉투 전수 15 중 서는 것 0). 손으로 적은 목록이라
+    작목이 둘이 되는 날 거짓이 됐다. 쪽파 쪽도 틀려 있었다(서는 것은 다섯인데 넷만 적혀 있었다 — 배수 경보 누락). 그래서 **세어서** 말한다.
+    이름은 위 `decision()` 정본에서 받는다(부르는 쪽이 세고 여기는 문장만 만든다).
+    """
+    if not names:
+        return "지금은 답할 수 있는 판단이 없습니다 — 재배 달력이 서면 열립니다"
+    return "지금 답할 수 있는 것: " + " · ".join(names)
+
+
 def season_over(day: int, last: int, say: str) -> str:
     """재배 달력이 **끝난 뒤**의 한 줄 — 달력이 어디까지 말하는지와, 농사를 마쳤으면 그 말을 어디에 적는지.
 
