@@ -52,9 +52,13 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _families(stage: dict[str, Any]) -> list[str]:
-    """칸의 작업 자재(유기) 문면에서 계열명 추출 — '·' 로 나누고 괄호·설명은 뗀다."""
-    out: list[str] = []
+def _family_tasks(stage: dict[str, Any]) -> dict[str, str]:
+    """칸의 작업 자재(유기) 문면에서 계열명 → 그 계열이 적힌 **작업 이름**. '·' 로 나누고 괄호·설명은 뗀다(순서는 문면 순서).
+
+    [앞날 걷기 2026-10-09] 「약 뭐 쳐요」 의 답이 「공시 자재 계열 1건 인용」 만 말했다 — 그 1건이 **웃거름용 유기질 비료**인데 그 말이 없어
+    농가는 그것을 약 목록으로 읽는다(약제 오용 축). 계열과 작업은 재배 달력에 이미 있다 — 함께 싣는다(새 지식이 아니다). 자르는 규칙은 여기 하나.
+    """
+    out: dict[str, str] = {}
     for t in (stage.get("tasks") or []) if stage.get("tasks") != grid_schema.NA else []:
         m = t.get("materials")
         if not isinstance(m, dict):
@@ -64,8 +68,13 @@ def _families(stage: dict[str, Any]) -> list[str]:
                 part = re.sub(r"\(.*?\)", "", part).split("—")[0].strip()   # 괄호 설명 · '— 비고' 는 뗀다
                 part = part.removeprefix("공시 ").strip()                      # '공시 유기질 비료' → '유기질 비료'
                 if part and part not in out:
-                    out.append(part)
+                    out[part] = str(t.get("name") or "")
     return out
+
+
+def _families(stage: dict[str, Any]) -> list[str]:
+    """칸의 작업 자재(유기) 계열명 — 규칙은 `_family_tasks` 하나(두 벌이면 한쪽만 바뀐다)."""
+    return list(_family_tasks(stage))
 
 
 CERTS = ("유기", "관행")
@@ -155,7 +164,8 @@ def judge(subject: dict[str, Any], today: date | None = None, psis_search=None) 
         return Envelope("해당 없음", DECISION_ID, sid, as_of, result={"why": f"기준점 후 {day}일 — 격자 창 밖"})
     if cert == "관행":
         return _conventional(subject, stage, today, as_of, sid, anchor, psis_search)
-    fams = _families(stage)
+    tasks = _family_tasks(stage)
+    fams = list(tasks)
     if not fams:
         return Envelope("해당 없음", DECISION_ID, sid, as_of, result={"why": f"칸 '{stage['name']}' 에 유기 자재 계열이 없다"})
     canon = om.load()
@@ -163,13 +173,13 @@ def judge(subject: dict[str, Any], today: date | None = None, psis_search=None) 
     for fam in fams:
         alias = next((v for k, v in d.params["aliases"].items() if k in fam), None)
         if alias is None:
-            groups.append({"family": fam, "status": "no_alias", "items": [], "note": "검색어 대응 없음 — params.aliases 보강 대상"})
+            groups.append({"family": fam, "task": tasks[fam], "status": "no_alias", "items": [], "note": "검색어 대응 없음 — params.aliases 보강 대상"})
             continue
         kw, mtype, pk = alias["material"], alias["type"], alias.get("product")
         res = om.search(mtype, kw, limit=int(d.params["per_alias_limit"]), today=today, product_keyword=pk)
         # [코드 평가 C1] 인용 항목은 봉투에 값째 실리는 유일한 경로(사실 인용 예외) — 그래서 여기서 스키마 검증을 한 번 거친다.
         # 금지 필드(price 등)가 검색 산출에 섞이면 화면에 닿기 전에 여기서 SchemaError 로 선다(조용히 통과하지 않는다).
-        groups.append({"family": fam, "keyword": kw + (f"+{pk}" if pk else ""), "type": mtype, "match": res.get("match"),
+        groups.append({"family": fam, "task": tasks[fam], "keyword": kw + (f"+{pk}" if pk else ""), "type": mtype, "match": res.get("match"),
                        "status": res["status"], "total": res["total"], "items": [sch.validate(i)["values"] for i in res["items"]]})
     fetched = canon.get("fetched_at")
     fetched_iso = f"{fetched[:4]}-{fetched[4:6]}-{fetched[6:]}" if fetched and len(fetched) == 8 else fetched

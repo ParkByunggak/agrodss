@@ -268,6 +268,8 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
             out.append(f'<p class="meta"><b>⚠ {_e(c["proxy_notice"])}</b></p>')
         for g in r["groups"]:
             head = g.get("family") or f"{g.get('risk', '')} · {g.get('pest', '')}"       # 유기(계열) · 관행(위험 · 병해충) 두 모양
+            if g.get("family") and g.get("task"):
+                head = f"{g['task']}: {g['family']}"      # [앞날 걷기 2026-10-09] 어느 작업의 자재인지 — 채팅 답과 같은 사실(웃거름용 비료가 약 목록으로 읽히던 자리)
             proxy = f' <span class="st st-보류">{_e(g["proxy_label"])}</span>' if g.get("proxy_label") else ""
             if g["status"] == "success" and "family" in g:
                 out.append(f"<p><b>{_e(head)}</b> <span class=\"meta\">(검색어 '{_e(g['keyword'])}' · 유효 {g['total']}건 중 {len(g['items'])})</span></p><ul>" + "".join(

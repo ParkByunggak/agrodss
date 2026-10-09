@@ -1229,9 +1229,10 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
     if e.decision_id == "forecast_citation":                       # [D-21] 예보 그대로 — summary 가 이미 원천 · 발표 시각을 품는다
         return f"{head}\n{r.get('summary', '')}\n해석·권고 없음"   # [발행자 2026-09-29 "가독성"] 머리·꼬리도 제 줄에 — 요약이 여러 줄이라 이어 붙이면 마지막 날 뒤에 붙는다
     if e.decision_id == "material_citation":
-        fams = r.get("cited_families")
-        n = fams if isinstance(fams, int) else len(fams or [])
-        return f"{head} {r.get('stage', '')} · 공시 자재 계열 {n}건 인용 — 효능 보증 아님. 화면 /judge 에 목록"
+        # [앞날 걷기 2026-10-09] 무엇을 인용했는지(계열 · 작업 · 건수)를 말한다 — 「계열 1건」 만으로는 웃거름용 비료가 약 목록으로 읽혔다. 문장은 4층 정본 하나
+        from frontend import words as _w
+        said = _w.citation_said(str(r.get("stage") or ""), list(r.get("groups") or []))
+        return f"{head} {said}" if said else f"{head} {r.get('stage', '')} · 인용할 자재 목록이 없습니다"
     if e.decision_id == "plan_vs_actual":
         # [발행자 2026-09-19 "현재 관리해야 할 항목"] 지금 것이 먼저다 — 마감 안 미이행 → 다음 예정 → 놓침(사유). 옛 놓침 6건만 보이던 표현 층 결함
         rows = r.get("rows") or []

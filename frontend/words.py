@@ -196,6 +196,31 @@ def decision_table() -> dict[str, str]:
     return out
 
 
+def citation_said(stage: str, groups: list[dict]) -> str:
+    """자재 인용 한 줄 — **무엇을**(계열) **어느 작업의 자재로**(작업) **몇 건**(공시 제품) 인용했는지. 권고가 아니다(효능 보증 아님).
+
+    [앞날 걷기 2026-10-09] 「약 뭐 쳐요」 의 답이 「4. 생육 중기 · 비대 · 공시 자재 계열 1건 인용 — 효능 보증 아님. 화면 /judge 에 목록」 이었다.
+    그 1건은 **웃거름용 유기질 비료**인데 답은 그 말을 하지 않아, 약을 물은 사람은 그것을 **약 목록**으로 읽는다(약제 오용 축).
+    그리고 「화면 /judge」 는 주소이지 메뉴 이름이 아니다 — 메뉴 이름은 정본(`schema.labels`)에서. 무엇을 인용할지는 바꾸지 않는다(그것은 발행자 판단 · 등재 후보).
+    """
+    from schema import labels as _labels
+    by_task: dict[str, list[str]] = {}
+    for g in groups or []:
+        fam = str(g.get("family") or "")
+        if not fam:
+            continue
+        n = g.get("total")
+        # 건수는 **찾은 것만** — 짝을 못 지은 계열(검색어 대응 없음)은 그렇다고 말한다(0건이라고 하면 「공시 제품이 없다」 는 다른 사실이 된다)
+        said = f"{fam}({n}건)" if isinstance(n, int) and g.get("status") == "success" else f"{fam}(공시 목록과 짝짓지 못함)"
+        by_task.setdefault(str(g.get("task") or ""), []).append(said)
+    if not by_task:
+        return ""
+    # 작업마다 한 번 — 계열마다 작업 이름을 되풀이하면 읽히지 않는다(같은 꼬리를 세 번 말하던 그 자리와 같은 꼴)
+    body = " / ".join(f"{task}: {' · '.join(fams)}" if task else " · ".join(fams) for task, fams in by_task.items())
+    return (f"{_stage_said(stage)}에 재배 달력이 적어 둔 자재 — {body} · 유기재배에 쓸 수 있다고 공시된 제품 수이고 효능 보증은 아닙니다"
+            f" · 목록은 왼쪽 메뉴 「{_labels.label('/judge')}」 에")
+
+
 USE_GAP_WHAT = {"risk_alert": "위험", "plan_vs_actual": "할 일"}      # 그 칸에서 **안 낸 것** — 판정마다 다르다(검사가 전수를 본다: 빈칸을 내는 판정이 늘면 여기도 는다)
 
 

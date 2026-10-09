@@ -177,6 +177,13 @@ def check_alerts(s: Sheet) -> None:
     closed = dict(sub, status="종료", ended_at=(anchor + timedelta(days=last + 17)).isoformat())
     s.check(want not in _chat.answer(closed, "오늘 뭐 해야 하나", anchor + timedelta(days=last + 17)),
             "닫은 뒤에는 그 말을 다시 하지 않는다", f"상태 {closed['status']} · 마친 날 {closed['ended_at']}")
+    # [앞날 걷기 2026-10-09] 「약 뭐 쳐요」 가 「계열 1건 인용」 만 말해 웃거름용 비료가 약 목록으로 읽혔다 — 무엇을(계열) 어느 작업의 것으로(작업) 말하는지 라이브로
+    cit = next(e for e in judge_run.judgments_for(SID, today=T) if e.decision_id == "material_citation")
+    yak = _chat.answer(sub, "약 뭐 쳐요", T)
+    pairs = [(g.get("task"), g.get("family")) for g in (cit.result or {}).get("groups") or []]
+    s.check(bool(pairs) and all(t and f and t in yak and f in yak for t, f in pairs) and "/judge" not in yak and "효능 보증은 아닙니다" in yak,
+            "자재 인용 답이 인용한 계열과 그 작업을 말한다(주소가 아니라 메뉴 이름 · 보증 아님은 남는다)",
+            f"{' · '.join(f'{t}: {f}' for t, f in pairs) or '없음'}")
     # [둘째 작목 걷기 2026-10-07] 「지금 답할 수 있는 것」 은 손으로 적던 넷이었고 실제로는 다섯이 선다 — 세어서 말하는지 라이브로 본다
     stands = [e.decision_id for e in judge_run.judgments_for(SID, today=T) if e.kind in _chat.STANDS]
     line = _chat.can_say_line(sub, T)
