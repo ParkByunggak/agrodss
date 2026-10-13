@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -73,14 +73,18 @@ LAN_TOKEN_MIN: int = 16
 LAN_BIND = "0.0.0.0"
 COOKIE_NAME = "agrodss_t"
 TODAY_ENV = "AGRODSS_TODAY"
+# 밭이 있는 곳의 시각 — 서울(UTC+9 · 일광 절약 없음이라 고정 오프셋으로 충분하다 · zoneinfo 는 Windows 에 tzdata 가 없으면 못 연다)
+FARM_TZ = timezone(timedelta(hours=9))
 
 
 def today() -> date:
     """화면의 '오늘' 정본. AGRODSS_TODAY=YYYY-MM-DD 가 있으면 그 날로 고정한다 — 검사 · 재현(시점 축)용.
     [2026-09-20] 발행자 경로 걷기 검사가 실제 날짜로 판정을 보니 9/24 마감이 지나면 거짓 실패가 난다(시점을 잃은 수치는 인상이 된다).
-    운영에서는 비워 둔다 — 고정돼 있으면 /judge · /changes 가 그 사실을 보인다(잊힌 고정이 조용히 옛 판정을 내지 않게)."""
+    운영에서는 비워 둔다 — 고정돼 있으면 /judge · /changes 가 그 사실을 보인다(잊힌 고정이 조용히 옛 판정을 내지 않게).
+    [재검토 F3 · 2026-10-14] 고정이 없으면 **밭의 시각(서울)** 으로 센다 — 전에는 프로세스 시각(date.today())이라 UTC 로 도는 세션이 서울 새벽에
+    대장 페이지를 만들면 하루 늦은 「오늘」 로 수확 창 앞 · 안 · 뒤를 골랐다(경계일 10-14 에 「내일 열린다」). 발행자 PC(서울 시각)에서는 같은 날이다."""
     raw = today_frozen()
-    return check_today(raw) if raw else date.today()
+    return check_today(raw) if raw else datetime.now(FARM_TZ).date()
 
 
 def today_frozen() -> str:

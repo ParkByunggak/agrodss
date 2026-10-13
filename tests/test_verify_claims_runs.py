@@ -13,7 +13,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "verify_claims.py"
-CLAIMS_MIN = 47          # 2026-10-05 첫 판 46줄 — **위로만** 간다(10-06 결정 화면 셈 주장 +1)
+FLOOR = 62               # 2026-10-05 첫 판 46줄 → 10-06 47 → [2026-10-14] 60(주장은 59 인데 하한이 47 에 머물러 열둘이 말없이 빠질 수 있었다 · 같은 날 +1) → 62(날짜 둘) — **위로만** 간다
+sys.path.insert(0, str(ROOT))
+from scripts.verify_claims import CLAIMS_MIN  # noqa: E402  — 정본(대장 페이지도 이 값을 읽는다)
+
+
+def test_the_floor_only_goes_up():
+    assert CLAIMS_MIN >= FLOOR, (CLAIMS_MIN, FLOOR)                                  # 정본을 내려 하한을 느슨하게 하면 붉다
 
 
 def _run() -> tuple[int, str]:

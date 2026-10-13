@@ -62,7 +62,10 @@ def test_assert_public_catches_forbidden_keys_anywhere():
 
 
 def test_mall_page_renders_and_unknown_product_404(monkeypatch):
+    # [달력 걷기 2026-10-14] 이 검사는 **실제 오늘**로 돌았다 — 10-14 에 마지막 촬영 창(수확)이 열리자 「촬영 예정」 이 화면 어디에도 없게 되어
+    # 화면은 맞는데 검사가 붉었다. 촬영 칸 상태는 날짜의 함수다 — 날짜를 고정하고, 창이 열린 뒤의 말도 함께 본다(양쪽)
     monkeypatch.setattr(config, "PORT", 0)
+    monkeypatch.setenv(config.TODAY_ENV, T25.isoformat())
     s = serve.make_server()
     threading.Thread(target=s.serve_forever, daemon=True).start()
     try:
@@ -72,6 +75,11 @@ def test_mall_page_renders_and_unknown_product_404(monkeypatch):
         r = c.getresponse()
         body = r.read().decode("utf-8")
         assert r.status == 200 and "목업" in body and "촬영 예정" in body and mp.NO_CERT_LABEL in body and "예약 판매 없음" in body
+        monkeypatch.setenv(config.TODAY_ENV, "2026-11-20")                       # 모든 촬영 창이 지난 뒤 — 「예정」 은 없고 「창 지남」 이 선다
+        c.request("GET", f"/mall/{quote(SID)}")
+        r = c.getresponse()
+        late = r.read().decode("utf-8")
+        assert r.status == 200 and "촬영 예정" not in late and "미촬영(창 지남)" in late and mp.NO_CERT_LABEL in late
         assert "갈금리" not in body and 'class="brand"' in body
         c.request("GET", "/mall/nope")
         r = c.getresponse()

@@ -106,7 +106,9 @@ def gather_outlook(today: date) -> tuple[list[dict[str, Any]] | None, str]:
     if not recs:
         # [발행자 2026-09-29 "기상청에 장기예보가 없다는 것인가?"] 아니다 — 1·3개월 전망은 발표되지만 자동으로 받는 길(오픈 API)이 없다(VELA 실측 2026-08-05). 문장이 그것을 말해야 한다
         # [WO-ASK-01 §2 2026-10-03] 농가 줄에 '오픈 API' · 파일 이름이 가고 있었다(래칫이 잡음) — 받는 길 · 파일은 설정 꼬리로(need.plain_reason 이 뗀다)
-        return None, (f"등재된 장기 전망 없음 — 기상청 1·3개월 전망은 발표되지만 자동으로 받는 길이 없어, 발표문 수치를 설정 → 장기 전망 등재에 출처와 함께 넣어야 합니다(값은 발행자 몫)"
+        # [앞날 걷기 W-43 · 2026-10-14] 「설정 → 장기 전망 등재」 는 없는 길이었다 — 화면 이름 정본(labels.PLACES)에서 읽는다
+        from schema import labels
+        return None, (f"등재된 장기 전망 없음 — 기상청 1·3개월 전망은 발표되지만 자동으로 받는 길이 없어, 발표문 수치를 {labels.PLACES['outlook']} 에 출처와 함께 넣어야 합니다(값은 발행자 몫)"
                       f" [설정: 오픈 API 없음(VELA 실측 2026-08-05) · /me/outlook 또는 {outlook.local_path().name}]" + tail)
     return None, f"등재된 장기 전망 {len(recs)}건이 모두 지난 기간(마지막 {recs[-1]['period_to']})" + tail
 

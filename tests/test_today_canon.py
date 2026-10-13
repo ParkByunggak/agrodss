@@ -5,6 +5,7 @@
 # + scripts/update.bat — U-18 뒤 발행자 PC 의 pull 이 "commit or stash" 로 멈추지 않게 하는 갱신 배치(ASCII · 괄호 규칙은 전 배치 공통 검사).
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -16,10 +17,16 @@ def _code(path: Path) -> str:
 
 
 def test_frontend_has_one_today_canon_and_every_consumer_uses_it():
+    # [재검토 F3 · 2026-10-14] 정본은 이제 밭의 시각(서울)으로 센다(datetime.now(FARM_TZ)) — 지키는 것은 꼴이 아니라 **시계를 읽는 자리가 하나**라는 것
     for py in (ROOT / "frontend").glob("*.py"):
         code = _code(py)
         if py.name == "config.py":
-            assert code.count("date.today()") == 1, "정본 자리 하나뿐"
+            # 호출만 센다(구문 트리) — 독스트링이 옛 호출형을 이름으로 말하는 것은 시계를 읽는 자리가 아니다
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+            clocks = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                      and isinstance(n.func.value, ast.Name) and (n.func.value.id, n.func.attr) in {("date", "today"), ("datetime", "now")}]
+            today_fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "today")
+            assert len(clocks) == 1 and clocks[0] in list(ast.walk(today_fn)), "정본 자리 하나뿐(today 안)"   # 밭의 시각인지는 아래 검사가 동작으로 잰다
         else:
             assert "date.today()" not in code, f"{py.name}: 옛 호출형이 남아 있다 — config.today() 로"
     serve = _code(ROOT / "frontend" / "serve.py")
@@ -29,6 +36,33 @@ def test_frontend_has_one_today_canon_and_every_consumer_uses_it():
             seg = serve[m.end():m.end() + 300].split(")\n", 1)[0]
             assert "config.today()" in seg, f"{call} 에 오늘이 안 넘어간다: {seg[:80]}"
     assert "hint_for(s, config.today())" in serve and "product_view(sid, today=config.today())" in serve
+
+
+def test_today_is_counted_on_the_farm_clock(monkeypatch):
+    """[재재검토 2026-10-14] 첫 판은 호출 글자(「datetime.now(FARM_TZ)」)를 박았다 — 같은 뜻의 다른 표기에 빨갛고, 시간대를 UTC 로 바꿔도 초록이었다.
+    동작으로 잰다: 세계 시각 10-13 22:00(서울 10-14 07:00 — 세션이 실제로 돈 시각대)에 「오늘」 은 10-14 다. 프로세스 시각이나 다른 시간대로 돌아가면 붉다."""
+    from datetime import date, datetime, timezone
+    from frontend import config
+    moment = datetime(2026, 10, 13, 22, 0, tzinfo=timezone.utc)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return moment.astimezone(tz) if tz else moment.replace(tzinfo=None)
+
+        @classmethod
+        def today(cls):
+            return moment.replace(tzinfo=None)
+
+    class Day(date):
+        @classmethod
+        def today(cls):
+            return moment.date()
+
+    monkeypatch.delenv(config.TODAY_ENV, raising=False)
+    monkeypatch.setattr(config, "datetime", Clock)
+    monkeypatch.setattr(config, "date", Day)
+    assert config.today() == date(2026, 10, 14)
 
 
 def test_update_bat_discards_stale_registry_edit_then_pulls():

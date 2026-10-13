@@ -32,6 +32,9 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+# 주장 줄 수의 하한 — **위로만** 간다(주장이 늘면 함께 올린다). [앞날 걷기 F35 · 2026-10-14] 하한이 검사 파일에만 47 로 있었고 대장 페이지는 「46」 을 손으로
+# 적었는데 주장은 59 였다 — 열둘이 말없이 빠져도 초록이었다. 정본을 여기 두고(대장 페이지가 읽는다) 검사는 제 바닥 숫자로 이 값이 내려가는 것을 막는다
+CLAIMS_MIN = 62          # 2026-10-14 59 → 60(발견 목록 번호가 풀리는가 +1) → 62(날에 따라 고르는 대장 문장 · 밭의 시각 「오늘」 +2)
 SID = "p001-jjokpa-2026f"
 T = date(2026, 10, 5)
 NOW = datetime(2026, 10, 5, 9, 0, tzinfo=timezone.utc)
@@ -45,6 +48,10 @@ def isolate() -> pathlib.Path:
         (w / name).mkdir()
     shutil.copy(ROOT / "data" / "parcels_seed.json", w / "parcels.json")
     shutil.copy(ROOT / "data" / "subjects.json", w / "subjects.json")
+    # [재검토 F6 · 2026-10-14] 경로만 tmp 로 돌리고 **정본 사본을 안 두었다** — 유기 자재 정본이 없어 자재 답이 「공시 목록과 짝짓지 못함」 으로 농가 답과 달랐고,
+    # 작목 사전이 없어 새 작목을 못 세웠다. conftest · walk.sh 는 둘 다 복사한다(같은 목록 · 같은 사본)
+    shutil.copy(ROOT / "data" / "crop_names.csv", w / "crop_names.csv")
+    shutil.copy(ROOT / "data" / "organic" / "organic_materials_public.json", w / "organic_materials_public.json")
     os.environ.update({
         "TZ": "Asia/Seoul", "AGRODSS_TODAY": T.isoformat(), "AGRODSS_AUTO_PULL_SEC": "0",
         "AGRODSS_MEDIA_DIR": str(w / "media"), "AGRODSS_EVENTS_DIR": str(w / "events"),
@@ -61,6 +68,10 @@ def isolate() -> pathlib.Path:
         "AGRODSS_ASKS_PATH": str(w / "chat" / "asks.json"), "AGRODSS_DECISIONS_LOCAL_PATH": str(w / "decisions_local.json"),
         "AGRODSS_PROBES_LOCAL_PATH": str(w / "utterance_probes_local.json"),      # [손 노릇 2026-10-07] 기대 덮개 — 보고 확인이 운영 덮개에 쓰지 않게(검사가 이 짝을 요구한다)
     })
+    # [재검토 F3 · 2026-10-14] TZ 를 env 에 넣기만 하면 이미 뜬 프로세스의 시각은 안 바뀐다(tzset) — 서울 새벽에 돌리면 「오늘」 이 하루 늦었다
+    import time
+    if hasattr(time, "tzset"):
+        time.tzset()
     return w
 
 
@@ -349,10 +360,67 @@ def check_ledger_page(s: Sheet) -> None:
     done = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", chat_pages._draft_html(after, i, after["drafts"][i])))
     s.check(line.startswith("밭 정보에 넣었습니다 · 용도 → ") and "parcel" not in line and "밭 정보에 넣었습니다" in done and chat.SAVED_LABEL not in done,
             "밭 정보 카드를 넣은 뒤 배너와 카드가 「밭 정보에 넣었습니다」 라고 말한다(일지 · 안쪽 이름 없이)", f"{line} ‖ 카드 「{done.strip()[:40]}」")
+    # [앞날 걷기 2026-10-14] 대장 페이지가 보이는 번호는 **풀 수 있어야** 한다 — 10-13 판의 F 번호는 뜻이 스크래치패드와 함께 사라졌다.
+    # 남은 즉시급의 번호마다 저장소의 발견 목록에 행이 있고, 그 수가 ⓪ᴿ 의 수와 같은가
+    rows = page.walk_rows()
+    zr = next(b for h, b in page.NEXT_PUBLISHER if h.startswith("⓪ᴿ"))
+    ids = {r["id"] for r in rows}
+    # [재재검토] 행 수는 읽기와 **독립된 셈**으로 대조한다(표 구역의 몸 줄) — 읽기가 행을 말없이 빠뜨리면 같은 읽기끼리의 비교로는 못 본다
+    body = [ln for ln in page.WALK_DOC.read_text(encoding="utf-8").split("\n## 표", 1)[1].split("\n## ", 1)[0].splitlines() if ln.strip().startswith("|")][2:]
+    # 옛 번호 목록이 다시 서는지는 **목록 꼴**(「F10 · F12」)로 본다 — 사과 문장의 보기 하나(「F8 · F10 …」)와 겹치지 않게(§7.1 4번 — 첫 판이 그것에 걸렸다)
+    s.check(bool(page._WALK_OPEN) and set(page._WALK_OPEN) <= ids and len(rows) == len(body) and f"{len(page._WALK_OPEN)}개가 남았습니다" in zr
+            and f"({' · '.join(page._WALK_OPEN)}" in zr and "F10 · F12" not in zr,
+            "대장 페이지가 보이는 남은 즉시급 번호는 저장소 발견 목록에서 풀린다(번호마다 행 · 수가 같다)",
+            f"남은 {len(page._WALK_OPEN)} · 목록 {len(rows)}행 · {' · '.join(page._WALK_OPEN[:4])} …")
+
+
+def check_page_by_date(s: Sheet) -> None:
+    """[2026-10-14 · 재검토] 대장 페이지가 날에 따라 다른 말을 고른다 — 답을 인용하는 문장은 **답이 읽는 칸**으로, 과습 문장은 **그 날 판정**으로.
+    첫 판은 수확 창 하나로 골라 창이 열리는 날(아직 생육 중기 칸)에 수확 칸 답을 오늘 것으로 인용했다. 그 날과 다음 날을 실제 답 · 판정으로 다시 잰다.
+    그리고 「오늘」 정본은 밭의 시각 — 세계 시각 10-13 22:00(서울 10-14 07:00)에 세면 10-14 다(시계를 바꿔 끼워 잰다)."""
+    import importlib
+    from datetime import timedelta
+    from frontend import config
+    from ingest import chat, media
+    from judge import run as jr
+    page = importlib.import_module("scripts.build_ledger_page")
+    sub = next(x for x in media.load_subjects() if x["id"] == SID)
+    first = page.harvest_stage_from()
+    ok, seen = True, []
+    try:
+        for day in (first - timedelta(days=1), first):
+            os.environ["AGRODSS_TODAY"] = day.isoformat()
+            p = importlib.reload(page)
+            zm = next(b for h, b in p.NEXT_PUBLISHER if h.startswith("⓪ᵐ"))
+            harvest_now = "칸 '수확' 에 유기 자재 계열이 없다" in chat.answer(sub, "약 뭐 쳐요", day)
+            wet = any("과습" in str(a.get("risk")) for _s, es, _i in jr.all_judgments(day, only=SID) for e in es
+                      if e.decision_id == "risk_alert" for a in (e.result or {}).get("alerts") or [])
+            ok &= (("수확 칸에 들어선 지금은 다릅니다" in zm) == harvest_now) and p._WET == wet
+            seen.append(f"{day.isoformat()} 자재 답이 수확 칸 {harvest_now} · 페이지 {'수확 칸' if '수확 칸에 들어선' in zm else '앞으로'} · 과습 {wet}/{p._WET}")
+    finally:
+        os.environ["AGRODSS_TODAY"] = T.isoformat()
+        importlib.reload(page)
+    s.check(ok, "대장 페이지가 답을 인용하는 문장은 답이 읽는 칸으로, 과습 문장은 그 날 판정으로 고른다(창이 열리는 날 · 그 다음 날)", " ‖ ".join(seen))
+    moment = datetime(2026, 10, 13, 22, 0, tzinfo=timezone.utc)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return moment.astimezone(tz) if tz else moment.replace(tzinfo=None)
+
+    real, frozen = config.datetime, os.environ.pop(config.TODAY_ENV, None)
+    try:
+        config.datetime = Clock
+        got = config.today()
+    finally:
+        config.datetime = real
+        if frozen is not None:
+            os.environ[config.TODAY_ENV] = frozen
+    s.check(got == date(2026, 10, 14), "「오늘」 은 밭의 시각(서울)으로 센다 — 세계 시각 10-13 22:00 에 세면 10-14", f"{moment.isoformat()} → {got}")
 
 
 GROUPS = (("분류", check_classification), ("사람 글", check_people_words), ("소비자", check_consumers),
-          ("경보", check_alerts), ("묻기", check_asking), ("화면", check_screens), ("대장", check_ledger_page))
+          ("경보", check_alerts), ("묻기", check_asking), ("화면", check_screens), ("대장", check_ledger_page), ("날짜", check_page_by_date))
 
 
 def run(http_too: bool = True) -> Sheet:

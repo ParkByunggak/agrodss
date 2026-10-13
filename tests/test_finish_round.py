@@ -24,6 +24,9 @@ def test_the_closing_chain_cannot_swallow_a_return_code():
     assert "walk.sh" not in body and "inject" not in body                                   # 관문·주입·걷기는 이 앞의 몫 — 여기서 돌리면 마감이 관문을 대신한다고 믿게 된다
     assert "git commit -q -F \"$MSG\"" in body and "(이 커밋 X)" in body and "docs/handover_20260919.md" in body
     assert "git push -u origin main" in body and "for d in 0 2 4 8 16" in body
+    # [재검토 F3 · 2026-10-14] 대장 페이지 생성 줄도 밭의 시각으로 — 검사 줄에만 TZ 가 붙어 있었다(생성 두 자리보다 **앞**에서 내보낸다)
+    tz = re.search(r"(?m)^export TZ=", body)                                              # 꼴로 본다(같은 뜻의 다른 표기를 막지 않는다)
+    assert tz and all(tz.start() < m.start() for m in re.finditer(r"python scripts/build_ledger_page\.py", body))
 
 
 def test_a_red_first_step_stops_before_any_commit(tmp_path):

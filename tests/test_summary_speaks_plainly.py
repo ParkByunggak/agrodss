@@ -92,7 +92,9 @@ def test_the_no_outlook_reason_says_the_forecast_exists_but_has_no_api():
     옛 문장("등재된 장기 전망 없음 — … 넣는다")은 기상청에 없다는 뜻으로 읽혔다."""
     from judge import run as judge_run
     recs, why = judge_run.gather_outlook(date(2026, 9, 29))                                       # 격리 환경 — 등재 0
-    assert recs is None and why.startswith("등재된 장기 전망 없음") and "발표되지만" in why and "오픈 API" in why and "설정 → 장기 전망 등재" in why
+    from schema import labels
+    assert recs is None and why.startswith("등재된 장기 전망 없음") and "발표되지만" in why and "오픈 API" in why and labels.PLACES["outlook"] in why
+    assert "설정 →" not in why                                                      # [W-43 · 2026-10-14] 없는 메뉴 길(「설정 → 장기 전망 등재」)이 답에 다시 오지 않는다
 
 
 def test_the_missing_cert_rule_summary_is_plain():

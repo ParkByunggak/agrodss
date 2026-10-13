@@ -72,11 +72,12 @@ def test_the_guidance_does_not_show_the_publisher_an_answer():
         assert "—" not in tail, f"안내가 답을 보인다: {sentence} …{tail}"
 
 
-def test_the_block_is_on_the_page_and_speaks_plainly():
-    import threading, http.client, os
+def test_the_block_is_on_the_page_and_speaks_plainly(monkeypatch):
+    import threading, http.client
     from frontend import config, serve
-    config.PORT = 0
-    os.environ[config.TODAY_ENV] = "2026-10-05"
+    # [재검토 F4 · 2026-10-14] 날짜를 os.environ 에 바로 넣어 **뒤에 도는 검사 쉰둘이 10-05 로 돌았다**(날짜 쓸기가 그 범위에서 눈을 감았다) — monkeypatch 로
+    monkeypatch.setattr(config, "PORT", 0)
+    monkeypatch.setenv(config.TODAY_ENV, "2026-10-05")
     s = serve.make_server()
     threading.Thread(target=s.serve_forever, daemon=True).start()
     try:

@@ -135,9 +135,14 @@ def test_every_open_backlog_row_is_judged_and_a_new_open_row_breaks_the_build():
 
 
 def test_open_rows_take_the_status_cell_not_a_word_in_the_text():
-    txt = "| ID | 항목 | 단계 | 상태 | 등재 |\n|---|---|---|---|---|\n| D-1 | 대기 중인 것을 등재하자 | 0 | 완료 | 09-18 |\n| D-2 | 물음 | 0 | **등재(발행자) · 남은 것** | 09-20 |\n| D-3 | 물음 | 0 | 보류 | 09-21 |\n"
+    # [재검토 R8 · 2026-10-14] 상태 말은 대장 머리 규칙 4 의 다섯뿐 — 「등재」 는 상태가 아니다(대장 생성기도 그 행에서 멈춘다). 굵게 쓴 열린 상태는 읽는다
+    txt = ("| ID | 항목 | 단계 | 상태 | 등재 |\n|---|---|---|---|---|\n| D-1 | 대기 중인 것을 등재하자 | 0 | 완료 | 09-18 |\n"
+           "| D-2 | 물음 | 0 | **진행(발행자) · 남은 것** | 09-20 |\n| D-3 | 물음 | 0 | 보류 | 09-21 |\n| D-4 | 물음 | 0 | **대기**(발행자 결정) | 09-22 |\n"
+           "| D-5 | 물음 | 0 | **등재(발행자)** | 09-23 |\n")
     rows = pb.open_backlog_rows(txt)
-    assert set(rows) == {"D-2"} and rows["D-2"][1] == "등재" and rows["D-2"][2] == date(2026, 9, 20)
+    assert set(rows) == {"D-2", "D-4"} and rows["D-2"][1] == "진행" and rows["D-4"][1] == "대기" and rows["D-2"][2] == date(2026, 9, 20)
+    from frontend import render
+    assert pb.OPEN_STATES is render.OPEN_STATES and pb.state_head is render.state_head          # 상태 셀 판독은 한 벌
 
 
 # ── §5 판정 ──

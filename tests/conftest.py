@@ -5,15 +5,26 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
 
 _REAL_SUBJECTS = Path(__file__).resolve().parent.parent / "data" / "subjects.json"
+# 검사가 시작할 때의 「오늘」 — 관문은 실제 오늘, scripts/date_sweep.sh 는 옮긴 날. [재검토 F4 · 2026-10-14] 검사 하나가 os.environ 에 날짜를 바로 넣고
+# 안 되돌려 알파벳 뒤의 쉰두 파일이 그 날(10-05)로 돌았다 — 날짜 쓸기가 그 범위에서 아무것도 못 봤다. 검사마다 시작 값으로 되돌린다
+_SESSION_TODAY = os.environ.get("AGRODSS_TODAY")
 
 
 @pytest.fixture(autouse=True)
 def _isolate_media_dir(tmp_path, monkeypatch):
+    if _SESSION_TODAY is None:
+        # [재재검토] 없는 값을 delenv 하면 monkeypatch 가 아무것도 적지 않아 되돌릴 때 검사가 남긴 날짜를 그대로 둔다(검사 몸 밖 — 다음 픽스처 · 모듈 준비가 그 날로 돈다).
+        # 먼저 세우고 지우면 「없었다」 가 적혀 되돌릴 때 지운다
+        monkeypatch.setenv("AGRODSS_TODAY", "-")
+        monkeypatch.delenv("AGRODSS_TODAY")
+    else:
+        monkeypatch.setenv("AGRODSS_TODAY", _SESSION_TODAY)
     monkeypatch.setenv("AGRODSS_MEDIA_DIR", str(tmp_path / "media"))
     monkeypatch.setenv("AGRODSS_EVENTS_DIR", str(tmp_path / "events"))
     monkeypatch.setenv("AGRODSS_FEEDBACK_DIR", str(tmp_path / "feedback"))

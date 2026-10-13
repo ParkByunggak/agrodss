@@ -294,15 +294,22 @@ def test_the_page_does_not_send_the_publisher_down_a_path_the_screen_no_longer_h
 
 def test_the_registry_question_counts_what_is_still_open_from_one_list(monkeypatch):
     """[재검토 2026-10-13 즉시] ⓪ᴿ 첫 판이 「농가 답을 틀리게 하는 것은 고쳤습니다」 라고 했다 — 즉시급 열둘이 남아 있었다(그 전제로 등재를 물으면 거짓 전제).
-    남은 수는 목록(_WALK_OPEN)에서 세고, 그 목록은 핸드오버의 마지막 「남은 즉시급」 줄과 같다 — 두 기록이 갈리면 붉다."""
+    남은 수는 목록(_WALK_OPEN)에서 센다.
+    [2026-10-14] 그 목록의 정본은 핸드오버 줄이 아니라 **발견 목록 문서**(docs/walk_findings.md)다 — 10-13 판은 번호만 적혀 뜻이 사라졌다(스크래치패드).
+    번호마다 그 표에 행이 있어야 하고(풀 수 있는 번호), 남은 수는 그 표의 즉시 · 세션 · 열림 행 수와 같다."""
     page = _page(monkeypatch)
     body = next(b for h, b in page.NEXT_PUBLISHER if h.startswith("⓪ᴿ"))
-    assert f"아직 {len(page._WALK_OPEN)} 이 남았습니다" in body and all(f in body for f in page._WALK_OPEN), body[:300]
+    assert f"{len(page._WALK_OPEN)}개가 남았습니다" in body and all(f in body for f in page._WALK_OPEN), body[:300]
     assert "고쳤습니다. 아래는" not in body and "지금 답은 그대로입니다" not in body             # 남은 것이 있는데 다 고쳤다고 하지 않는다
-    hand = (ROOT / "docs" / "handover_20260919.md").read_text(encoding="utf-8")
-    lines = re.findall(r"\*\*남은 즉시급[^*]*\*\*\(앞날 걷기 — 세션 몫\): ([^\n—]+)", hand)
-    assert lines, "핸드오버에 「남은 즉시급」 줄이 없다 — 측정이 죽었다"
-    assert tuple(re.findall(r"F\d+", lines[-1])) == page._WALK_OPEN, (lines[-1], page._WALK_OPEN)
+    assert not re.search(r"\bF\d+\b(?! · F10 …)", re.sub(r"\(F8 · F10 …\)", "", body)), body[:400]   # 풀 수 없는 옛 번호를 목록으로 다시 보이지 않는다(사과 문장의 보기 하나만)
+    # [재재검토 2026-10-14] 여기 따로 둔 두 번째 표 읽기(정규식)는 생성기가 받는 굵은 칸에서 빨갛고 꾸민 번호는 둘 다 놓쳤다 — 읽기는 page.walk_rows 하나,
+    # 대조는 **독립된 셈**(표 구역의 몸 줄 수)으로 한다: 행이 말없이 빠지면 둘이 갈린다
+    doc = (ROOT / "docs" / "walk_findings.md").read_text(encoding="utf-8")
+    body_lines = [ln for ln in doc.split("\n## 표", 1)[1].split("\n## ", 1)[0].splitlines() if ln.strip().startswith("|")][2:]
+    rows = page.walk_rows()
+    assert len(rows) == len(body_lines) > 0 and all(w in {r["id"] for r in rows} for w in page._WALK_OPEN)
+    want = tuple(r["id"] for r in rows if (r["grade"], r["owner"]) == ("즉시", "세션") and r["state"] == "열림")
+    assert want == page._WALK_OPEN and len(want) > 0, (want, page._WALK_OPEN)
 
 
 def test_the_retired_check_reads_the_visible_text_and_covers_all_of_best(monkeypatch):

@@ -127,6 +127,9 @@ def test_frontend_does_not_touch_layer1_sources_directly():
 
 def test_judge_page_shows_kind_first(monkeypatch):
     monkeypatch.setattr(config, "PORT", 0)
+    # [달력 걷기 2026-10-14] 이 검사는 실제 오늘로 돌았다 — 수확 칸(10-14~)에는 자재 인용이 「해당 없음」 이라 「사실 인용 · 공시」 줄이 없어
+    # 10-20 에 붉어진다(전체 검사를 날짜 셋으로 돌려 셌다 — 이 파일 하나 · 몰 하나). 화면 계약은 날짜의 함수다 — 아래 기대(9/19 의 창)와 같은 날로 고정한다
+    monkeypatch.setenv(config.TODAY_ENV, "2026-09-19")
     srv = serve.make_server()
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)

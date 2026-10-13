@@ -64,6 +64,8 @@ PLACES: dict[str, str] = {
     "parcel": f"왼쪽 메뉴 「{label('/me')}」 → 「{ME_SECTIONS['parcel']}」",
     "subject": f"채팅에 한 줄(「인증은 유기다」 처럼) · 또는 왼쪽 메뉴 「{NEW_CHAT}」 의 인증 칸",
     "judge": f"왼쪽 메뉴 「{label('/judge')}」",
+    # [앞날 걷기 W-43 · 2026-10-14] 날씨 답의 장기 줄이 「설정 → 장기 전망 등재」 — 그런 메뉴는 없다(10-04 에 「밭 정보 · 설정」 으로 물러났다 · F32 와 같은 꼴)
+    "outlook": f"왼쪽 메뉴 「{label('/me')}」 → 「{ME_SECTIONS['outlook']}」",
     "publisher": "발행자 PC",
 }
 _QUOTED = re.compile(r"「([^」]+)」")

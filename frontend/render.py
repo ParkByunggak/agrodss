@@ -43,6 +43,14 @@ def when(ts: str | None) -> str:
 
 
 STATES: tuple[str, ...] = ("대기", "진행", "완료", "보류", "폐기")
+OPEN_STATES: tuple[str, ...] = ("대기", "진행")      # 열린 항목 — 대장 머리 규칙 4 의 다섯 가운데 둘(보류는 열림이 아니다)
+
+
+def state_head(cell: str) -> str:
+    """대장 상태 셀의 머리 — 꾸밈(굵게)을 걷고 괄호 앞까지. **이 저장소에서 상태 셀을 읽는 자리는 이것 하나**다.
+    [앞날 걷기 F36 · 2026-10-14] 굵게 쓴 상태(「**완료(…)**」)는 머리가 「**완료」 라 안 세어졌다(「항목 96」 · 알약 합 92). 같은 대장을 읽는 다른 도구
+    (measure_publisher_bottleneck)는 따로 걷되 다르게 걷었고 상태 말 아닌 「등재」 를 열림으로 셌다 — 두 벌 판독. 둘 다 이것을 부른다(재검토 R8)."""
+    return cell.strip().strip("*").split("(")[0].strip(" *")
 _STATE_CELL = re.compile(r"<td>(대기|진행|완료|보류|폐기)([^<]*)</td>")
 MISSING_MARKDOWN_NOTE = ("<p class=\"meta\">markdown 모듈이 없어 원문으로 보여 준다 — "
                          "<code>python -m pip install markdown</code> 뒤 재시작하면 표·제목이 렌더된다</p>")
@@ -85,7 +93,7 @@ def ledger_counts(text: str) -> dict[str, int]:
             continue
         # 상태 열은 표마다 위치가 다르다(D/I/M/U 는 4번째, R 은 3번째) — 셀 전체를 훑는다
         for c in cells:
-            base = c.split("(")[0]
+            base = state_head(c)
             if base in counts:
                 counts[base] += 1
                 break

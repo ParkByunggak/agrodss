@@ -19,6 +19,8 @@ ROOT="$(cd "$HERE/.." && pwd)"
 OUT="${LEDGER_OUT:-${TMPDIR:-/tmp}/agrodss_ledger.html}"
 LOG="$(mktemp "${TMPDIR:-/tmp}/agrodss_finish_XXXX.log")"
 cd "$ROOT"
+# [재검토 F3 · 2026-10-14] 검사 줄에만 TZ 가 붙고 대장 페이지 생성 줄에는 없었다 — 「오늘」 정본은 이제 밭의 시각으로 세지만(config.FARM_TZ) 셸도 같은 시각으로(gate.sh 와 같다)
+export TZ="${TZ:-Asia/Seoul}"
 
 step() { echo "== $1"; }
 fail() { echo "!! $1 실패 (rc=$2) — 로그 꼬리:"; tail -n 15 "$LOG"; exit "$2"; }

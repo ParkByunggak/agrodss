@@ -2,7 +2,7 @@
 """WO-PB-01 발행자 응답 병목 — 측정과 갈래 판정 (2026-09-29 착수 · 규칙 변경 아님).
 
 *"세션이 값을 지어내지 않는다"* 와 *"모든 값을 발행자가 직접 준다"* 는 다른 규칙인데 지금 하나로 붙어 있다 — 이 도구는 그 둘을
-가르는 **근거를 측정으로** 만든다. 대기 항목 전수(대장 대기·진행·등재 + 핸드오버 발행자 몫 + 검토지 미회신 문항)에 갈래(P1~P4)와
+가르는 **근거를 측정으로** 만든다. 대기 항목 전수(대장의 열린 상태 — 대기·진행 + 핸드오버 발행자 몫 + 검토지 미회신 문항)에 갈래(P1~P4)와
 근거를 붙이고, 비율로 H1/H2/H3 를 판정하고, P2 로 판정된 원천이 **실제로 닿는지**를 잰다.
 
 하지 않는 것(지시서 §7): 격자 값을 채우지 않는다 · 임계를 제안하지 않는다 · 대기 항목을 닫지 않는다 · 규칙을 바꾸지 않는다.
@@ -35,7 +35,9 @@ DOC_PATH = ROOT / "docs" / "wo_pb01_publisher_bottleneck.md"
 
 BRANCHES = ("P1", "P2", "P3", "P4")
 BRANCH_SAID = {"P1": "발행자만", "P2": "외부 정본", "P3": "내부 논리", "P4": "어디에도 없음"}
-OPEN_STATES = ("대기", "진행", "등재")          # 대장 상태 셀의 머리 — 이 셋이 "열린" 항목이다(보류는 지시서 §2 의 대상이 아니다)
+# [재검토 R8 · 2026-10-14] 상태 셀은 대장 정본(frontend.render.state_head · OPEN_STATES)으로 읽는다 — 여기 따로 둔 셋(대기 · 진행 · 등재)은 상태 말이 아닌
+# 「등재」 를 열림으로 셌고 꾸밈을 다르게 걷었다(「**대기**(…)」 를 「대기**」 로 읽어 말없이 뺐다). 대장 머리 규칙 4 의 다섯 가운데 열린 것은 대기 · 진행 둘이다
+from frontend.render import OPEN_STATES, state_head  # noqa: E402
 LONG_OPEN_DAYS = 30                             # §2 "30일 넘게 열려 있는 항목은 밀린 것이 아니라 안 닫히는 것이다"
 REACHED, UNREACHED = "도달", "미확인"           # §4 — "없음" 이라는 상태는 이 도구에 없다
 GROUPS = ("대장", "핸드오버", "검토지")
@@ -216,14 +218,14 @@ _DATE = re.compile(r"^(\d{2})-(\d{2})$")
 
 
 def open_backlog_rows(text: str, year: int = 2026) -> dict[str, tuple[str, str, date | None]]:
-    """대장 표에서 상태가 대기·진행·등재 인 행 → {id: (항목, 상태 머리, 등재일)}. 상태 열 위치는 표마다 달라 셀을 훑는다."""
+    """대장 표에서 상태가 열린(대기 · 진행) 행 → {id: (항목, 상태 머리, 등재일)}. 상태 열 위치는 표마다 달라 셀을 훑는다(셀 읽기는 대장 정본 state_head)."""
     rows: dict[str, tuple[str, str, date | None]] = {}
     for line in text.splitlines():
         m = re.match(r"^\| ([A-Z]-\d+) \|", line)
         if not m:
             continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        state = next((c.strip("*").split("(")[0].strip() for c in cells[1:] if c.strip("*").split("(")[0].strip() in OPEN_STATES), None)
+        state = next((state_head(c) for c in cells[1:] if state_head(c) in OPEN_STATES), None)
         if state is None:
             continue
         since = None
@@ -318,7 +320,7 @@ def render(today: date, backlog_text: str | None = None) -> str:
     L.append("")
     L.append("## 0. 요약")
     L.append("")
-    L.append(f"- 열린 항목 **{rows_total}행 · {n_total}문항**(대장 대기·진행·등재 {sum(1 for i in items if i.group == '대장')} · 핸드오버 발행자 몫 "
+    L.append(f"- 열린 항목 **{rows_total}행 · {n_total}문항**(대장 {'·'.join(OPEN_STATES)} {sum(1 for i in items if i.group == '대장')} · 핸드오버 발행자 몫 "   # 상태 말은 정본에서(재재검토 — 「등재」 는 상태 말이 아니다)
              f"{sum(1 for i in items if i.group == '핸드오버')} · 검토지 미회신 {sum(1 for i in items if i.group == '검토지')}행/{sum(i.n for i in items if i.group == '검토지')}문항)")
     L.append("- 갈래(문항 단위): " + " · ".join(f"**{b}** {BRANCH_SAID[b]} {_pct(c[b][1], n_total)}" for b in BRANCHES))
     L.append(f"- 판정: **{h_w}** ({why_w}) — 행 단위로도 {h_r}({why_r}) · 미도달 P2 를 전부 P4 로 내려도 {h_c}({why_c}). **세 셈이 같은 쪽을 가리킨다.**")
