@@ -449,16 +449,19 @@ def chosen_reply(farmer: dict[str, Any] | None) -> str | None:
     if not farmer:
         return None
     for i, d in enumerate(farmer.get("drafts") or []):
-        if d.get("why") != chat.CHOSEN_WHY:
+        if not chat.is_chosen(d):                 # 표지는 why 의 머리(못 한 이유는 고른 뒤 계획표 잇기가 사유를 덧붙인다 — 같다(==)로 보면 못 알아본다)
             continue
         k = chat.KIND_PLAIN.get(d["kind"], d["kind"])
         if chat.confirmed_ref(farmer, i):
             return f"고르신 종류({k})로 넣었습니다 — 처음 제안은 지웠습니다."
-        return f"종류를 고르셨습니다 — {k}. 처음 제안은 지웠습니다. '{chat.CONFIRM_LABEL}' 를 누르면 영농일지에 들어갑니다."
+        # [앞날 걷기 2026-10-13] 고를 수 있는 종류에는 일지로 안 가는 것(고쳐 달라는 말 · 농사 끝)도 있는데 이 줄은 단추도 자리도 일지로 박혀 있었다 — 종류의 단추 · 자리 정본에서
+        label, place = chat.confirm_label(d["kind"]), chat.PLACE_SAID.get(d["kind"])
+        return f"종류를 고르셨습니다 — {k}. 처음 제안은 지웠습니다. '{label}' 를 누르면 " + (f"{place}." if place else "적습니다.")
     return None
 
 
-def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
+def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any], said: str = "") -> str:
+    """초안 카드 하나. `said` = 이 말에 대한 답(있으면) — 밭 정보 카드의 뒷말을 답이 이미 했으면 카드는 다시 말하지 않는다."""
     k = d["kind"]
     if k == "question":
         return ""
@@ -466,16 +469,24 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any]) -> str:
     if done:
         # [발행자 화면 2026-09-29 06:18] 제안(본 것)을 손으로 바꿔(할 일) 넣으면 위 답변은 "본 것으로 적었습니다" 인 채 남아 카드와 어긋나 보였다 —
         # 카드가 "고르신 종류" 라고 말해 두 줄이 서로를 설명하게 한다(답변은 보낸 때의 기록이라 고쳐 쓰지 않는다)
-        chosen = " · 고르신 종류(처음 제안과 다릅니다)" if d.get("why") == chat.CHOSEN_WHY else ""
+        chosen = " · 고르신 종류(처음 제안과 다릅니다)" if chat.is_chosen(d) else ""
         # [내부 값 전수 2026-10-04] 들어간 뒤의 카드가 원장 id(obs_…)를 **사람이 읽는 줄**에 냈다 — 농가에게 그 열두 자리는 아무 뜻이 없고,
         # 발행자가 실사용에서 그 꼴을 그대로 집어 왔다. 사람에게는 **들어간 날**을 보이고 id 는 `title` 에 남긴다(정확함을 안 버린다 — 전례와 같은 가름)
-        day = d.get("observed_at") or d.get("planned_day") or d.get("target_date") or ""
-        return (f'<div class="draft" title="{_e(done)}"><span class="done">{_e(chat.SAVED_LABEL)}</span> '
-                f'{_e(chat.KIND_PLAIN.get(k, k))}{_e(chosen)}{(" · " + _e(day)) if day else ""}</div>')
+        # [앞날 걷기 2026-10-13] 밭 정보 카드를 넣으면 「일지에 넣었습니다 밭 정보 · 2026-10-04」 — 자리가 틀리고(밭 정보에 들어갔다) 날짜는 **일지에서 읽은 날**이었다.
+        # 배너와 **같은 하나**(chat.saved_parts — 간 자리 · 밭 정보는 값 · 일지 종류는 원장이 적은 날)를 쓴다 — 넣은 카드가 초안의 날을 읽어 배너와 다른 날을 말하던 것도 함께
+        head, what = chat.saved_parts(d)
+        return (f'<div class="draft" title="{_e(done)}"><span class="done">{_e(head)}</span> {_e(what)}{_e(chosen)}</div>')
     need = d.get("needs") or []
     # [발행자 2026-09-21] 앞에 서는 것은 **사람 말**이고, 개발자 사유(`why`)는 버리지 않고 `title` 로 내린다 —
     # 정확함을 잃지 않으면서 읽는 사람을 막지 않는다. 옛 판은 `why` 를 그대로 카드 첫 줄에 냈다.
-    why_line = "고르신 종류입니다 — 처음 제안은 지웠습니다" if d.get("why") == chat.CHOSEN_WHY else chat.plain_why(d)   # [2026-10-04] 고른 뒤엔 선택 확인
+    why_line = "고르신 종류입니다 — 처음 제안은 지웠습니다" if chat.is_chosen(d) else chat.plain_why(d)   # [2026-10-04] 고른 뒤엔 선택 확인
+    if k in chat.FIELD_KINDS:
+        # [앞날 걷기 2026-10-13] 밭 정보 카드가 **누르면 어디로 · 넣으면 무엇이** 를 몸에 안 싣고 답 줄에만 맡겼다 — 옛 메시지의 카드(옛 코드의 답)는 그 말이
+        # 어디에도 없었다(발행자 PC 의 그 용도 카드). 답이 이미 한 문장은 카드가 다시 하지 않는다(같은 말 두 번 금지 — 답은 카드 바로 뒤에 선다).
+        # 문장마다 따로 본다 — 옛 답(10-04~06 꼴)은 누르면 문장은 같고 읽는 판단 문장이 달랐다(통째로 비교하면 같은 누르면 문장이 두 번 섰다 · 검토 2026-10-13)
+        more = [x for x in (chat.field_place_said(d), chat.field_opens_said(d)) if x and x not in said]
+        if more:
+            why_line = f"{why_line.rstrip(' .')}. " + " ".join(more)      # 문장 경계(검토 2026-10-13 — 앞말과 마침표 없이 붙어 한 문장으로 읽혔다)
     parts = [f'<div class="draft" title="{_e(d.get("why", ""))}"><b>{_e(chat.KIND_PLAIN.get(k, k))}</b> — {_e(why_line)}']
     parts.append(f'<form method="post" action="/c/{quote(m["subject"])}/confirm"><input type="hidden" name="msg" value="{_e(m["id"])}"><input type="hidden" name="i" value="{i}">')
     if k == "event":
@@ -519,8 +530,10 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
         shown = {"한 일": "오늘 물 줬다", "본 것": "잎이 누렇다", "할 일": "내일 웃거름"}
         says = " · ".join(f"<b>{_e(w)}</b>({_e(shown[w])})" if w in shown else _e(w) for w in chat.writable_said())
         out.append('<div class="msg sys"><div class="av">a</div><div class="bub">여기에 그날 밭에서 있었던 일을 그냥 적으시면 됩니다 — '
-                   + says + '. 읽어서 어디에 적을지 <b>먼저 골라 보여 드립니다</b>. <b>넣기를 누르셔야</b> 영농일지에 들어갑니다 — 저절로 적히지 않습니다.</div></div>')
+                   + says + '. 읽어서 어디에 적을지 <b>먼저 골라 보여 드립니다</b>. <b>넣기를 누르셔야</b> 들어갑니다 — 저절로 적히지 않습니다'
+                   '(어디로 들어가는지는 카드마다 적혀 있습니다 — 영농일지 · 밭 정보 …).</div></div>')   # [2026-10-13] 위 목록엔 일지로 안 가는 것도 있다(밭 정보 · 고쳐 달라는 말 · 농사 끝)
     by_id = {m["id"]: m for m in msgs}
+    reply_of = {m.get("reply_ref"): m.get("text") or "" for m in msgs if m.get("role") == "system" and m.get("reply_ref")}   # 말 → 그 말의 답(카드가 답과 같은 말을 두 번 안 하게)
     for m in msgs:
         if m.get("role") == "system":
             alt = chosen_reply(by_id.get(m.get("reply_ref") or ""))       # [2026-10-04] 종류를 고른 발화의 답은 선택 확인으로 — 원문은 title 에
@@ -542,7 +555,7 @@ def thread_main(s: dict[str, Any], today: date, message: str = "", error: str = 
                        f'<div class="ts" style="text-align:right">{_e(render.local_time(m.get("recorded_at")))}{_e(tag)}</div>{_question_actions(m)}</div></div>')
             drafts = m.get("drafts") or []
             for i, d in enumerate(drafts):
-                out.append(_draft_html(m, i, d))
+                out.append(_draft_html(m, i, d, reply_of.get(m["id"], "")))
     out.append("</div>")
     out.append(f'<div class="composer"><form method="post" action="/c/{quote(s["id"])}/send" id="composer" enctype="multipart/form-data">'
                '<input type="hidden" name="input_mode" id="input_mode" value="text"><input type="hidden" name="edit_of" id="edit_of" value="">'
@@ -671,7 +684,9 @@ def thread_panel(s: dict[str, Any], today: date) -> str:
         out.append('<div class="card">심은 날이 아직 없어 촬영 시기를 못 냅니다 — 파종을 적고 넣으시면 그날부터 셉니다</div>')
     pend = chat.pending_drafts(s["id"])
     if pend:
-        out.append(f'<div class="card"><b>{_e(chat.PENDING_LABEL)} {len(pend)}</b> — 대화에서 넣기를 누르시면 영농일지에 들어갑니다</div>')
+        # [앞날 걷기 2026-10-13] 기다리는 것이 다 밭 정보 카드인데 「영농일지에 들어갑니다」 였다 — 자리마다 센다(chat.pending_said)
+        out.append(f'<div class="card"><b>{_e(chat.PENDING_LABEL)} {len(pend)}</b> — 대화에서 넣기를 누르시면 들어갑니다: '
+                   f'{_e(chat.pending_said([d["kind"] for _, _, d in pend]))}</div>')
     inbox = media.list_inbox()
     if inbox:
         out.append(f'<div class="card"><b>반입 대기 파일 {len(inbox)}</b> — 촬영 시각이 없어 등록되지 않았다. <a href="/media">/media</a> 에서 날짜를 넣어 등록</div>')
@@ -705,7 +720,8 @@ def diary_main(s: dict[str, Any], today: date) -> str:
     out = [f'<div class="thead"><div><h1>영농일지 — {_e(s.get("label"))}</h1><div class="meta">넣으신 것({_e(shows)})을 날짜순으로 펼친 것입니다. 따로 적는 곳이 아닙니다.</div></div><div><a href="/c/{quote(s["id"])}">대화로</a></div></div><div class="msgs diary">']
     pend = chat.pending_drafts(s["id"])
     if pend:
-        out.append(f'<p class="err">{_e(chat.PENDING_LABEL)} {len(pend)} — 대화에서 넣기를 누르셔야 일지에 들어갑니다</p>')
+        out.append(f'<p class="err">{_e(chat.PENDING_LABEL)} {len(pend)} — 대화에서 넣기를 누르셔야 들어갑니다: '
+                   f'{_e(chat.pending_said([d["kind"] for _, _, d in pend]))}</p>')      # 같은 셈 줄 — 옆 칸과 한 함수(일지로 안 가는 것까지 「일지에」 라고 했다)
     items = chat.diary(s["id"])
     if not items:
         out.append("<p>아직 기록이 없다.</p>")

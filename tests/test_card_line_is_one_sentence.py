@@ -68,7 +68,10 @@ def test_before_and_after_are_different_sentences():
     pend, done = words.opened("use", "종구 생산", pending=True), words.opened("use", "종구 생산")
     assert pend.startswith("넣으면 ") and "지금 답은 그 값 없이 낸 것입니다" in pend
     assert done.startswith("이것으로 ") and "다음 답부터 그 근거에 실립니다" in done
-    assert pend.split("판단이", 1)[1] == done.split("판단이", 1)[1].replace("다음 답부터 그 근거에 실립니다", "지금 답은 그 값 없이 낸 것입니다")
+    # [검토 2026-10-13] 종구 덧줄도 때를 따른다 — 넣기 전에는 조건(「들어가면」), 넣은 뒤에는 사실(「있어」). 그 밖은 같은 문장이다
+    assert pend.split("판단이", 1)[1] == (done.split("판단이", 1)[1].replace("다음 답부터 그 근거에 실립니다", "지금 답은 그 값 없이 낸 것입니다")
+                                         .replace("「종구」 가 있어", "「종구」 가 들어가면"))
+    assert "「종구」 가 들어가면" in pend and "「종구」 가 있어" in done
     assert words.opened("soil_texture", "양토", pending=True) == ""      # 읽는 판단이 없으면 열린다고도, 열릴 거라고도 말하지 않는다
     assert "넣으면" in chat.card_line({"kind": "parcel.field", "field": "use", "value": "종구 생산", "why_key": "from_diary"})
 

@@ -382,7 +382,10 @@ def opened(field: str, value: str, pending: bool = False) -> str:
     head, tail = ("넣으면", "지금 답은 그 값 없이 낸 것입니다") if pending else ("이것으로", "다음 답부터 그 근거에 실립니다")
     line = f"{head} {names} 판단이 {word} 값 '{value}' {_records.josa(value, '을')} 읽습니다 — {tail}."      # 값이 들어오는 자리(유기 → 「를」 · 무농약 → 「을」)
     if field == "use" and grid_schema.use_key(value):      # [종구 2026-10-03] 용도에 「종구」 — 재배 달력 자체가 종구 기준으로 읽힌다(grid.schema.use_key → apply_use · use_gap)
-        line += " 용도에 「종구」 가 있어 재배 달력도 종구 기준으로 읽습니다 — 수확 단계부터는 종구 값이 올 때까지 잎 기준 경보를 내지 않습니다."
+        # [검토 2026-10-13] 아직 안 넣은 카드에서도 「용도에 「종구」 가 있어 … 내지 않습니다」 라고 해 **이미 멎은 것**으로 읽혔다(같은 화면에 잎 기준 「주의」 둘이 서 있다) —
+        # 넣기 전에는 조건으로 말한다(위 줄의 「넣으면」 과 같은 가름)
+        cond = "용도에 「종구」 가 들어가면" if pending else "용도에 「종구」 가 있어"
+        line += f" {cond} 재배 달력도 종구 기준으로 읽습니다 — 수확 단계부터는 종구 값이 올 때까지 잎 기준 경보를 내지 않습니다."
     return line
 
 

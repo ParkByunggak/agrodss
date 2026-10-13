@@ -87,7 +87,10 @@ def test_the_parcel_form_is_the_third_place_an_answer_lands_and_it_speaks_the_sa
     for rel, fn, reach in (("frontend/chat_pages.py", "def handle_parcel_form", ("words.opened(", "_w.opened(")),
                            ("ingest/chat.py", "def _confirm_locked", ("words.opened(", "_w.opened(")),
                            ("ingest/chat.py", "def send", ("card_line(",)),
-                           ("ingest/chat.py", "def card_line", ("words.opened(", "_w.opened("))):
+                           # [2026-10-13] 카드 몸도 같은 뒷말을 쓰게 되어 한 겹 더 깊어졌다(card_line → field_card_tail → opened) — 사슬을 끝까지 본다
+                           ("ingest/chat.py", "def card_line", ("field_card_tail(",)),
+                           ("ingest/chat.py", "def field_card_tail", ("field_opens_said(",)),
+                           ("ingest/chat.py", "def field_opens_said", ("words.opened(", "_w.opened("))):
         src = (ROOT / rel).read_text(encoding="utf-8")
         body_ = src[src.index(fn):src.index("\ndef ", src.index(fn) + 10)]
         assert any(t in body_ for t in reach), (rel, fn, reach)

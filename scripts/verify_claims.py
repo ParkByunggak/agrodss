@@ -328,6 +328,17 @@ def check_ledger_page(s: Sheet) -> None:
     s.check(page._USE["head"] in card and page._USE["button"] in card and want in page.BEST["do"]["what"] and want in zs,
             "대장 페이지의 용도 카드 안내(머리 · 단추)가 채팅 화면의 그 카드와 같다",
             f"페이지 {want} · 화면 카드 「{card[max(0, card.find(page._USE['head'])):][:len(page._USE['head']) + len(page._USE['button']) + 2].strip()}」")
+    # [2026-10-13 · 둘째 묶음] 그 카드를 **누른 뒤**와 **셈 줄** — 넣기 전만 바른 자리를 말하고 셈 줄 · 넣은 뒤는 다 일지라고 했다
+    kinds = [x["kind"] for _, _, x in chat.pending_drafts(SID)]
+    count = chat.pending_said(kinds)
+    s.check("밭 정보" in count and ("영농일지" in count) == any(k in chat.DIARY_SHOWS for k in kinds),
+            "「아직 안 넣은 것」 셈 줄이 넣으면 갈 자리마다 센다(밭 정보 카드를 일지라고 하지 않는다)", count)
+    rec = chat.confirm(m["id"], i, now=NOW)
+    after = chat.get_message(m["id"])
+    line = chat.saved_line(after["drafts"][i], rec)
+    done = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", chat_pages._draft_html(after, i, after["drafts"][i])))
+    s.check(line.startswith("밭 정보에 넣었습니다 · 용도 → ") and "parcel" not in line and "밭 정보에 넣었습니다" in done and chat.SAVED_LABEL not in done,
+            "밭 정보 카드를 넣은 뒤 배너와 카드가 「밭 정보에 넣었습니다」 라고 말한다(일지 · 안쪽 이름 없이)", f"{line} ‖ 카드 「{done.strip()[:40]}」")
 
 
 GROUPS = (("분류", check_classification), ("사람 글", check_people_words), ("소비자", check_consumers),

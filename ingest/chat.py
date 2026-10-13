@@ -380,6 +380,32 @@ def confirm_label(kind: str) -> str:
     return CONFIRM_LABELS.get(kind, CONFIRM_LABEL)
 
 
+def field_place_said(draft: dict[str, Any]) -> str:
+    """밭 정보 · 농사 정보 카드의 **누르면 어디로** 한 문장."""
+    from schema import labels as _labels
+    kind = draft.get("kind", "")
+    label = confirm_label(kind)
+    place = (f"밭 정보에 들어갑니다({_labels.PLACES['parcel']} 에서 언제든 고칠 수 있습니다)"
+             if kind == "parcel.field" else "이 농사의 정보에 들어갑니다")
+    return f"'{label}' {sch.josa(label, '를')} 누르면 {place}."
+
+
+def field_opens_said(draft: dict[str, Any]) -> str:
+    """**넣으면 어느 판단이 읽는지** 한 문장 — 문장은 words.opened 하나(폼 · 확인 줄과 같은 자리 · 아직 안 넣은 카드라 「넣으면」). 읽는 것이 없으면 빈 문자열."""
+    from frontend import words as _w
+    return _w.opened(draft.get("field", ""), draft.get("value", ""), pending=True)
+
+
+def field_card_tail(draft: dict[str, Any]) -> str:
+    """밭 정보 · 농사 정보 카드의 뒷말 — **누르면 어디로 들어가고 넣으면 어느 판단이 읽는지**(위 두 문장). card_line 의 뒷부분이고 카드 몸도 이 둘을 쓴다.
+
+    [앞날 걷기 2026-10-13] 이 말은 **답 줄**에만 있었다 — 카드 몸은 「일지에 이미 적힌 말에서 읽었습니다 … 맞으면 넣기, 아니면 그냥 두시면 됩니다」 뿐이라
+    옛 메시지에 선 카드(발행자 PC 의 그 용도 카드 — 옛 코드의 답에는 이 줄이 없다)는 넣으면 무엇이 달라지는지를 어디에서도 말하지 않았다.
+    두 문장으로 나눈 이유: 카드는 답이 **이미 한 문장만** 건너뛴다 — 옛 답(10-04~06 꼴)은 누르면 문장은 같고 읽는 판단 문장은 달랐다(넣은 뒤의 꼴로 적혀 있었다)."""
+    opens = field_opens_said(draft)
+    return field_place_said(draft) + (f" {opens}" if opens else "")
+
+
 def card_line(draft: dict[str, Any]) -> str:
     """초안 카드 한 줄 — **왜 그렇게 읽었는지 · 넣으면 어디에 들어가는지 · 무엇이 달라지는지**.
 
@@ -391,22 +417,105 @@ def card_line(draft: dict[str, Any]) -> str:
     kind = draft.get("kind", "")
     label = confirm_label(kind)
     if kind in ("parcel.field", "subject.field"):
-        from frontend import words as _w
-        from schema import labels as _labels
-        field, value = draft.get("field", ""), draft.get("value", "")
-        word = parcels.FIELD_WORDS.get(field) or subjects.SUBJECT_FIELD_WORDS.get(field, field)
-        place = (f"밭 정보에 들어갑니다({_labels.PLACES['parcel']} 에서 언제든 고칠 수 있습니다)"
-                 if kind == "parcel.field" else "이 농사의 정보에 들어갑니다")
-        return (f"{plain_why(draft)} — {word}: {value}. '{label}' {sch.josa(label, '를')} 누르면 {place}. "
-                + _w.opened(field, value, pending=True))      # [§12] 이 답이 열 판단 — 문장은 words.opened 하나(폼 · 확인 줄과 같은 자리 · 여기는 아직 안 넣은 카드라 「넣으면」)
+        return f"{plain_why(draft)} — {field_word(draft.get('field', ''))}: {draft.get('value', '')}. " + field_card_tail(draft)
     need = draft.get("needs") or []
     place = PLACE_SAID.get(kind)                       # 모르는 종류면 자리를 **말하지 않는다**(지어내면 농가가 없는 곳을 찾는다)
     return (f"{plain_why(draft)}. " + ("날짜를 넣고 " if need else "")
             + f"'{label}' {sch.josa(label, '를')} 누르면" + (f" {place}." if place else " 적습니다."))
+def _field_cards_said(drafts: list[dict[str, Any]]) -> str:
+    """함께 선 밭 정보 · 농사 정보 카드의 말 — 답의 어느 분기든 **같은 하나**를 부른다(2026-10-13: 분기 넷 가운데 하나만 둘째 카드를 말했다).
+
+    카드가 하나면 card_line 그대로. 둘 이상이면 **같은 말은 한 번**(왜 읽었는지 · 누르면 어디로) · 값과 「넣으면 …」 은 카드마다 —
+    [길이 2026-10-13] 카드마다 card_line 을 붙였더니 같은 두 문장이 두 번 나와 답이 218자에서 754자가 됐다(꼬리는 한 번만 — 2026-10-07 할 일 답과 같은 규율)."""
+    fs = [d for d in drafts if d.get("kind") in FIELD_KINDS]
+    if len(fs) <= 1:
+        return "".join(" " + card_line(d) for d in fs)
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for d in fs:
+        groups.setdefault((plain_why(d), field_place_said(d)), []).append(d)
+    out = []
+    for (why, place), ds in groups.items():
+        vals = " · ".join(f"{field_word(d.get('field', ''))}: {d.get('value', '')}" for d in ds)
+        opens = " ".join(o for o in (field_opens_said(d) for d in ds) if o)
+        out.append(f" {why} — {vals}. {place}" + (f" {opens}" if opens else ""))
+    return "".join(out)
+
+
+def is_chosen(draft: dict[str, Any]) -> bool:
+    """사람이 종류를 고른 초안인가 — 표지는 `why` 의 **머리**다. [2026-10-13] 못 한 이유는 고른 뒤 계획표 잇기가 표지 뒤에 사유를 덧붙여
+    (「표지 · 계획표에 …」) 같다(==)로 보던 네 자리가 그 초안을 못 알아봤다(고른 뒤 확인 줄이 안 서고 옛 답이 그대로 보였다)."""
+    return str(draft.get("why") or "").split(" · ", 1)[0] == CHOSEN_WHY
+
+
 OTHER_KIND_LABEL = "다르게 적을까요?"     # 옛 문면 "다른 종류:"
 CHOSEN_WHY = "사람이 고름"               # 사람이 종류를 고른 초안의 표지 — 오분류 측정(ingest/misclassified.py · /changes 상시)이 이 표지를 읽는다(정본 하나)
-SAVED_LABEL = "일지에 넣었습니다"         # 옛 문면 "원장에 들어감"
+SAVED_LABEL = "일지에 넣었습니다"         # 옛 문면 "원장에 들어감" — **일지로 가는 종류**의 넣은 뒤 말(종류마다는 아래 saved_label)
 PENDING_LABEL = "아직 안 넣은 것"         # 옛 문면 "미확인 초안"
+# [앞날 걷기 2026-10-13] 넣기 **전**(단추 CONFIRM_LABELS · 문장 PLACE_SAID)은 종류마다 자리를 말하는데, 넣은 **뒤**의 줄과 **셈 줄**은 한 자리(일지)로만 말했다 —
+# 발행자의 10/14 한 수(「밭 정보에 넣기」)를 누르면 「일지에 넣었습니다 · parcel 2026-10-14」 가 뜨고(자리가 틀리고 안쪽 이름이 보인다) 옆 칸은
+# 「아직 안 넣은 것 2 — 대화에서 넣기를 누르시면 영농일지에 들어갑니다」 였다(기다리는 둘이 다 밭 정보 카드). 2026-10-04 · 10-07 에 넣기 전 쪽만 고친
+# §7.5 지점이다. 자리 이름을 종류마다 **하나** 두고 셈 줄 · 넣은 뒤 줄이 그것을 쓴다. 일지로 가는 종류는 일지가 실제로 펼치는 것(DIARY_SHOWS)에서 센다 —
+# 손으로 적지 않는다. 모르는 종류에는 자리를 말하지 않는다(PLACE_SAID 와 같은 규율 — 틀린 자리가 침묵보다 나쁘다).
+PLACE_NOUN: dict[str, str] = {"parcel.field": "밭 정보", "subject.field": "농사 정보", "feedback.request": "고쳐 달라는 말",
+                              "subject.end": "농사 끝"}      # 카드 머리 · 넣은 카드와 같은 이름(KIND_PLAIN) — 화면에 한 번만 나오는 이름을 새로 짓지 않는다
+SAVED_SAID: dict[str, str] = {"parcel.field": "밭 정보에 넣었습니다", "subject.field": "농사 정보에 넣었습니다",
+                              "feedback.request": "고쳐 달라는 말로 넣었습니다", "subject.end": "이 농사를 마친 것으로 닫았습니다"}
+FIELD_KINDS = ("parcel.field", "subject.field")
+
+
+def place_noun(kind: str) -> str | None:
+    """넣으면 들어가는 자리의 이름 — 「영농일지」 · 「밭 정보」 · …. 모르면 None(지어내지 않는다)."""
+    return "영농일지" if kind in DIARY_SHOWS else PLACE_NOUN.get(kind)
+
+
+def saved_label(kind: str) -> str:
+    """넣은 **뒤**의 말 — 종류가 간 자리대로. 모르는 종류엔 자리를 말하지 않는다."""
+    return SAVED_LABEL if kind in DIARY_SHOWS else SAVED_SAID.get(kind, "넣었습니다")
+
+
+def pending_said(kinds: list[str]) -> str:
+    """「아직 안 넣은 것 N」 의 뒤 — 넣으면 **어디로** 가는지 자리마다 센다(「영농일지 3 · 밭 정보 2」). 자리를 모르는 종류는 「그 밖」."""
+    counts: dict[str, int] = {}
+    for k in kinds:
+        p = place_noun(k) or "그 밖"
+        counts[p] = counts.get(p, 0) + 1
+    return " · ".join(f"{p} {n}" for p, n in counts.items())
+
+
+def field_word(field: str) -> str:
+    """밭 정보 · 농사 정보 칸의 사람 말(「용도」 · 「배수」 · 「인증」) — 카드 머리와 같은 표."""
+    return parcels.FIELD_WORDS.get(field) or subjects.SUBJECT_FIELD_WORDS.get(field, field)
+
+
+def draft_name(draft: dict[str, Any]) -> str:
+    """초안을 **목록에서** 부르는 이름 — 밭 정보 카드는 칸 이름을 붙인다(「밭 정보(용도)」 · 「밭 정보(배수)」).
+    [앞날 걷기 2026-10-13] 「적을 것이 1) 한 일 · 2) 밭 정보 · 3) 밭 정보」 — 다른 두 값을 같은 이름으로 두 번 불렀다."""
+    k = draft.get("kind", "")
+    name = KIND_PLAIN.get(k, k)
+    return f"{name}({field_word(draft.get('field', ''))})" if k in FIELD_KINDS and draft.get("field") else name
+
+
+def saved_parts(draft: dict[str, Any], rec: dict[str, Any] | None = None) -> tuple[str, str]:
+    """넣은 뒤의 (간 자리 말, 무엇을) — 넣은 직후 배너와 넣은 카드가 **같은 하나**를 쓴다.
+
+    밭 정보 값은 **값**을(「용도 → 종구 생산」 — 일지에서 읽은 날과 넣은 날이 두 날짜로 보이던 것). 일지 종류는 종류와 **원장이 적은 날**을 —
+    원장 레코드(rec) → 넣을 때 초안에 찍은 날(confirmed_day) → 초안의 날 순. [검토 2026-10-13] 넣은 카드가 초안의 날을 읽어 날짜 칸을 고쳐 넣으면
+    배너(원장 날)와 카드(초안 날)가 다른 날을 말했다(새로 읽으면 배너는 사라지고 틀린 날만 남는다). 일지 밖 종류는 종류 이름을 또 말하지 않는다
+    (「고쳐 달라는 말로 넣었습니다 고쳐 달라는 말」). 안쪽 이름(parcel · subject)은 쓰지 않는다 — 종류는 **초안의** 종류다."""
+    k = draft.get("kind", "")
+    head = saved_label(k)
+    if k in FIELD_KINDS:
+        return head, f"{field_word(draft.get('field', ''))} → {draft.get('value', '')}"
+    day = ((rec or {}).get("observed_at") or draft.get("confirmed_day") or draft.get("observed_at") or draft.get("planned_day")
+           or draft.get("target_date") or draft.get("ended_at") or "")
+    what = [KIND_PLAIN.get(k, "")] if k in DIARY_SHOWS else []
+    return head, " · ".join(what + ([day] if day else []))
+
+
+def saved_line(draft: dict[str, Any], rec: dict[str, Any] | None = None) -> str:
+    """넣은 직후 한 줄 — saved_parts 를 한 줄로."""
+    head, what = saved_parts(draft, rec)
+    return f"{head} · {what}" if what else head
 
 
 # 관찰 메모는 **서로 다른 네 가지 이유**로 나온다. 종류만 사람 말로 바꾸고 이유를 하나로 뭉개면 화면이 틀린 말을 한다
@@ -1444,17 +1553,22 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         here = {d.get("field") for d in drafts[1:] if d.get("kind") in ("parcel.field", "subject.field") and d.get("field")}
         reply_text, asked = answer_with_asks(s, text, today, skip_pending=here)         # 물은 것은 아래에서 원장에 센다(send 에서만)
         if len(drafts) > 1:                  # 물음 안의 본 것 · 또는 일지에서 읽은 밭 정보 값 — 카드가 함께 섰다(확인은 사람)
-            reply_text += " " + card_line(drafts[1])      # 문장은 card_line 하나 — 이 분기가 자기 문장을 쓰다 「영농일지」 라고 말하고 연 판단을 뺐다
+            # 문장은 card_line 하나 — 이 분기가 자기 문장을 쓰다 「영농일지」 라고 말하고 연 판단을 뺐다. [2026-10-13] 둘째 뒤의 밭 정보 카드(배수)는
+            # 어느 길에서도 말해지지 않았다 → 밭 정보 카드는 묶어서 한 번(같은 말 두 번 금지)
+            if drafts[1].get("kind") in FIELD_KINDS:
+                reply_text += _field_cards_said(drafts[1:])
+            else:
+                reply_text += " " + card_line(drafts[1]) + _field_cards_said(drafts[2:])
     elif drafts and drafts[0]["kind"] in ("parcel.field", "subject.field"):
         # [§9 2026-10-03] 물음에 대한 답 — 어느 값을 어떻게 읽었는지 말하고, 넣기를 누르면 밭 정보(등록부)에 들어간다(영농일지가 아니다) · [2026-10-04] 농사 값(인증)도 같은 줄
-        reply_text = card_line(drafts[0])
+        reply_text = _field_cards_said(drafts).lstrip()          # 카드가 하나면 card_line 그대로 · 여럿이면 같은 말은 한 번
     elif drafts and drafts[0]["kind"] == "feedback.request":
         # [처방 직후 전수 2026-10-04] 항의 갈래를 넓힌(㉝) 뒤 나가는 쪽을 재니 답이 **틀린 자리**를 가리켰다 — 「영농일지에 들어갑니다」. 확인은 fb.add_request 로 가므로 일지가 아니다.
         # 그리고 「왜 자꾸 같은 걸 묻지」 에 대한 답이 **또 물었다**(아래 물음 블록) — 묻는 것 자체에 대한 항의면 그 답에는 안 묻는다.
         from schema import labels as _labels
         d = drafts[0]
         reply_text = (f"{plain_why(d)}. '{confirm_label(d['kind'])}' 를 누르면 왼쪽 「{_labels.label('/improve')}」 에 들어갑니다(영농일지가 아닙니다). "
-                      "고칠지는 사람이 정합니다. 아니면 아래에서 다르게 고르시면 됩니다.")
+                      "고칠지는 사람이 정합니다. 아니면 아래에서 다르게 고르시면 됩니다.") + _field_cards_said(drafts[1:])
         if _complains_about_asking(text):
             reply_text += " 이번 답에는 더 묻지 않습니다."
     elif drafts:
@@ -1463,8 +1577,11 @@ def send(subject_id: str, text: str, today: date | None = None, now: datetime | 
         # [발행자 2026-09-21] 옛 문면은 `{KIND_LABEL}(으)로 읽었다 — {why}` 였다 — 내부 이름과 개발자 사유를 그대로 내보냈다.
         reply_text = card_line(d) + " 아니면 아래에서 다르게 고르시면 됩니다."      # 같은 문장 하나에서(날짜가 필요한 꼴도 card_line 이 안다)
         if len(drafts) > 1:
-            reply_text += " 적을 것이 " + " · ".join(f"{n + 1}) {KIND_PLAIN.get(x['kind'], x['kind'])}"
+            reply_text += " 적을 것이 " + " · ".join(f"{n + 1}) {draft_name(x)}"
                                                   for n, x in enumerate(drafts)) + " — 하나씩 넣습니다."
+            # [앞날 걷기 2026-10-13] 대장 페이지가 보낸 길(「아무 말이나 한 줄」)이 이 분기다 — 함께 선 밭 정보 카드가 **어디로 들어가고 무엇이 읽는지**를
+            # 어느 길에서도 말하지 않았다(물음 분기만 둘째 카드를 말했다). 그 사람이 누를지 정하는 자리라 카드마다 한 줄(card_line 하나에서)
+            reply_text += _field_cards_said(drafts[1:])
     else:
         # [발행자 2026-09-21] 종류를 **사람에게 묻지 않는다** — 규칙이 못 고르면 시스템이 관찰 메모로 정한다(내용은 원문 그대로,
         # 지어내지 않는다). 사람은 초안의 '다른 종류' 로 고친다. 빈 발화는 위에서 이미 거부되므로 여기는 사실상 닿지 않지만,
@@ -1647,7 +1764,8 @@ def _confirm_locked(msg_id: str, draft_index: int = 0, day: str | None = None, e
         raise ChatError(str(e))
     upd = dict(m)
     upd["confirmed_refs"] = list(m.get("confirmed_refs", [])) + [rec["id"]]
-    upd["drafts"] = [dict(x, confirmed_ref=rec["id"]) if n == draft_index else x for n, x in enumerate(drafts)]
+    # [검토 2026-10-13] 넣은 날도 초안에 찍는다 — 넣은 카드가 원장이 적은 날을 말하게(날짜 칸을 고쳐 넣으면 초안의 날과 다르다 · 농사 끝은 ended_at)
+    upd["drafts"] = [dict(x, confirmed_ref=rec["id"], confirmed_day=rec.get("observed_at")) if n == draft_index else x for n, x in enumerate(drafts)]
     upd.pop("schema_version", None)
     _append(upd)
     return rec

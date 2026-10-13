@@ -64,7 +64,7 @@ def measure(path: Path | None = None) -> dict[str, Any]:
     for i in farmer:
         f, l = first[i], latest[i]
         d = l.get("drafts") or []
-        if d and d[0].get("why") == chat.CHOSEN_WHY and _kind0(f) != _kind0(l):
+        if d and chat.is_chosen(d[0]) and _kind0(f) != _kind0(l):      # [2026-10-13] 표지는 why 의 머리 — 고른 못 한 이유는 계획표 잇기가 사유를 덧붙여 같다(==)로는 빠졌다
             chosen.append({"id": i, "text": f.get("text", ""), "rule": _kind0(f), "human": _kind0(l)})
     edits = []
     for i in farmer:

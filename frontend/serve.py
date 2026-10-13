@@ -771,7 +771,11 @@ class Handler(BaseHTTPRequestHandler):
                 rec = chat.confirm(form.get("msg", ""), int(form.get("i") or 0), day=form.get("day") or None, event_type=form.get("type") or None,
                                    risk=form.get("risk") or None, planned_task=form.get("planned_task") or None)
                 # [§7.5 전수 2026-09-21] 앞 회차 문면 고침이 **여기까지 닿지 않았다** — 확인 직후 화면에 뜨는 줄이다(가장 자주 보는 말)
-                saved = f"{chat.SAVED_LABEL} · {chat.KIND_PLAIN.get(rec['kind'], rec['kind'])} {rec.get('observed_at', '')}"
+                # [앞날 걷기 2026-10-13] 밭 정보 값을 넣으면 「일지에 넣었습니다 · parcel 2026-10-14」 — 자리가 틀리고 원장 레코드의 안쪽 종류(parcel · subject)가 보였다.
+                # 종류는 **초안의** 것을 쓰고 줄은 정본 하나(chat.saved_line — 넣은 카드도 같은 꼴)
+                msg_id, idx = form.get("msg", ""), int(form.get("i") or 0)
+                draft = ((chat.get_message(msg_id) or {}).get("drafts") or [{}] * (idx + 1))[idx]
+                saved = chat.saved_line(draft, rec)
                 if rec.get("opens_line"):                                    # [WO-ASK-01 §12 2026-10-03] 밭 정보 값을 넣은 직후 — 그 답이 연 판단을 말한다
                     saved = f"{saved} — {rec['opens_line']}"
                 status, body = chat_page(sid, message=saved)

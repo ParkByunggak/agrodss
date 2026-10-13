@@ -68,7 +68,12 @@ def test_the_marker_it_reads_is_the_one_choose_kind_writes():
     src = (ROOT / "ingest" / "chat.py").read_text(encoding="utf-8")
     assert src.count('"사람이 고름"') == 1                                    # 정의 한 곳뿐 — 리터럴을 두 번 쓰지 않는다
     msrc = (ROOT / "ingest" / "misclassified.py").read_text(encoding="utf-8")                                     # [검토표 ③] 정본이 ingest 로 옮겨졌다
-    assert "chat.CHOSEN_WHY" in msrc and "사람이 고름" not in msrc.split("def measure")[1]
+    # [2026-10-13] 표지를 읽는 길이 한 겹 깊어졌다(chat.is_chosen — why 의 머리를 본다 · 고른 못 한 이유는 계획표 잇기가 사유를 덧붙인다). 정본을 거치는지를 끝까지 본다
+    assert ("chat.CHOSEN_WHY" in msrc or "chat.is_chosen(" in msrc) and "사람이 고름" not in msrc.split("def measure")[1]
+    import ast
+    fn = next(n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.FunctionDef) and n.name == "is_chosen")
+    pred = ast.get_source_segment(src, fn)                                         # 함수 본문만 — 문자 창으로 자르면 바로 아래 정의까지 딸려 온다(구조로 자른다)
+    assert "CHOSEN_WHY" in pred and "사람이 고름" not in pred
     ssrc = (ROOT / "scripts" / "measure_misclassified.py").read_text(encoding="utf-8")
     assert "from ingest.misclassified import" in ssrc and "def measure" not in ssrc                                # 껍데기는 정본을 부를 뿐 두 벌을 만들지 않는다
     sid = _sid()

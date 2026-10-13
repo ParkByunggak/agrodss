@@ -59,6 +59,19 @@ def test_the_use_card_the_page_names_is_the_card_the_chat_draws(monkeypatch):
     assert "「밭 정보 → " not in said, "카드 머리는 칸 이름이다(「용도 →」) — 「밭 정보 →」 는 화면에 없는 머리"
 
 
+def test_the_page_says_how_to_find_a_card_that_is_already_standing(monkeypatch):
+    """[검토 2026-10-13] 「카드가 안 보이면 아무 말이나 한 줄 보내면 섭니다」 는 카드가 이미 서 있으면 거짓이다(같은 카드는 다시 안 선다 — 발행자 PC 상태).
+    셈 줄이 자리마다 세므로(「… 밭 정보 N」) 그 줄로 가른다 — 줄 이름 · 자리 이름은 화면 정본에서."""
+    page = _page(monkeypatch, "2026-10-13")
+    find = page._USE["find"]
+    assert chat.PENDING_LABEL in find and chat.place_noun("parcel.field") in find, find
+    zs = next(h + b for h, b in page.NEXT_PUBLISHER if h.startswith("⓪ˢ"))
+    assert find in page.BEST["do"]["what"] and find in zs
+    assert "안 보이면 아무 말이나" not in _rows_text(page)                         # 손으로 적은 옛 말이 안 남았다
+    # 그 줄이 정말 그 이름으로 서는가 — 셈 줄 정본이 「밭 정보」 를 센다
+    assert chat.place_noun("parcel.field") in chat.pending_said(["parcel.field"])
+
+
 def test_every_quoted_button_on_the_page_is_a_real_button_and_the_right_one_for_its_card(monkeypatch):
     page = _page(monkeypatch, "2026-10-13")
     said = _rows_text(page)
