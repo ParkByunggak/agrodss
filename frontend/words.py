@@ -72,6 +72,45 @@ def subject_label(sid: str | None) -> str:
     s = subjects.by_id(sid)
     return (s or {}).get("label") or sid
 
+
+NO_CROP_FIELD = "짓는 작목이 없는 밭"
+UNREAD_FIELD = "작목을 못 읽은 밭"
+_ORDINALS = ("첫째", "둘째", "셋째", "넷째", "다섯째", "여섯째", "일곱째", "여덟째", "아홉째", "열째")
+
+
+def parcel_label(pid: str | None) -> str:
+    """밭 정보 id → 그 밭을 부르는 말 — **그 밭에서 짓는 작목**으로(「쪽파 · 대파 밭」). 정확한 id 는 화면이 title 에 남긴다(글에는 안 낸다).
+    [앞날 걷기 2026-10-13] 밭 정보 화면의 머리와 저장 줄이 등록부 id(p001)를 냈다 — 표의 목록 칸을 농사 이름으로 바꾼 2026-10-04 처방(subject_label)이
+    밭 쪽에는 안 닿았다(§7.5 지점). 밭 기록에는 이름 칸이 없어 짓는 작목으로 부른다.
+    [재검토 2026-10-13] 작목이 없는 밭 · 같은 이름의 밭에서 id 가 **다시 글로** 나갔다 — 새 밭에 첫 농사를 세우는 바로 그때가 그 꼴이다.
+    작목이 없으면 그 사실을 말하고(지어내지 않는다), 같은 말로 불리는 밭이 둘 이상이면 밭 정보의 순서로 가른다(「쪽파 밭 · 둘째」).
+    값이 글이 아닌 줄(손으로 고친 덮개)은 건너뛴다 — 이 말 하나 때문에 화면이 죽지 않게."""
+    from ingest import media, parcels       # 4층이 모듈 수준에서 ingest 를 들면 층이 뒤집힌다(subject_label 과 같은 규율)
+    if not pid:
+        return ""
+    try:
+        subs = [s for s in media.load_subjects() if isinstance(s.get("parcel"), str) and isinstance(s.get("crop"), str) and s.get("crop")]
+    except (OSError, ValueError):           # 덮개 파일이 깨졌으면 지어내지 않는다(H-후보㉣ 과 같은 자리)
+        return UNREAD_FIELD
+    try:
+        order = [p["id"] for p in parcels.load()]
+    except (OSError, ValueError):
+        order = []
+
+    def crops_of(p: str) -> str:
+        # [검토 2026-10-13] 마친 농사(종료)는 그 밭을 부르는 말에서 뺀다 — 다 마쳤으면 그래도 그 작목으로(빈 말보다 낫다)
+        live = [s["crop"] for s in subs if s["parcel"] == p and s.get("status") != "종료"]
+        every = live or [s["crop"] for s in subs if s["parcel"] == p]
+        return f"{' · '.join(dict.fromkeys(every))} 밭" if every else NO_CROP_FIELD
+
+    mine = crops_of(pid)
+    ids = list(dict.fromkeys(order + [s["parcel"] for s in subs]))
+    same = [p for p in ids if crops_of(p) == mine]
+    if pid not in same or len(same) < 2:
+        return mine
+    n = same.index(pid)
+    return f"{mine} · {_ORDINALS[n] if n < len(_ORDINALS) else f'{n + 1}번째'}"
+
 # 닫힌 낱말 표 — **측정으로 고른 것만** 넣는다. 긴 것부터 바꾼다(짧은 것이 먼저 물면 뒤가 어그러진다).
 SWAPS: tuple[tuple[str, str], ...] = (
     # [대파 걷기 2026-10-04 실측] 받침이 바뀌는 낱말은 조사까지 함께 — 「격자가 서면」 이 「재배 달력가 서면」 으로 나갔다(원장은→일지는 과 같은 축 · 넷을 전수로 셌다: 격자 · 봉투 · 원장 · 등급)
@@ -161,8 +200,8 @@ def decision(decision_id: str) -> str:
 def waiting(field: str, value: str, observed_at: str = "") -> str:
     """일지에서 읽혔는데 **아직 안 넣은 값**이 이 답을 바꾼다 — 그 사실 한 줄(행동은 카드가 말한다 · 여기서는 왜 이 답이 그 값 없이 나왔는지만).
     [10/07 걷기 2026-10-06] 카드는 한 번만 서고 답은 날마다 나간다 — 그 사이를 이 줄이 메운다."""
-    from ingest import parcels, subjects
-    word = parcels.FIELD_WORDS.get(field) or subjects.SUBJECT_FIELD_WORDS.get(field, field)
+    from ingest import parcels
+    word = parcels.field_word(field)               # [검토 2026-10-13] 두 표 찾기는 정본 하나(parcels.field_word) — 손으로 적힌 사본 다섯을 걷었다
     when = f"일지 {observed_at} 에서" if observed_at else "일지에서"
     return (f"이 답은 {word} 값 없이 낸 것입니다 — {when} 읽은 '{value}' {_records.josa(value, '이')} "
             f"아직 안 들어갔습니다({_places()} 에서 넣으면 다시 답합니다)")
@@ -179,8 +218,8 @@ def waiting_many(items: list[tuple[str, str, str]]) -> str:
         return ""
     if len(items) == 1:
         return waiting(*items[0])
-    from ingest import parcels, subjects
-    words_ = [parcels.FIELD_WORDS.get(f) or subjects.SUBJECT_FIELD_WORDS.get(f, f) for f, _v, _d in items]
+    from ingest import parcels
+    words_ = [parcels.field_word(f) for f, _v, _d in items]
     reads = " · ".join(f"'{v}'({d})" if d else f"'{v}'" for _f, v, d in items)      # 읽은 날은 그 값의 출처다 — 합치면서 버리지 않는다
     return (f"이 답은 {' · '.join(words_)} 값 없이 낸 것입니다 — 일지에서 읽은 {reads}"
             f"{_records.josa(reads[-1] if reads[-1] != ')' else '것', '이')} 아직 안 들어갔습니다({_places()} 에서 넣으면 다시 답합니다)")
@@ -372,13 +411,13 @@ def opened(field: str, value: str, pending: bool = False) -> str:
         other = parcels.FIELD_OTHER_CONSUMERS.get(field)
         if other:
             who, cond = other
-            word = parcels.FIELD_WORDS.get(field, field)
+            word = parcels.field_word(field)
             head = "넣으면" if pending else "이것으로"
             return (f"{head} {word} 값 '{value}' {_records.josa(value, '을')} {who}{_records.josa(who, '이')} 읽습니다 — "
-                    f"판정은 이 값을 읽지 않습니다({cond}).")
+                    f"판단은 이 값을 읽지 않습니다({cond}).")      # [재검토 2026-10-13] 같은 화면의 표지 셋이 「판단」 — 셋째만 「판정」 이었다
         return ""
     names = _names_said(ids)
-    word = parcels.FIELD_WORDS.get(field) or subjects.SUBJECT_FIELD_WORDS.get(field, field)
+    word = parcels.field_word(field)
     head, tail = ("넣으면", "지금 답은 그 값 없이 낸 것입니다") if pending else ("이것으로", "다음 답부터 그 근거에 실립니다")
     line = f"{head} {names} 판단이 {word} 값 '{value}' {_records.josa(value, '을')} 읽습니다 — {tail}."      # 값이 들어오는 자리(유기 → 「를」 · 무농약 → 「을」)
     if field == "use" and grid_schema.use_key(value):      # [종구 2026-10-03] 용도에 「종구」 — 재배 달력 자체가 종구 기준으로 읽힌다(grid.schema.use_key → apply_use · use_gap)

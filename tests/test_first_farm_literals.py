@@ -28,7 +28,7 @@ def test_default_parcel_only_when_registry_has_exactly_one():
     doc["parcels"].append({**doc["parcels"][0], "id": "p002"})
     Path(parcels.parcels_path()).write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     assert subjects.default_parcel() is None
-    with pytest.raises(subjects.SubjectError, match="필지를 지정"):
+    with pytest.raises(subjects.SubjectError, match="어느 밭인지 고릅니다 .*대신 고르지 않습니다"):   # [2026-10-13] 물러난 말(필지) → 밭 정보 말 · 대표값을 고르지 않는다는 뜻은 그대로
         subjects.add("배추", "2027 봄", status="계획")
     assert subjects.add("배추", "2027 봄", status="계획", parcel="p002")["parcel"] == "p002"
 

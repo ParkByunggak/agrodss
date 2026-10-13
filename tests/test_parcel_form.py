@@ -104,7 +104,9 @@ def test_filled_answers_are_saved_and_blanks_are_left_alone(srv):
     st, body = _post(srv, "/me/parcel", {"id": "p001", "soil_texture": "양토", "slope": "완경사", "drainage": "보통",
                                          "microclimate": "동향 · 안개 잦음", "area_m2": "330", "irrigation": "", "night_light": "",
                                          "environment": "", "use": "", "seed_source": "", "cert_legal": ""})
-    assert st == 200 and "밭 정보(p001) 저장" in body                                   # [10-04] 구역 이름 「밭 정보」 — 요구 문장 · 보고와 같은 말(전엔 「필지」)
+    from frontend import words
+    assert st == 200 and f"밭 정보 저장({words.parcel_label('p001')})" in body           # [10-04] 구역 이름 「밭 정보」 · [10-13] id(p001) 대신 밭을 부르는 말
+    assert "(p001)" not in body and words.parcel_label("p001") != "p001"               # 짓는 작목이 있는 밭 — 이름이 선다
     rec = parcels.by_id("p001")
     assert rec["soil_texture"] == "양토" and rec["slope"] == "완경사" and rec["drainage"] == "보통"
     assert rec["area_m2"] == 330 and isinstance(rec["area_m2"], int)              # 숫자로 들어간다(문자열 "330" 이 아니라)
@@ -135,9 +137,13 @@ def test_the_vocabulary_gate_refuses_outside_words_and_passes_the_listed_ones(sr
         assert parcels.set_fields("p001", overwrite=True, **{key: opts[-1]})[key] == opts[-1]      # 통과
         with pytest.raises(parcels.ParcelError) as e:
             parcels.set_fields("p001", overwrite=True, **{key: "아무말"})                            # 거부
-        assert key in str(e.value) and opts[0] in str(e.value)                    # 사유가 고를 말을 알려 준다
+        assert parcels.FIELD_WORDS[key] in str(e.value) and opts[0] in str(e.value)   # 사유가 고를 말을 알려 준다 — 칸 이름은 화면과 같은 말
+        assert key not in str(e.value)                                            # [2026-10-13] 안쪽 키가 오류 줄로 새지 않는다
     st, body = _post(srv, "/me/parcel", {"id": "p001", "area_m2": "서른 평"})
-    assert st == 400 and "숫자여야 한다" in body
+    assert st == 400 and "면적은 숫자로 적습니다" in body                          # 맨 낱말 뒤 조사는 붙인다(띄우는 것은 인용 뒤뿐)
+    with pytest.raises(parcels.ParcelError) as e:
+        parcels.set_fields("p001", area_m2="서른 평", overwrite=True)
+    assert "area_m2" not in str(e.value) and "면적" in str(e.value)                 # 오류 줄에 안쪽 키가 없다
     with pytest.raises(parcels.ParcelError):
         parcels.set_fields("p001", area_m2=0, overwrite=True)
 

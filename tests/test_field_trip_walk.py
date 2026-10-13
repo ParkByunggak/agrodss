@@ -57,12 +57,14 @@ def test_the_field_trip_path_walks_end_to_end(srv, monkeypatch):
     st, _, body = _post(srv, "/me/parcel", {"id": "p001", "soil_texture": "양토", "slope": "완경사",
                                             "drainage": "보통", "irrigation": "점적", "night_light": "없음",
                                             "microclimate": "동쪽 트임 · 안개 잦음 · 바람길 남북"})
-    assert st == 200 and "밭 정보(p001) 저장" in body
+    from frontend import words
+    assert st == 200 and f"밭 정보 저장({words.parcel_label('p001')})" in body             # [2026-10-13] 등록부 id 대신 밭을 부르는 말(짓는 작목)
     rec = parcels.by_id("p001")
     assert rec["soil_texture"] == "양토" and rec["microclimate"].startswith("동쪽")
     assert len(parcels.missing_inputs(rec)) == before_missing - 6
     st, body = _get(srv, "/me")
-    assert "판정이 읽는 값" in body and "지금은 등록부에만 쌓인다" in body       # 무엇이 열리고 무엇이 안 열리는지 화면이 말한다
+    from frontend import chat_pages
+    assert chat_pages.READS_LABEL in body and chat_pages.STORED_ONLY_LABEL in body   # 무엇이 열리고 무엇이 안 열리는지 화면이 말한다(표지 글은 화면 정본에서 — 2026-10-13 판정 → 판단)
 
     # ② 밭에서 한 일 — 예찰 한 줄(발행자가 실제로 칠 문장에 가깝게)
     st, loc, _ = _post(srv, f"/c/{quote(SID)}/send", {"text": "9월 8일 트랩 확인했다. 고자리파리 성충은 안 보였다"})

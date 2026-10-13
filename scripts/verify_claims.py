@@ -256,6 +256,16 @@ def check_screens(s: Sheet) -> None:
         st, me = get("/me")
         s.check(st == 200 and labels.label("/me") in me and labels.ME_SECTIONS["parcel"] in me,
                 "화면 이름이 한 목록에서 온다(왼쪽 메뉴 · 구역)", (labels.label("/me"), labels.ME_SECTIONS["parcel"]))
+        # [앞날 걷기 2026-10-13 · F6 · F30] 밭 정보 화면이 안쪽 키(lat · use …)로 입력 대기를 세고 · 머리는 등록부 id · 탭은 사용자 정보 사본을 셌다(「필지 0」)
+        from ingest import parcels as _pa
+        from frontend import words as _wd
+        ps = _pa.load()
+        here = _pa.missing_words(ps[0], here=True) if ps else []
+        mt = _text(me)
+        tab = f"{labels.ME_SECTIONS['parcel']} {len(ps)} · 메뉴"
+        s.check(st == 200 and bool(ps) and f"입력 대기 {len(here)}: {' · '.join(here)}" in mt and _wd.parcel_label(ps[0]["id"]) in mt and tab in mt and "필지" not in mt,
+                "밭 정보 화면이 칸을 사람 말로 센다(이 화면에서 넣을 수 있는 것만) · 밭은 짓는 작목으로 부른다 · 탭의 밭 수는 등록부와 같다",
+                f"입력 대기 {len(here)} · 밭 {len(ps)} · 「{_wd.parcel_label(ps[0]['id']) if ps else '-'}」")
         st, jd = get("/judge")
         s.check(st == 200 and "재배 달력가" not in jd and "일지은" not in jd, "판단 화면에 조사 어긋남이 없다", st)
         st, sc = get("/selfcheck")

@@ -64,7 +64,11 @@ def test_retired_screen_names_cannot_come_back_into_the_publisher_lists_or_requi
     for place in labels.PLACES.values():
         assert labels.retired_in(place) == [], place
     src = (ROOT / "scripts" / "build_ledger_page.py").read_text(encoding="utf-8")
-    assert "assert not check_retired(NEXT_PUBLISHER + NEXT_SESSION)" in src                 # 배선 — 적재 때 멈춘다
+    # 배선 — 적재 때 멈춘다. [2026-10-13 F32] 범위가 BEST 까지 넓어졌다(BEST 의 「지금 화면에선 … 설정 → 필지 구역」 이 두 목록만 보던 검사 밖이었다)
+    assert "assert not check_retired(RETIRED_SCOPE)" in src
+    scope = blp.RETIRED_SCOPE
+    assert all(x in scope for x in blp.NEXT_PUBLISHER + blp.NEXT_SESSION) and {k for k, _ in scope if k.startswith("BEST.")} >= {"BEST.what", "BEST.where"}
+    assert blp.check_retired([("BEST.where", "지금 화면에선 맨 아래 사용자 탭을 누르면 나오는 설정 → 필지 구역")])   # 괄호 없이 쓴 옛 길도 잡는다(거부)
 
 
 def test_the_report_cannot_name_a_menu_that_is_not_on_the_screen():

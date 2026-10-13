@@ -101,7 +101,7 @@ def test_mid_term_days_follow_the_short_window_verbatim_and_the_short_window_win
     assert [i.source for i in e.inputs] == ["external:kma:vilage", "external:kma_midfcst"]                                     # 원천 둘이 입력에 따로
     s = e.result["summary"]
     # [발행자 2026-09-29 "가독성이 떨어진다 — 시간과 날짜 단위로 줄바꿈"] 지평 머리 한 줄 + 날마다 한 줄. ' · ' 로 잇던 한 줄은 휴대폰에서 못 읽었다
-    assert s.split("\n") == ["단기 — 기상청 단기예보 · 필지 자리 5km 예보 구역 · 3시간 단위 · 발표 09-28 05시",       # [발행자 2026-09-29 "어느 지점을 말하는가"] 자리를 머리에
+    assert s.split("\n") == ["단기 — 기상청 단기예보 · 밭 자리 5km 예보 구역 · 3시간 단위 · 발표 09-28 05시",       # [발행자 2026-09-29 "어느 지점을 말하는가"] 자리를 머리에
                              "09-28 12~21℃ 비 30%", "09-29 11~22℃ 비 60% 5.0mm", "09-30 10~19℃(시간대 값) 비 20%",
                              "중기 — 괴산 권역 · 기상청 중기예보 · 발표 09-27 18시",
                              "10-01 7~17℃ 비 70%", "10-02 6~18℃ 비 20%", "10-05 5~16℃ 비 40%",
@@ -163,7 +163,7 @@ def test_the_short_forecast_is_told_in_three_hour_lines_under_each_day():
     e = SD.judge_forecast_citation(_subject(), TODAY, forecast=fc, why=None)
     assert e.result["days"][0]["hours"] == hours and e.result["days"][1]["hours"] == []
     lines = e.result["summary"].split("\n")
-    assert lines[0] == "단기 — 기상청 단기예보 · 필지 자리 5km 예보 구역 · 3시간 단위 · 발표 09-28 05시"
+    assert lines[0] == "단기 — 기상청 단기예보 · 밭 자리 5km 예보 구역 · 3시간 단위 · 발표 09-28 05시"
     assert lines[1:5] == ["09-28 12~21℃ 비 30%", "· 06시 12℃ 맑음 비 0% 바람 1.2m/s", "· 09시 16℃ 흐림 비 비 60% 1.0mm", "· 12시"]
     assert lines[5].startswith("09-29 ") and lines[6].startswith("09-30 ")                                 # 3시간 줄 없는 날은 날 한 줄만
     for bad in ("None", "nan"):
@@ -208,7 +208,7 @@ def test_the_chat_card_and_judge_page_render_a_citation_without_crashing(srv, mo
     body = resp.read().decode("utf-8", "replace")
     assert resp.status == 200 and "날씨 인용(단기·중기 예보)" in body and "비 올 확률(최대)" in body and "2026-09-29" in body and "(시간대 값)" in body
     assert "비 올 확률(오전·오후 최대)" in body and "2026-10-05" in body and "흐리고 비" in body and "<b>중기</b>(괴산 권역)" in body   # 중기 표 — 단기와 다른 열
-    assert "<b>단기</b>(필지 자리 5km 예보 구역 69,107)" in body and "5km 재배 달력" not in body                                      # 어느 자리인지 — 격자 번호까지
+    assert "<b>단기</b>(밭 자리 5km 예보 구역 69,107)" in body and "5km 재배 달력" not in body                                      # 어느 자리인지 — 격자 번호까지
     from frontend import render
     assert f"발표 {render.local_time('2026-09-28T05:00:00+09:00')}" in body and f"발표 {render.local_time('2026-09-27T18:00:00+09:00')}" in body   # 시각 표기 정본(C16) — 손으로 자르지 않는다
     assert "2026-09-28T05:00" not in body

@@ -212,8 +212,17 @@ def user_tab_html(current: str) -> str:
         items.append(f'<a href="{href}"{on}>{_e(label)}' + (f"<small>{_e(sub)}</small>" if sub else "") + "</a>")
     said = words.role(role)      # [내부 값 전수 2026-10-04] 역할 어휘(farmer · publisher)가 배지와 머리에 그대로 나갔다 — 안쪽 값은 title 에 남긴다
     return (f'<details class="umenu" id="user-tab"><summary class="user{cls}"><b>{_e(name)}<span class="pill" title="{_e(role)}">{_e(said)}</span></b>'
-            f'<span>필지 {len(u.get("parcels") or [])} · 메뉴 ▴</span></summary>'
+            f'<span>{_e(labels.ME_SECTIONS["parcel"])} {_parcel_count()} · 메뉴 ▴</span></summary>'
             f'<div class="ulist"><div class="uhead" title="{_e(role)}">{_e(name)} · {_e(said)}</div>{"".join(items)}</div></details>')
+
+
+def _parcel_count() -> str:
+    """사용자 탭의 밭 수 — **등록부에서** 센다. [앞날 걷기 2026-10-13] 탭은 사용자 정보 파일에 저장 때 찍어 둔 사본을 세어 「필지 0」 이었고
+    (그 파일이 없으면 0) 밭 정보 화면은 같은 때 밭 하나를 보였다 — 두 벌의 수가 갈린 형태. 이름도 물러난 말(필지)이었다. 못 읽으면 수를 지어내지 않는다."""
+    try:
+        return str(len(parcels.load()))
+    except (OSError, ValueError):
+        return "?"
 
 
 # [발행자 2026-09-21 "필지 3문항과 토성·경사가 비어 있어서 병해충 필지 보정과 과습 판정이 막혀 있다"]
@@ -226,11 +235,12 @@ def user_tab_html(current: str) -> str:
 #         그래서 화면이 그렇게 **말한다**. 열리지 않을 판정을 열린다고 하면 밭에 헛걸음을 시킨다.
 # 어휘 목록은 여기 두지 않는다 — 등록부(ingest.parcels.FIELD_CHOICES)가 정본이고 CLI 도 같은 것을 본다.
 BATCH_FORM = "dec"      # 결정 화면의 저장 폼 id — 칸들이 `form=` 로 여기 붙는다(폼을 겹쳐 넣을 수 없어서)
-READS_LABEL = "판정이 읽는 값"
-STORED_ONLY_LABEL = "지금은 등록부에만 쌓인다(읽는 판정 없음)"
+# [검토 2026-10-13] 같은 화면의 저장 줄은 「판단이 읽는 값은 없습니다(밭 정보에 남습니다)」 라고 한다 — 표지도 같은 말로(판정 → 판단 · 등록부 → 밭 정보)
+READS_LABEL = "판단이 읽는 값"
+STORED_ONLY_LABEL = "지금은 밭 정보에만 남는다(읽는 판단 없음)"
 # [낡음 대조 2026-10-06] 표지가 둘뿐이라 **판정이 아닌 소비자**가 있는 값이 「읽는 판정 없음」 으로 나갔다 — 인증 근거가 그렇다(몰 상품의 인증 표기가 읽는다).
 # 적을 이유를 지우는 거짓 표지다. 셋째 표지를 둔다(소비자 이름은 등록부 정본에서 — 표지 글을 두 벌 만들지 않는다).
-OTHER_CONSUMER_LABEL = "{who}가 읽는 값({cond}) — 판정은 안 읽는다"
+OTHER_CONSUMER_LABEL = "{who}가 읽는 값({cond}) — 판단은 안 읽는다"      # [재검토 2026-10-13] 표지 셋 가운데 둘만 판정 → 판단으로 바꿨었다
 
 
 def _parcel_note(key: str) -> str:
@@ -251,10 +261,11 @@ def parcel_form(p: dict[str, Any]) -> str:
     for key, opts in parcels.FIELD_CHOICES.items():
         cur = p.get(key)
         sel = "".join(f'<option value="{_e(o)}"{" selected" if cur == o else ""}>{_e(o)}</option>' for o in opts)
-        rows.append(f'<label>{_e(key)}{_parcel_note(key)}</label>'
+        # [앞날 걷기 2026-10-13] 고르는 칸의 이름이 안쪽 키(environment · drainage …)였다 — 답과 대장은 「배수」 라고 부르는데 그 말이 이 화면에 없었다. 키는 title 에
+        rows.append(f'<label title="{_e(key)}">{_e(parcels.FIELD_WORDS.get(key, key))}{_parcel_note(key)}</label>'
                     f'<select name="{key}"><option value="">— 모름(비워 둔다)</option>{sel}</select>')
-    for key, label in parcels.FIELD_LABELS:
-        rows.append(f'<label>{_e(label)}{_parcel_note(key)}</label><input name="{key}" value="{_e(p.get(key) or "")}">')
+    for key, hint in parcels.FIELD_LABELS:           # 칸 이름은 FIELD_WORDS 하나 · 둘째 칸은 덧말만(검토 2026-10-13 — 이름이 두 벌이었다)
+        rows.append(f'<label title="{_e(key)}">{_e(parcels.FIELD_WORDS.get(key, key) + hint)}{_parcel_note(key)}</label><input name="{key}" value="{_e(p.get(key) or "")}">')
     rows.append(f'<div style="margin-top:8px"><button class="btn pri" type="submit">{_e(labels.PARCEL_SAVE)}</button>'
                 '<span style="color:var(--muted)"> — 빈 칸은 건드리지 않는다(모르는 것을 지어내지도, 있는 값을 지우지도 않는다). '
                 '주소·좌표는 이 화면에 없다(PII)</span></div></form>')
@@ -427,9 +438,12 @@ def me_main(message: str = "", error: str = "", form: dict[str, str] | None = No
     out.append(f'<h2 id="parcel" style="font-size:14px">{_e(labels.ME_SECTIONS["parcel"])}</h2>')   # 「밭 정보」 — 요구 문장 · 보고 · 단추와 같은 말(전엔 「필지」)
     for p in parcels.load():
         v = parcels.public_view(p)
-        miss = parcels.missing_inputs(p)
-        out.append(f'<div class="card"><b>{_e(p["id"])}</b> · 용도 {_e(v.get("use") or "미기재")} · 위치 {_e(v["location"])} · 인증 주장 {_e(v.get("cert_claimed") or "없음")}'
-                   f'<div style="color:var(--muted)">입력 대기 {len(miss)}: {_e(", ".join(miss))}</div>'
+        miss, here, away = parcels.missing_inputs(p), parcels.missing_words(p, here=True), parcels.missing_words(p, here=False)
+        # [앞날 걷기 2026-10-13] 머리는 등록부 id, 입력 대기는 안쪽 키였다 — 사람 말로(짓는 작목 · FIELD_WORDS) · 정확한 값은 title 에.
+        # 이 화면에 칸이 있는 것과 없는 것(좌표 · 토양 검정 근거)을 가른다 — 한 줄로 세면 다 채워도 「입력 대기 2」 가 남아 이 화면에서 넣을 것처럼 읽혔다(검토 2026-10-13)
+        out.append(f'<div class="card"><b title="{_e(p["id"])}">{_e(words.parcel_label(p["id"]))}</b> · 용도 {_e(v.get("use") or "미기재")} · 위치 {_e(v["location"])} · 인증 주장 {_e(v.get("cert_claimed") or "없음")}'
+                   f'<div style="color:var(--muted)" title="{_e(", ".join(miss))}">입력 대기 {len(here)}: {_e(" · ".join(here) or "없음")}'
+                   + (f' · 이 화면 밖 {len(away)}: {_e(" · ".join(away))}' if away else "") + '</div>'
                    + parcel_form(p) + "</div>")
     out.append(f'<h2 id="sync" style="font-size:14px">{_e(labels.ME_SECTIONS["sync"])}</h2>')
     lan = "켜짐(같은 Wi-Fi, 토큰 필요)" if config.BIND == config.LAN_BIND and config.LAN_TOKEN else "꺼짐(이 PC 에서만 — D-6)"
@@ -499,7 +513,7 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any], said: str = "") ->
         parts.append(f'<input name="planned_task" value="{_e(d.get("planned_task") or "")}" placeholder="계획 작업명" size="18">')
     day = d.get("observed_at") or d.get("planned_day") or d.get("target_date") or ""
     if k in ("parcel.field", "subject.field"):     # [§9] 밭 정보 값 · [2026-10-04] 농사 값(인증) — 날짜가 아니라 값이 보인다(고르는 말 그대로)
-        word = parcels.FIELD_WORDS.get(d.get("field")) or subjects.SUBJECT_FIELD_WORDS.get(d.get("field"), d.get("field"))
+        word = parcels.field_word(d.get("field"))
         parts.append(f'<span style="color:var(--muted)" title="{_e(d.get("field"))}">{_e(word)} → <b>{_e(d.get("value"))}</b></span> ')
     if k not in ("feedback.request", "parcel.field", "subject.field"):
         parts.append(f'<input name="day" value="{_e(day)}" placeholder="YYYY-MM-DD{" (필요)" if need else ""}" size="12">')
@@ -690,9 +704,17 @@ def thread_panel(s: dict[str, Any], today: date) -> str:
     inbox = media.list_inbox()
     if inbox:
         out.append(f'<div class="card"><b>반입 대기 파일 {len(inbox)}</b> — 촬영 시각이 없어 등록되지 않았다. <a href="/media">/media</a> 에서 날짜를 넣어 등록</div>')
-    miss = parcels.missing_inputs(parcels.by_id(s.get("parcel", "")))
-    if miss:
-        out.append(f'<div class="card"><b>필지 입력 대기 {len(miss)}</b> <span style="color:var(--muted)">{_e(", ".join(miss[:6]))}{" …" if len(miss) > 6 else ""}</span></div>')
+    p = parcels.by_id(s.get("parcel", "")) if s.get("parcel") else None
+    if p is None and s.get("parcel"):
+        # [검토 2026-10-13] 밭 정보에 없는 밭이면 「… 에서 넣습니다」 가 거짓이다(그 화면에 그 밭의 칸이 없다) — 없는 사실을 말한다
+        out.append(f'<div class="card">이 농사의 밭이 {_e(labels.ME_SECTIONS["parcel"])}에 없습니다 <span style="color:var(--muted)" title="{_e(s.get("parcel"))}">— 밭이 먼저 서야 칸이 생깁니다</span></div>')
+    here = parcels.missing_words(p, here=True) if p is not None else []
+    if here:
+        # [앞날 걷기 2026-10-13] 「필지 입력 대기 13 lat, lon, area_m2, use …」 — 물러난 말(필지)에 안쪽 키 · 어디서 넣는지도 없었다. 밭 정보 화면과 같은 말 · 같은 셈 · 자리는 정본에서.
+        # **그 화면에서 넣을 수 있는 것만** 센다(검토 2026-10-13 즉시 — 좌표 · 토양 검정 근거는 그 화면에 칸이 없는데 「… 에서 넣습니다」 에 들어 있었다)
+        keys = [k for k in parcels.missing_inputs(p) if k in parcels.input_fields()]
+        out.append(f'<div class="card"><b>{_e(labels.ME_SECTIONS["parcel"])} 입력 대기 {len(here)}</b> <span style="color:var(--muted)" title="{_e(", ".join(keys))}">'
+                   f'{_e(" · ".join(here[:6]))}{" …" if len(here) > 6 else ""} — {_e(labels.PLACES["parcel"])} 에서 넣습니다</span></div>')
     # [WO-ASK-01 §8 2026-10-03] 물은 것 — 묻기 원장(ingest.asks)을 그대로 보인다(축은 사람 말 · 정확한 축 이름은 title). 못 읽으면 이유 한 줄(U-21)
     asked, asked_why = asks.summary_rows(s["id"])
     if asked_why:
@@ -748,8 +770,31 @@ def new_main(error: str = "", form: dict[str, str] | None = None) -> str:
             f'<label>상태</label><select name="status">{st_opts}</select>'
             f'<label>기준점 — 파종·정식일 (재배 중일 때, YYYY-MM-DD)</label><input name="anchor" value="{_e(f.get("anchor", ""))}" placeholder="비우면 계획">'
             f'<label>인증 (유기 · 무농약 · 관행 — 없으면 비움)</label><input name="cert" value="{_e(f.get("cert", ""))}">'
-            f'<label>필지</label><input name="parcel" value="{_e(f.get("parcel") or subjects.default_parcel() or "")}" placeholder="필지 id(등록부)">'
-            '<div style="margin-top:14px"><button class="btn pri" type="submit">목록 만들기</button></div></form></div>')
+            + _parcel_pick(f.get("parcel") or "")
+            + '<div style="margin-top:14px"><button class="btn pri" type="submit">목록 만들기</button></div></form></div>')
+
+
+def _parcel_pick(cur: str) -> str:
+    """새 채팅의 밭 칸 — **고른다**(값은 등록부 id · 보이는 말은 밭을 부르는 말).
+    [검토 2026-10-13] 이 칸은 「필지」 라는 물러난 말로 등록부 id 를 **적게** 했는데, 밭 정보 화면은 이제 id 를 글로 안 보인다(title 에만) —
+    적을 값을 찾을 곳이 없어졌고, 보이는 이름을 적으면 없는 밭으로 농사가 섰다. 고르는 칸이면 둘 다 없다. 등록부를 못 읽으면 적는 칸으로(이유는 등록부 쪽 오류)."""
+    head = f'<label title="parcel">밭 — {_e(labels.ME_SECTIONS["parcel"])}에서 고릅니다</label>'
+    why = ""
+    try:
+        rows = parcels.load()
+        cur = cur or subjects.default_parcel() or ""     # [검토 2026-10-13 · 직렬 게이트] 기본값도 등록부를 읽는다 — 호출부에서 먼저 읽으면 이 가드가 닿기 전에 500 이다
+    except (OSError, ValueError) as e:
+        rows, why = [], str(e)
+    # [재검토 2026-10-13] 못 읽음과 비어 있음은 다른 사실이다 — 비어 있는데 「못 읽었습니다」 라고 했고, 못 읽을 때는 같은 상태로 500 이 나는 화면으로 보냈다
+    if why:
+        return head + f'<input name="parcel" value="{_e(cur)}" title="{_e(why)}" placeholder="밭 정보를 못 읽었습니다(이유는 마우스를 올리면 보입니다)">'
+    if not rows:
+        return head + f'<input name="parcel" value="{_e(cur)}" placeholder="밭 정보에 밭이 아직 없습니다">'
+    # [재검토 2026-10-13] 밭이 둘 이상이면 빈 칸을 먼저 둔다 — 아무것도 안 고른 목록은 브라우저가 **첫 밭을 보낸다**(대표값을 대신 고르는 꼴 ·
+    # subjects.add 의 「어느 밭인지 고릅니다」 가드가 닿지 못했다). required 로 고르기 전에는 안 보내진다 — 하나면 그 밭이 이미 골라져 있다
+    blank = "" if len(rows) == 1 else f'<option value=""{"" if cur else " selected"}>— 밭을 고릅니다</option>'
+    opts = "".join(f'<option value="{_e(p["id"])}" title="{_e(p["id"])}"{" selected" if p["id"] == cur else ""}>{_e(words.parcel_label(p["id"]))}</option>' for p in rows)
+    return head + f'<select name="parcel" required>{blank}{opts}</select>'
 
 
 def improve_main(today: date, message: str = "", error: str = "", cycle: dict[str, Any] | None = None, subject: str | None = None) -> str:
@@ -880,7 +925,7 @@ def handle_parcel_form(form: dict[str, str]) -> str:
     """
     pid = (form.get("id") or "").strip()
     if not pid:
-        raise parcels.ParcelError("필지 id 가 없다")
+        raise parcels.ParcelError("어느 밭의 정보인지 적혀 있지 않습니다 — 화면을 새로 열어 다시 넣어 주세요")
     keys = tuple(parcels.FIELD_CHOICES) + tuple(k for k, _ in parcels.FIELD_LABELS)
     vals = {k: (form.get(k) or "").strip() for k in keys}
     filled = {k: v for k, v in vals.items() if v}
@@ -893,7 +938,9 @@ def handle_parcel_form(form: dict[str, str]) -> str:
     opened = [words.opened(k, v) for k, v in filled.items() if words.opened(k, v)]
     tail = " · " + " ".join(opened) if opened else " · 지금 판단이 읽는 값은 없습니다(밭 정보에 남습니다)"
     names = ", ".join(parcels.FIELD_WORDS.get(k, k) for k in sorted(filled))
-    return f"{labels.ME_SECTIONS['parcel']}({pid}) 저장 — {names}{tail} · 입력 대기 {len(left)}"
+    # [앞날 걷기 2026-10-13] 저장 줄이 등록부 id(p001)를 냈다 — 밭을 부르는 말(짓는 작목)로 · 입력 대기도 사람 말의 수(위도 · 경도는 「위치」 하나)
+    # [검토 2026-10-13] 저장 줄의 셈은 **이 화면에서 넣을 수 있는 것**만(here=True) — 좌표 · 토양 검정 근거를 세면 다 채워도 「입력 대기 2」 가 남는다(옆 칸과 같은 처방)
+    return f"{labels.ME_SECTIONS['parcel']} 저장({words.parcel_label(pid)}) — {names}{tail} · 입력 대기 {len(parcels.missing_words(rec, here=True))}"
 
 
 def run_cycle(today: date, head: str) -> dict[str, Any]:

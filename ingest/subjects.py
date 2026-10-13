@@ -132,7 +132,8 @@ def add(crop: str, season: str, status: str = "계획", parcel: str | None = Non
         now: datetime | None = None) -> dict[str, Any]:
     parcel = (parcel or "").strip() or default_parcel()
     if not parcel:
-        raise SubjectError("필지를 지정한다 — 등록된 필지가 하나가 아니라 기본값을 두지 않는다(fallback 대표값 금지)")
+        # [검토 2026-10-13] 물러난 말(필지) · 개발 말(fallback) — 새 채팅 화면의 그 칸과 같은 말로
+        raise SubjectError("어느 밭인지 고릅니다 — 밭 정보의 밭이 하나가 아니라 대신 고르지 않습니다(대표값을 지어내지 않습니다)")
     # [발행자 실사용 2026-09-28] 새 채팅 폼의 기준점 '2026-09-30 '(끝 공백 — 휴대폰 자판·자동완성이 흔히 붙인다)이 "YYYY-MM-DD 여야 한다" 로 거부됐다.
     # 사람이 친 값의 양끝 공백은 여기 입구 한 곳에서 걷는다(폼·검사·다른 호출자 전부) — 값의 뜻은 안 바꾼다(빈 문자열은 None 그대로)
     anchor = (anchor or "").strip() or None

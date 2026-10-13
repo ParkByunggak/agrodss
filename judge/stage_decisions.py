@@ -702,7 +702,7 @@ def judge_forecast_citation(subject, today: date, forecast: list[dict[str, Any]]
         cit = {"source": src, "observed_at": issued, "resolution": res, "note": "기상청 단기예보 그대로 — 해석·권고 없음(경보는 위험 경보 몫 · D-21)"}
         # [발행자 2026-09-29 "이 날씨는 어느 지점을 말하는가"] 어느 자리의 예보인지를 줄에 싣는다 — 단기는 필지 좌표가 든 기상청 5km 격자 칸
         # [발행자 2026-09-29 "가독성이 떨어진다 — 시간과 날짜 단위로 줄바꿈"] 지평 머리 한 줄 + 날마다 한 줄. ' · ' 로 잇던 줄은 휴대폰에서 못 읽었다
-        parts.append(f"단기 — 기상청 단기예보 · 필지 자리 5km 예보 구역 · 3시간 단위 · 발표 {_issued(issued)}")   # '격자' 는 화면 낱말 표가 재배 달력으로 바꾼다 — 농가 말로
+        parts.append(f"단기 — 기상청 단기예보 · 밭 자리 5km 예보 구역 · 3시간 단위 · 발표 {_issued(issued)}")   # '격자' 는 화면 낱말 표가 재배 달력으로 바꾼다 — 농가 말로 · [2026-10-13] 물러난 말(필지) → 밭
         for x in days:                                                   # 날 한 줄 + 그 아래 3시간마다 한 줄(원천이 3시간 단위다 — 하루로 접지 않는다)
             parts.append(_fmt_forecast_day(x))
             parts += [_fmt_forecast_hour(h) for h in x["hours"]]

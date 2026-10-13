@@ -483,8 +483,8 @@ def pending_said(kinds: list[str]) -> str:
 
 
 def field_word(field: str) -> str:
-    """밭 정보 · 농사 정보 칸의 사람 말(「용도」 · 「배수」 · 「인증」) — 카드 머리와 같은 표."""
-    return parcels.FIELD_WORDS.get(field) or subjects.SUBJECT_FIELD_WORDS.get(field, field)
+    """밭 정보 · 농사 정보 칸의 사람 말(「용도」 · 「배수」 · 「인증」) — 정본은 parcels.field_word(채팅 쪽 호출 이름만 남긴다)."""
+    return parcels.field_word(field)
 
 
 def draft_name(draft: dict[str, Any]) -> str:

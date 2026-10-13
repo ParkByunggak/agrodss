@@ -22,6 +22,8 @@ from schema import records as sch      # 조사 정본(sch.josa) — 칸 이름 
 
 DECISION_ID = "risk_alert"
 DRAINAGE_NOTE_PREFIX = "배수"       # 배수 메모의 머리 — 칸 카드(stage_decisions._delegate_risk)가 과습 위험이 없는 칸에서 이 메모를 걷는다
+# [재검토 2026-10-13] 대장 페이지 ⓪ʷ 가 이 메모를 손으로 인용해 화면과 달랐다 — 이름을 두어 인용하는 쪽이 여기서 읽는다
+NO_DRAINAGE_NOTE = "배수 등급 없음 — 밭 정보(/me)에 배수를 적으면 과습 근거에 실린다"
 
 registry.register(registry.Decision(
     id=DECISION_ID,
@@ -253,7 +255,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
             inputs.append(AxisUse("soil_water", None, "farmer", "parcel", "관측"))      # 필지 고정값 — 날짜 없는 속성(관측 기록이 생기면 그것이 보조)
             notes.append(f"배수 {drainage} {sch.josa(drainage, '는')} 밭 정보의 고정값 — 근거에 싣기만 한다(나쁨이면 경보로 올릴지는 발행자 규칙 대기 · 지어내지 않는다)")
         else:
-            notes.append("배수 등급 없음 — 밭 정보(/me)에 배수를 적으면 과습 근거에 실린다")
+            notes.append(NO_DRAINAGE_NOTE)
     order = {"경보": 0, "주의": 1, "예고": 2}
     alerts.sort(key=lambda a: order.get(a["level"], 9))
     return Envelope(

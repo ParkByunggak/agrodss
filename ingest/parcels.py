@@ -43,7 +43,15 @@ def legacy_path() -> Path:
 def _read(p: Path) -> list[dict[str, Any]]:
     if not p.exists():
         return []
-    return list(json.loads(p.read_text(encoding="utf-8")).get("parcels", []))
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    # [검토 2026-10-13] JSON 은 맞는데 **모양**이 틀린 파일(「[]」 · {"parcels": null})이 AttributeError · TypeError 로 샜다 — 사용자 탭이 모든 화면(500 화면까지)에서
+    # 등록부를 세게 되자 그것 하나로 **모든 화면이 응답 없이** 끊겼다. 읽는 자리 하나에서 이유를 단 ValueError 로 — 부르는 쪽은 한 가지만 받는다
+    # [재검토 2026-10-13] id 가 글이 아닌 줄(「["p001"]」)도 같은 꼴로 샜다 — 등록부를 합치는 자리(load)에서 TypeError · 모든 화면이 응답 없이 끊김. id 까지 본다.
+    # 메시지는 화면 오류 줄에 그대로 나간다 — 안쪽 키(parcels)는 빼고 **고칠 파일 이름**은 둔다(발행자가 그 파일을 고친다 · judge.need.DEV_TOKENS 와 같은 결정)
+    rows = doc.get("parcels", []) if isinstance(doc, dict) else None
+    if not isinstance(rows, list) or not all(isinstance(r, dict) and isinstance(r.get("id"), str) and r.get("id") for r in rows):
+        raise ValueError(f"밭 정보를 읽지 못했습니다 — {p.name} 의 모양이 다릅니다(밭마다 글자로 된 번호가 있는 목록이어야 합니다)")
+    return list(rows)
 
 
 def _backfill_local(lp: Path) -> Path:
@@ -170,11 +178,12 @@ FIELD_CHOICES: dict[str, tuple[str, ...]] = {
     "night_light": ("없음", "약함", "강함"),
 }
 FIELD_LABELS: tuple[tuple[str, str], ...] = (        # 고르는 것이 아니라 적는 값 — 순서가 화면 순서다
-    ("area_m2", "면적(㎡ — 지적 면적이나 걸음 측정)"),
-    ("use", "용도(자가 · 판매 · 몰 납품 · 종구 생산)"),      # 종구 — [발행자 전달 2026-10-03] 이 말이 들어가면 재배 달력이 종구 기준으로 읽힌다(grid.schema.use_key)
-    ("microclimate", "미기상 3문항 — 주변 개방도 · 안개 빈도 · 바람길(본 대로 짧게)"),
-    ("seed_source", "종구 출처"),
-    ("cert_legal", "인증 근거(인증서 번호 · 기관)"),
+    # [검토 2026-10-13] 둘째 칸은 **덧말만** — 칸 이름은 FIELD_WORDS 하나(전에는 여기에 이름을 또 적어 두 벌이었다 · 화면이 「{이름}{덧말}」 로 잇는다)
+    ("area_m2", "(㎡ — 지적 면적이나 걸음 측정)"),
+    ("use", "(자가 · 판매 · 몰 납품 · 종구 생산)"),      # 종구 — [발행자 전달 2026-10-03] 이 말이 들어가면 재배 달력이 종구 기준으로 읽힌다(grid.schema.use_key)
+    ("microclimate", " 3문항 — 주변 개방도 · 안개 빈도 · 바람길(본 대로 짧게)"),
+    ("seed_source", ""),
+    ("cert_legal", "(인증서 번호 · 기관)"),
 )
 NUMERIC_FIELDS = ("area_m2",)
 # [발행자 실사용 2026-10-04 "이 쪽파는 종구생산을 위한 목적이다" → 본 것] 용도는 자유 글이지만 **채팅으로 들어오는 용도 선언**은 이 네 말 중 하나로 읽는다(라벨의 어휘와
@@ -215,7 +224,31 @@ FIELD_WORDS: dict[str, str] = {
     "environment": "재배환경", "soil_texture": "토성", "slope": "경사", "drainage": "배수", "irrigation": "관수 시설",
     "night_light": "야간 조명", "microclimate": "미기상", "area_m2": "면적", "use": "용도", "seed_source": "종구 출처",
     "cert_legal": "인증 근거",
+    # [앞날 걷기 2026-10-13] 입력 대기에는 있는데 말이 없던 셋 — 화면이 「lat, lon, …, soil_exam_ref」 를 그대로 냈다. 위도 · 경도는 사람에게 한 가지다 —
+    # 「위치」 가 아니라 「좌표」: 같은 카드의 「위치 있음」(주소 · 필지번호 · 좌표 중 하나)과 같은 말이면 「위치 있음 · 입력 대기 위치」 가 된다(검토 2026-10-13)
+    "lat": "좌표", "lon": "좌표", "soil_exam_ref": "토양 검정 근거",
 }
+
+
+def field_word(key: str) -> str:
+    """밭 정보 · 농사 정보 칸의 사람 말 — **한 자리**. [검토 2026-10-13] 같은 두 표 찾기(FIELD_WORDS → SUBJECT_FIELD_WORDS)가 다섯 군데 손으로 적혀 있었다."""
+    if key in FIELD_WORDS:
+        return FIELD_WORDS[key]
+    from ingest import subjects            # 같은 층 늦은 import — subjects 가 이 모듈을 든다
+    return subjects.SUBJECT_FIELD_WORDS.get(key, key)
+
+
+def missing_words(parcel: dict[str, Any] | None, here: bool | None = None) -> list[str]:
+    """입력 대기를 **사람 말로** — 안쪽 키 대신 FIELD_WORDS(같은 말은 한 번 — 위도 · 경도는 「좌표」 하나).
+    [앞날 걷기 2026-10-13] 밭 정보 화면 · 채팅 옆 칸 둘이 `missing_inputs` 의 키를 그대로 냈다(「입력 대기 13: lat, lon, area_m2, use …」) —
+    답과 대장 페이지는 같은 값을 「용도」 · 「배수」 로 부르는데 사람이 손대는 화면만 다른 말이었다. 정확한 키는 화면이 title 에 남긴다.
+    `here` — True 면 밭 정보 화면에서 **넣을 수 있는** 것만(input_fields) · False 면 그 밖(좌표 · 토양 검정 근거 — 화면에 칸이 없다) · None 이면 전부.
+    [검토 2026-10-13 즉시] 옆 칸이 「… 에서 넣습니다」 라며 좌표 · 토양 검정 근거까지 셌다 — 그 둘은 그 화면에 칸이 없다(다 채워도 「입력 대기 2」 가 남았다)."""
+    keys = missing_inputs(parcel)
+    if here is not None:
+        form = set(input_fields())
+        keys = [k for k in keys if (k in form) == here]
+    return list(dict.fromkeys(FIELD_WORDS.get(k, k) for k in keys))
 
 # [G1 전수 2026-09-21 — 처방 직후 그 자리에서 셌다] 입력 자리를 만들면서 **그 값을 읽는 쪽**을 전수로 셌다. 입력 대기 필드 중
 # 판정·수집이 실제로 값을 읽는 것은 **둘뿐**이었다. 나머지는 등록부에 쌓이기만 한다 — 값이 흐르는데 소비자가 없는 G1 형태.
@@ -287,17 +320,20 @@ def check_vocab(key: str, value: Any) -> Any:
     [§7.5 관문의 입력] 어휘 검사가 fertilizer 쪽에만 있었다(재배환경). 화면이 생기면서 두 번째 입력 경로가 열리므로
     검사를 **값이 등록부에 닿는 자리**(set_fields)로 내린다 — 경로가 늘어도 같은 관문을 지난다.
     """
+    # [검토 2026-10-13] 밭 정보 화면의 오류 줄이 안쪽 키(area_m2 · drainage)를 냈다 — 칸 이름은 화면과 같은 말로.
+    # [재검토] 맨 낱말 뒤 조사는 붙인다(「면적은」) — 띄우는 것은 인용(「'수확' 이」) 뒤뿐이다
+    w = FIELD_WORDS.get(key, key)
     if key in NUMERIC_FIELDS:
         try:
             n = float(value)
         except (TypeError, ValueError):
-            raise ParcelError(f"{key} 는 숫자여야 한다: {value!r}") from None
+            raise ParcelError(f"{w}{sch.josa(w, '은')} 숫자로 적습니다: {value!r}") from None
         if n <= 0:
-            raise ParcelError(f"{key} 는 0 보다 커야 한다: {value!r}")
+            raise ParcelError(f"{w}{sch.josa(w, '은')} 0보다 커야 합니다: {value!r}")
         return int(n) if n.is_integer() else n
     opts = FIELD_CHOICES.get(key)
     if opts and value not in opts:
-        raise ParcelError(f"{key} 어휘 밖: {value!r} — {' | '.join(opts)}")
+        raise ParcelError(f"{w}에는 이 가운데 하나를 고릅니다: {' · '.join(opts)} (받은 값 {value!r})")
     return value
 
 
@@ -307,7 +343,7 @@ def set_fields(pid: str, **fields: Any) -> dict[str, Any]:
     overwrite = bool(fields.pop("overwrite", False))
     rec = by_id(pid)                                          # 씨앗 + 덮개가 합쳐진 현재 값
     if rec is None:
-        raise ParcelError(f"없는 필지: {pid}")
+        raise ParcelError(f"밭 정보에 없는 밭입니다(id {pid}) — 화면을 새로 열어 보세요")      # [검토 2026-10-13] 물러난 말(필지)
     allowed = sch.KINDS["parcel"].fields
     lp = ensure_local()
     data = json.loads(lp.read_text(encoding="utf-8"))
@@ -318,7 +354,7 @@ def set_fields(pid: str, **fields: Any) -> dict[str, Any]:
         rows.append(over)
     for k, v in fields.items():
         if k not in allowed:
-            raise ParcelError(f"필지 등록부에 없는 필드: {k}")
+            raise ParcelError(f"밭 정보에 없는 칸: {k}")
         if v is None:
             over[k] = None                                    # 덮개의 None = 씨앗 값도 가린다(키 삭제와 같은 뜻)
         elif k not in rec or rec.get(k) is None or overwrite:

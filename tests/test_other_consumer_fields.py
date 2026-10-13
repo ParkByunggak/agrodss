@@ -111,7 +111,7 @@ def test_the_line_after_saving_is_not_empty_for_such_a_field():
     who, cond = parcels.FIELD_OTHER_CONSUMERS["cert_legal"]
     # [주입 C] 「cond in said」 만 보면 **빈 조건이 통과한다**(빈 문자열은 어디에나 있다 — 값 대조가 공허한 것과 같은 축) → 조건이 있는지부터 본다
     assert cond.strip() and who.strip(), (who, cond)
-    assert said and who in said and cond in said and "판정은 이 값을 읽지 않습니다" in said, said
+    assert said and who in said and cond in said and "판단은 이 값을 읽지 않습니다" in said, said   # [2026-10-13] 표지 셋이 같은 말(판정 → 판단)
     assert re.search(r"\([^)]{6,}\)\.$", said), said                          # 조건이 괄호로 실려 있다(빈 괄호가 아니다)
     assert words.plain(said) == said and not [w for w in JARGON if w in said]
     assert words.opened("cert_legal", "제0000호", pending=True).startswith("넣으면")

@@ -84,9 +84,9 @@ def test_parcel_set_fields_validates_and_is_isolated():
     assert parcels.set_fields("p001", slope="완경사")["slope"] == "평지"                             # 있는 값은 덮지 않는다
     assert parcels.set_fields("p001", slope="완경사", overwrite=True)["slope"] == "완경사"            # 발행자 답은 덮는다
     assert "slope" not in parcels.set_fields("p001", slope=None)                                    # None 은 키 삭제
-    with pytest.raises(parcels.ParcelError, match="없는 필드"):
+    with pytest.raises(parcels.ParcelError, match="없는 칸"):                                      # [2026-10-13] 물러난 말(필지 · 필드) 대신 화면 말
         parcels.set_fields("p001", stock=3)
-    with pytest.raises(parcels.ParcelError, match="없는 필지"):
+    with pytest.raises(parcels.ParcelError, match="밭 정보에 없는 밭"):
         parcels.set_fields("p999", slope="평지")
     assert parcels.parcels_path().resolve() != parcels.PARCELS_PATH.resolve()                       # 운영 등록부 무변경(conftest 사본)
     assert before.get("environment") == "노지"                                                      # 발행자 답 2026-09-19 — 등록부 정본
