@@ -297,7 +297,11 @@ TOPIC: tuple[tuple[str, tuple[str, ...]], ...] = (
     # '전망' 홀로는 안 된다: "수확 전망" 은 수확 시기, "출하 전망" 은 출하가 맞다 → 기간·요소가 붙은 꼴만
     ("forecast_citation", ("날씨", "기온", "예보", "기상", "비 올까", "비 오나", "비 오려나", "비 올 확률", "몇 도", "추울까", "더울까",
                            "장기 전망", "중기 전망", "달 전망", "계절 전망", "봄 전망", "여름 전망", "가을 전망", "겨울 전망", "강수량", "강수 확률", "강수 전망")),
-    ("top_dressing_1", ("웃거름", "추비")),
+    # [2026-10-13] 회차를 말한 물음은 그 회차로 · 말하지 않은 물음은 회차 묶음(stage_decisions.ROUNDS)으로 — 답할 때 오늘 때가 열린 회차를 고른다.
+    # 전에는 둘 다 1회로 가서 2회 때(10-04~10-14) 안에 「웃거름 때가 지났습니다 — 마감 09-24」 가 나갔다(회차 이름은 재배 달력 작업 이름 그대로)
+    ("top_dressing_2", ("웃거름 2회", "웃거름2회", "2회 웃거름", "추비 2회", "2회 추비")),
+    ("top_dressing_1", ("웃거름 1회", "웃거름1회", "1회 웃거름", "추비 1회", "1회 추비")),
+    ("top_dressing", ("웃거름", "추비")),
     ("base_fertilization", ("밑거름", "기비")),
     ("replant", ("보식", "결주", "안 난", "안 났", "듬성")),
     ("sowing_window", ("파종", "심을 때", "심어도", "언제 심")),
@@ -1124,10 +1128,17 @@ def answer_with_asks(subject: dict[str, Any], text: str, today: date,
     if not did:
         return f"{dont_know}. 이 물음에 답하는 판단이 아직 등록되지 않았습니다. 지어내지 않습니다. {can}.", []
     envs = judge_run.judgments_for(subject["id"], today=today)
+    from judge import stage_decisions as _sd
+    rounded = did in _sd.ROUNDS
+    if rounded:                               # 회차를 말하지 않은 물음 — 오늘 때가 열린 회차(봉투가 가른 '지났다' 를 읽는다)
+        did = _sd.round_now(did, envs)
     e = next((x for x in envs if x.decision_id == did), None)
     if e is None:
         return f"{_w.said('판단 불가(데이터)')} — 이 농사는 아직 판단을 낼 재료(심은 날 · 재배 달력)가 없습니다. {can}.", []     # [2026-10-04 전수] 종류 이름도 사람 말 정본으로
-    out = (summarize_envelope(e) + use_gap_line(e) + pending_value_line(subject, did, skip=skip_pending)
+    said = summarize_envelope(e)
+    if rounded and _w.decision(did) not in said:          # 고른 회차의 이름 — 본문이 이미 싣고 있으면(「웃거름 1회 때가 지났습니다」) 또 말하지 않는다
+        said += f" · {_w.round_said(_w.decision(did))}"
+    out = (said + use_gap_line(e) + pending_value_line(subject, did, skip=skip_pending)
            + unconfirmed_line(subject["id"], did) + season_over_line(subject, today))
     return out, asked_in(e)
 

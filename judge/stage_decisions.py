@@ -179,6 +179,26 @@ IDS = ("sowing_window", "base_fertilization", "replant", "pest_alert", "top_dres
        "forecast_citation", "drought_alert", "symptom_triage")
 UNDECLARED = ("forecast_citation", "drought_alert", "symptom_triage")   # 격자 칸 decisions 목록에 안 적는 결정 — 선언은 규칙 키 자체(drought_rules · symptom_rules) 또는 없음(날씨 인용)
 
+# [앞날 걷기 2026-10-13 · 회차를 말하지 않은 물음] 「웃거름 언제 줘요」 가 웃거름 **1회**에 묶여 2회 때(10-04~10-14) 안에서 「웃거름 때가 지났습니다 — 마감 09-24」
+# 를 냈다. 같은 날 카드·/judge 는 2회 때가 열려 있다고 말했다(한 사실을 두 화면이 반대로). 2026-09-29 병·벌레 물음(칸 비특정 → risk_alert)과 같은 형태인데
+# 그때 처방이 **병·벌레 한 곳에만** 닿았다(§7.5 지점). 전수: IDS 가운데 한 작업이 두 칸에 **회차로** 나뉜 것은 웃거름 하나다(나머지는 한 번뿐 · 위임형).
+# 회차를 말하지 않은 물음은 **오늘 때가 열렸거나 다음에 열릴 회차**로 간다. 그 '지났다' 는 봉투가 이미 가른 것을 읽는다 — 마감 셈을 두 벌 두지 않는다.
+ROUNDS: dict[str, tuple[str, ...]] = {"top_dressing": ("top_dressing_1", "top_dressing_2")}
+
+
+def round_now(family: str, envs) -> str:
+    """회차 묶음 → 지금 답할 회차 하나. 앞에서부터 **때가 안 지난**(해당 없음이 아닌) 첫 회차 · 다 지났으면 마감이 있는 마지막 회차.
+
+    마감이 없는 '해당 없음' 은 격자가 그 회차를 **선언하지 않은** 것이다(지난 것이 아니다) — 그 회차로는 가지 않는다.
+    아무것도 못 고르면 첫 회차(전과 같은 길 — 그 봉투가 무엇이 비었는지 말한다)."""
+    ids = ROUNDS[family]
+    by = {e.decision_id: e for e in envs if e.decision_id in ids}
+    open_ = [d for d in ids if d in by and by[d].kind != "해당 없음"]
+    if open_:
+        return open_[0]
+    past = [d for d in ids if d in by and (by[d].result or {}).get("deadline")]
+    return past[-1] if past else ids[0]
+
 
 # ── 판정 ─────────────────────────────────────────────────────────────────────────
 def _base(subject: dict[str, Any], did: str, today: date):
@@ -402,7 +422,10 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
     work_date, dl = (a + timedelta(days=wd)).isoformat(), (a + timedelta(days=deadline)).isoformat()
     # [B5] 판별 순서(I-1 §3): 해당하는가 → 지식 → 데이터. 창 지남을 먼저 본다 — 전에는 지식 미비가 먼저라 시즌 내내 그 상태로 남았다
     if day > deadline:
-        return Envelope("해당 없음", did, sid, as_of, result={"why": f"마감({dl}){sch.josa(dl, '을')} 지났다", "summary": f"웃거름 때가 지났습니다 — 마감 {dl}"})
+        # [2026-10-13 반대형 — 조건 탈락] 요약이 「웃거름 때가 지났습니다」 로 **회차를 뗐다** — 1회가 지난 것을 웃거름 전부가 지난 것으로 읽힌다.
+        # 회차 이름(결정 이름)을 함께 싣는다 · 마감은 기계 칸에도 둔다(회차 고르기 `round_now` 가 '지났다' 와 '선언 안 됨' 을 그것으로 가른다)
+        return Envelope("해당 없음", did, sid, as_of, result={"why": f"마감({dl}){sch.josa(dl, '을')} 지났다", "deadline": dl,
+                                                            "summary": f"{d.name} 때가 지났습니다 — 마감 {dl}"})
     if did == "top_dressing_2":
         return Envelope("판단 불가(지식)", did, sid, as_of,
                         result={"why": "'필요 시' 의 필요 여부 판정 규칙이 격자에 미채움(생육 관찰 기준 없음)", "work_date": work_date, "deadline": dl,

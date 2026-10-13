@@ -58,7 +58,7 @@ def test_classify_rules_are_proposals_only():
     # 발행자 두 번째 발화(2026-09-19 라이브) — 물음표 없는 요청형이 분류 안 됨이었다. 요청형은 질문이고, "관리해야 할 항목"은 계획 대 실제다
     q = "쪽파를 현재 관리해야 할 항목들을 알려줘요"
     assert chat.classify(q, TODAY)[0]["kind"] == "question" and chat.topic_of(q) == "plan_vs_actual"
-    assert chat.classify("웃거름은 언제 주나요", TODAY)[0]["kind"] == "question" and chat.topic_of("웃거름은 언제 주나요") == "top_dressing_1"
+    assert chat.classify("웃거름은 언제 주나요", TODAY)[0]["kind"] == "question" and chat.topic_of("웃거름은 언제 주나요") == "top_dressing"   # 회차 묶음(2026-10-13)
     assert chat.classify("9월 25일에 웃거름 해야 할 것 같다", TODAY)[0]["kind"] == "plan.farmer"   # 요청형 확장이 계획을 삼키지 않는다
     # 발행자 2026-09-19 "질문을 분석하고 그 성격을 분류해서 내부 로직으로" — 서술문은 사람에게 넘기지 않고 관찰 메모로 제안한다(원문 그대로)
     d = chat.classify("날씨가 좋다", TODAY)[0]

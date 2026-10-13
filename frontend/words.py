@@ -152,6 +152,8 @@ def decision(decision_id: str) -> str:
     if decision_id in DECISION_SAID:
         return DECISION_SAID[decision_id]
     from judge import registry, stage_decisions  # noqa: F401 — M-10 등록분은 등록부 이름(stage_decisions 가 적재 때 등록한다) — 함수 안에서(모듈 수준이면 4층이 3층을 든다)
+    if decision_id in stage_decisions.ROUNDS:     # [2026-10-13] 회차 묶음(판단이 아니라 경로) — 이름은 회차 이름에서 짓는다(자기 점검의 경로 칸)
+        return " · ".join(decision(x) for x in stage_decisions.ROUNDS[decision_id]) + " 가운데 오늘 때인 것"
     d = registry.all_decisions().get(decision_id)
     return d.name if d is not None else decision_id
 
@@ -221,7 +223,16 @@ def citation_said(stage: str, groups: list[dict]) -> str:
             f" · 목록은 왼쪽 메뉴 「{_labels.label('/judge')}」 에")
 
 
-USE_GAP_WHAT = {"risk_alert": "위험", "plan_vs_actual": "할 일"}      # 그 칸에서 **안 낸 것** — 판정마다 다르다(검사가 전수를 본다: 빈칸을 내는 판정이 늘면 여기도 는다)
+def round_said(name: str) -> str:
+    """회차를 말하지 않은 물음(「웃거름 언제」)에 **어느 회차로 답했는지** 한 줄.
+
+    [앞날 걷기 2026-10-13] 경로가 날짜마다 다른 회차를 고르게 되자(때가 안 지난 첫 회차) 답 본문이 회차 이름을 안 싣는 때가 생겼다 —
+    2회 봉투의 줄은 「줄지 말지 가르는 기준이 아직 없습니다 — 때 …」 뿐이다. 카드는 머리에 이름이 있지만 답에는 머리가 없다.
+    이름이 없으면 그 때가 어느 회차의 것인지 모른다(1회가 지난 것을 웃거름 전부가 지난 것으로 읽던 결함의 거울)."""
+    return f"이 답은 「{name}」 의 것입니다 — 회차를 말씀하지 않으면 때가 안 지난 첫 회차로 답합니다"
+
+
+USE_GAP_WHAT ={"risk_alert": "위험", "plan_vs_actual": "할 일"}      # 그 칸에서 **안 낸 것** — 판정마다 다르다(검사가 전수를 본다: 빈칸을 내는 판정이 늘면 여기도 는다)
 
 
 def use_gap_said(use: str, stages: list[str], did: str) -> str:

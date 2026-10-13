@@ -15,7 +15,8 @@ TODAY = date(2026, 9, 19)
 CORPUS = [
     # 질문 — 물음표 없음
     ("지금 뭘 해야 하죠", "question", "plan_vs_actual"),
-    ("웃거름 언제 줘야 하는지 알려주세요", "question", "top_dressing_1"),
+    # [2026-10-13] 회차를 말하지 않은 웃거름 물음은 회차 묶음으로(답할 때 때가 안 지난 회차를 고른다) — 전에는 1회에 묶여 2회 때 안에 「때가 지났습니다」 가 나갔다
+    ("웃거름 언제 줘야 하는지 알려주세요", "question", "top_dressing"),
     ("수확은 언제쯤인가요", "question", "harvest_timing"),
     ("서리 오면 어떻게 하죠", "question", "risk_alert"),
     ("이번 주 할 일 알려줘", "question", "plan_vs_actual"),
@@ -72,7 +73,7 @@ CORPUS = [
     ("잎이 마르지 않게 물 줬다", "event", None),
     ("벌레가 안 보인다", "observation.note", None),
     ("내일 웃거름 주지 않을 예정", "plan.farmer", None),
-    ("웃거름 안 줘도 되나요", "question", "top_dressing_1"),
+    ("웃거름 안 줘도 되나요", "question", "top_dressing"),
     # 피해 어휘 + 부정 = 피해 없음 관찰 — §7.5 처방 직후 전수(2026-09-20): 사건 부정을 고친 직후 같은 형태를 세니 13문장 중 7건이 피해 사건이었다
     ("서리에 안 얼었다", "observation.note", None),
     ("서리 피해 없었다", "observation.note", None),
@@ -123,8 +124,8 @@ CORPUS = [
     ("9월 8일에 트랩 확인했습니다", "event", None),
     # [발행자 2026-09-21 지시의 다음 층] 종류를 **정하기는 하는데 틀리게** 정하던 자리 — 물음표 없는 농가 물음 15 중 8이
     # 관찰 메모로 떨어졌다(물음이 원장에 관찰로 쌓이고 답은 안 나온다). 간접 의문 어미(-는지 · -은지 · -ㄴ지 · -을지)를 본다.
-    ("웃거름 지금 줘도 되는지", "question", "top_dressing_1"),
-    ("지금 웃거름 시기 맞는지", "question", "top_dressing_1"),
+    ("웃거름 지금 줘도 되는지", "question", "top_dressing"),
+    ("지금 웃거름 시기 맞는지", "question", "top_dressing"),
     ("벌레 약 쳐야 하는지", "question", "risk_alert"),          # [2026-09-29] 같은 이유
     ("고랑 물 빠짐 괜찮은지", "question", "drainage_alert"),
     ("지금 상태 어떤지", "question", None),

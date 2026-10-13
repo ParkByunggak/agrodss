@@ -184,6 +184,16 @@ def check_alerts(s: Sheet) -> None:
     s.check(bool(pairs) and all(t and f and t in yak and f in yak for t, f in pairs) and "/judge" not in yak and "효능 보증은 아닙니다" in yak,
             "자재 인용 답이 인용한 계열과 그 작업을 말한다(주소가 아니라 메뉴 이름 · 보증 아님은 남는다)",
             f"{' · '.join(f'{t}: {f}' for t, f in pairs) or '없음'}")
+    # [앞날 걷기 2026-10-13] 「웃거름 언제 줘요」 가 1회에 묶여 2회 때 안에서 「웃거름 때가 지났습니다 — 마감 09-24」 를 냈다 — 회차를 고르고 그 이름을 말하는지
+    from judge import registry, stage_decisions as SD
+    w2 = next(e for e in judge_run.judgments_for(SID, today=anchor + timedelta(days=40)) if e.decision_id == "top_dressing_2").result
+    in2 = _chat.answer(sub, "웃거름 언제 줘요", date.fromisoformat(w2["deadline"]) - timedelta(days=1))
+    s.check("때가 지났습니다" not in in2 and f"{w2['work_date']}~{w2['deadline']}" in in2 and f"「{words.decision('top_dressing_2')}」" in in2,
+            "회차를 말하지 않은 웃거름 물음은 때가 열린 회차로 답하고 그 이름을 말한다",
+            f"2회 때 {w2['work_date']}~{w2['deadline']} · 하루 전 답에 {'지났다 있음' if '때가 지났습니다' in in2 else '지났다 없음'}")
+    after = _chat.answer(sub, "웃거름 언제 줘요", date.fromisoformat(w2["deadline"]) + timedelta(days=1))
+    s.check(f"{registry.get('top_dressing_2').name} 때가 지났습니다 — 마감 {w2['deadline']}" in after and SD.ROUNDS,
+            "다 지난 뒤에는 마지막 회차와 그 마감을 말한다(지난 줄이 회차를 싣는다)", after[:90])
     # [둘째 작목 걷기 2026-10-07] 「지금 답할 수 있는 것」 은 손으로 적던 넷이었고 실제로는 다섯이 선다 — 세어서 말하는지 라이브로 본다
     stands = [e.decision_id for e in judge_run.judgments_for(SID, today=T) if e.kind in _chat.STANDS]
     line = _chat.can_say_line(sub, T)
@@ -299,8 +309,29 @@ def check_screens(s: Sheet) -> None:
         srv.server_close()
 
 
+def check_ledger_page(s: Sheet) -> None:
+    """[앞날 걷기 2026-10-13] 대장 페이지가 발행자의 한 수를 「「밭 정보 → 종구 생산」 카드 → '일지에 넣기'」 로 적었다 — 화면 카드는 「용도 → 종구 생산」 · 단추 「밭 정보에 넣기」.
+    채팅으로 용도 카드를 **실제로 세워** 그 카드의 글자와 페이지의 글자를 대조한다(원장은 tmp)."""
+    import importlib
+    from frontend import chat_pages
+    from ingest import chat
+    page = importlib.import_module("scripts.build_ledger_page")
+    m, _ = chat.send(SID, "종구용이다", today=T, now=NOW)
+    hit = [(i, d) for i, d in enumerate(m["drafts"]) if d["kind"] == "parcel.field" and d.get("field") == "use"]
+    if not hit:
+        s.say(NA, "대장 페이지의 용도 카드 안내가 화면 카드와 같다", "용도 카드가 안 섰다 — 조건 못 세움")
+        return
+    i, d = hit[0]
+    card = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", chat_pages._draft_html(m, i, d)))
+    want = f"「{page._USE['head']}」 카드에서 '{page._USE['button']}'"
+    zs = next(h + b for h, b in page.NEXT_PUBLISHER if h.startswith("⓪ˢ"))
+    s.check(page._USE["head"] in card and page._USE["button"] in card and want in page.BEST["do"]["what"] and want in zs,
+            "대장 페이지의 용도 카드 안내(머리 · 단추)가 채팅 화면의 그 카드와 같다",
+            f"페이지 {want} · 화면 카드 「{card[max(0, card.find(page._USE['head'])):][:len(page._USE['head']) + len(page._USE['button']) + 2].strip()}」")
+
+
 GROUPS = (("분류", check_classification), ("사람 글", check_people_words), ("소비자", check_consumers),
-          ("경보", check_alerts), ("묻기", check_asking), ("화면", check_screens))
+          ("경보", check_alerts), ("묻기", check_asking), ("화면", check_screens), ("대장", check_ledger_page))
 
 
 def run(http_too: bool = True) -> Sheet:

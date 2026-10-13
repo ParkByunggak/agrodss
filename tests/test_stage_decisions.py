@@ -122,7 +122,7 @@ def test_ship_or_store_with_target_date_for_supplying_subject():
 def test_run_emits_twelve_envelopes_and_chat_routes_specific_questions():
     envs = judge_run.judgments_for(SID, today=T25)
     assert len(envs) == 4 + len(SD.IDS) and {e.decision_id for e in envs} >= set(SD.IDS)     # 봉투 수 = 첫해 4 + 등록부(리터럴을 박지 않는다 — D-20 에서 13 이 깨졌다)
-    assert chat.topic_of("웃거름 줘야 하나?") == "top_dressing_1"
+    assert chat.topic_of("웃거름 줘야 하나?") == "top_dressing"                # [2026-10-13] 회차 묶음 — 25일째는 1회 때라 아래 답은 1회 봉투 그대로
     assert chat.topic_of("보식해야 하나?") == "replant"
     assert chat.topic_of("출하할까 저장할까?") == "ship_or_store"
     assert chat.topic_of("벌레 걱정되는데 괜찮나?") == "risk_alert"          # [2026-09-29] 병·벌레 물음은 칸 비특정 — 오늘 칸 + 다음 칸 위험 전부(pest_alert 는 칸 3 카드일 뿐)
