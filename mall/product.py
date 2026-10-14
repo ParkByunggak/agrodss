@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from grid import schema as grid_schema
+from grid import capture as grid_capture, schema as grid_schema
 from ingest import media, parcels, subjects
 from judge import run as judge_run
 from schema import records as sch
@@ -46,11 +46,18 @@ def capture_timeline(subject: dict[str, Any], videos: list[dict[str, Any]], toda
     out = []
     for s in unit.get("stages", []):
         cap = s.get("capture")
-        if not isinstance(cap, dict) or not cap.get("shoot"):
+        gap = grid_schema.use_gap(unit, s, grid_capture.CAPTURE_KEYS)
+        if not gap and (not isinstance(cap, dict) or not cap.get("shoot")):
             continue
         w = s["window"]
         start, end = a + timedelta(days=w["from_day"]), a + timedelta(days=w["to_day"])
         clips = [v for v in videos if start.isoformat() <= (v.get("observed_at") or "")[:10] <= end.isoformat()]
+        if gap:
+            # [앞날 걷기 2026-10-14 W-02] 용도 기준이 없는 칸 — 잎 수확 장면과 그 기간을 소비자에게 내지 않는다. 조용히 빼면 「연속성이 상품」 인 시계열에 구멍이
+            # 말없이 난다 — 기준을 기다린다는 줄로 선다(문장은 4층 mall_main · words). 그 사이 찍힌 것은 사실이라 달력 칸 경계(오늘 칸을 정하는 그 경계)로 붙인다
+            out.append({"stage": f"{s['order']}. {s['name']}", "scene": "", "window": "", "state": GAP_STATE, "use_gap_use": unit.get("_use"),
+                        "clips": [_clip(v) for v in clips]})
+            continue
         if clips:
             state = "촬영됨"
         elif today < start:
@@ -60,10 +67,17 @@ def capture_timeline(subject: dict[str, Any], videos: list[dict[str, Any]], toda
         else:
             state = "미촬영(창 지남)"
         out.append({"stage": f"{s['order']}. {s['name']}", "scene": cap.get("scene", ""), "window": f"{start} ~ {end}", "state": state,
-                    "clips": [{"id": v.get("id"), "kind": "사진" if v.get("kind") == "observation.image" else "영상",
-                               "observed_at": v.get("observed_at"), "duration_sec": v.get("duration_sec"),
-                               "width": v.get("width"), "height": v.get("height"), "note": v.get("note", "")} for v in clips]})
+                    "clips": [_clip(v) for v in clips]})
     return out
+
+
+GAP_STATE = "촬영 기준 대기"       # 용도 기준이 그 칸에 아직 없다 — 찍는지 · 무엇을 찍는지 모른다(촬영 예정도 미촬영도 아니다)
+
+
+def _clip(v: dict[str, Any]) -> dict[str, Any]:
+    return {"id": v.get("id"), "kind": "사진" if v.get("kind") == "observation.image" else "영상",
+            "observed_at": v.get("observed_at"), "duration_sec": v.get("duration_sec"),
+            "width": v.get("width"), "height": v.get("height"), "note": v.get("note", "")}
 
 
 def visible_judgments(envs: list[Any]) -> list[dict[str, Any]]:

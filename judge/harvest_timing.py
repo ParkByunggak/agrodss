@@ -17,6 +17,7 @@ from judge.envelope import AxisUse, Envelope, weakest
 from judge.need import need_anchor
 
 DECISION_ID = "harvest_timing"
+WINDOW_KEYS: tuple[str, ...] = ("window",)    # 수확 때가 칸에서 읽는 키 — 용도 문(use_gap)은 이 키가 덮어써져야 연다(위험 경보의 수확 지연도 같은 것)
 GRID_GRADE = {"상": "관측", "중": "추정", "하": "추정"}   # 격자 출처 확신 → 등급. 추론 초안은 '추정'을 넘지 못한다
 # [A13] 수확 창의 허용 오차 키 — 싣는 쪽(여기)이 정본이고 읽는 쪽(evolve 대조 · 화면)이 가져온다. 두 벌이면 어긋나는 날 0 으로 읽힌다
 TOLERANCE_DAYS_KEY = "error_days"
@@ -59,7 +60,7 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     if stage is None:
         return Envelope("해당 없음", DECISION_ID, sid, as_of,
                         result={"why": "이 재배 단위에는 수확 시기 결정이 적용되는 격자 칸이 없다"})
-    if grid_schema.use_gap(unit, stage):
+    if grid_schema.use_gap(unit, stage, WINDOW_KEYS):
         # [종구 2026-10-03 발행자 전달 "용도 = 종구 생산. 수확 칸 덮어쓰기 필요"] 잎 수확 기준의 창을 종구 재배에 내지 않는다 — 값이 오면 by_use 가 덮어쓴다(판단 불가(지식) · 고칠 파일)
         return Envelope("판단 불가(지식)", DECISION_ID, sid, as_of,
                         result={"why": grid_schema.use_gap_note(unit, stage),

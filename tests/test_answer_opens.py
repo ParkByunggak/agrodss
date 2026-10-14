@@ -31,8 +31,12 @@ def test_every_field_a_judgment_reads_names_its_readers_and_they_are_real_decisi
     readers = {("use", "ship_or_store"): ("judge/stage_decisions.py", '"use"'),
                ("use", "harvest_timing"): ("judge/harvest_timing.py", "use_gap("),
                ("use", "risk_alert"): ("judge/risk_alert.py", "use_gap("),
-               ("use", "plan_vs_actual"): ("judge/plan_vs_actual.py", "use_gap("),
+               ("use", "plan_vs_actual"): ("judge/plan_vs_actual.py", "plan.use_gapped("),
                ("use", "drainage_alert"): ("judge/stage_decisions.py", '_delegate_risk(subject, "drainage_alert"'),
+               # [재측정 2026-10-14] 물 · 약에 용도 문을 세웠다(W-01) · 병해충 카드는 위험 경보를 칸으로 잘라 「안 낸 칸」 을 싣는다(W-03) — 그 셋의 읽는 자리
+               ("use", "drought_alert"): ("judge/stage_decisions.py", 'grid_schema.use_gap(unit, stage, ("water", key, "window"))'),
+               ("use", "material_citation"): ("judge/material_citation.py", "grid_schema.use_gap(unit, stage,"),
+               ("use", "pest_alert"): ("judge/stage_decisions.py", '_delegate_risk(subject, "pest_alert"'),
                ("environment", "base_fertilization"): ("ingest/fertilizer.py", '"environment"'),
                ("drainage", "risk_alert"): ("judge/risk_alert.py", '"drainage"'),
                ("drainage", "drainage_alert"): ("judge/stage_decisions.py", '_delegate_risk(subject, "drainage_alert"')}

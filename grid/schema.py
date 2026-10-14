@@ -130,7 +130,18 @@ def load_unit(subject: dict[str, Any]) -> tuple[dict[str, Any] | None, UnitMiss 
             f"격자 '{uid}' 정본이 **있는데 읽지 못했다** — 없는 것이 아니다. /changes 의 '읽다 버린 것' 에 사유가 있다",
             f"격자 '{uid}' 가 깨져 읽다 버렸다 — 고치면 판정이 열린다",
             f"data/grid/{p.name} 가 깨졌다(고치면 바뀐다) · 사유는 /changes 의 '읽다 버린 것' 에")   # 누가·어디서·왜 지금은 judge.need 가 붙인다
-    return apply_use(unit, use_key(subject.get("use"))), None
+    return apply_use(unit, use_key(_use_of(subject))), None
+
+
+def _use_of(subject: dict[str, Any]) -> Any:
+    """재배 단위의 용도 문면 — 붙어 있으면 그것, 없으면 그 필지에서. [앞날 걷기 2026-10-14 W-01 · W-02 뿌리]
+    용도는 필지 값이라 `parcels.enrich_subject` 를 지난 재배 단위에만 붙는다 — 판정 회차(judge.run.all_judgments)만 그 길을 탔고, 촬영 안내 · 몰 · 달력 끝 줄 ·
+    증상 어휘는 등록부의 **날 재배 단위**를 넘겨 용도 없이 읽었다(같은 날 같은 밭에 달력이 둘). 소비자마다 붙이게 하면 한 곳만 고쳐지는 형태(§7.5 지점)라
+    읽는 자리 하나(여기)에서 채운다. 필지 등록부는 1층 잎 모듈이라 함수 안에서 부른다(위 `dropped` 와 같은 꼴). 붙이는 규칙도 그쪽 하나(enrich_subject)."""
+    if "use" in subject:
+        return subject.get("use")
+    from ingest import parcels
+    return parcels.enrich_subject({}, parcels.by_id(str(subject.get("parcel") or ""))).get("use")
 
 
 # ── 용도별 덮어쓰기 [발행자 전달 2026-10-03 "용도 = 종구 생산. 수확 칸 덮어쓰기 필요"] ──────────────────────────────────────────
@@ -138,6 +149,10 @@ def load_unit(subject: dict[str, Any]) -> tuple[dict[str, Any] | None, UnitMiss 
 # 값(종구의 창 · 위험 · 할 일)은 지식이라 발행자 몫이고, 여기는 **자리**다: 칸의 `by_use: {"종구": {source, …덮어쓸 키…}}` 를 load_unit 이 용도에 맞게 합친다
 # (소비자는 전부 load_unit 하나를 지나므로 한 자리에서 끝난다 — §7.5 지점). 값이 오기 전까지는 **문**이 선다: 용도가 종구인데 수확 칸(수확 시기 결정이 선언된 칸)
 # 이후의 칸에 덮어쓰기가 없으면 그 칸의 수확 창 · 위험 · 할 일을 잎 기준으로 내지 않는다(use_gap — 판정기가 판단 불가(지식)/보류로 말한다). 틀린 경보보다 빈 자리가 낫다.
+# [앞날 걷기 2026-10-14 실측 — 위 「전부 load_unit 하나를 지나므로」 는 **반만** 맞았다] 지나기는 했는데 용도가 **안 도착했다**: 용도는 필지 값이라
+# 판정 회차만 붙여 넘겼고 촬영 안내 · 몰 · 달력 끝 줄은 날 재배 단위를 넘겼다(관문의 입력 축). 그래서 load_unit 이 필지에서 직접 읽는다(_use_of).
+# 그리고 문은 **칸 단위가 아니라 키 단위**다: 발행자에게 청한 값은 창 · 위험 · 할 일인데, 칸 단위 문이면 덮어쓰기가 하나라도 온 칸의 물 · 자재 · 촬영까지
+# 잎 기준으로 열린다(값이 안 온 키가 따라 열린다). 소비자는 **자기가 읽는 키**를 넘기고 문은 그 키가 덮어써졌는지를 본다(use_gap keys).
 BY_USE_KEY = "by_use"
 USE_KEYS: tuple[str, ...] = ("종구",)                 # 덮어쓰기를 받는 용도 이름 — 필지 use 문면에 이 말이 들어 있으면 그 용도(어휘는 ingest.parcels 의 라벨과 같다)
 OVERRIDABLE: frozenset[str] = frozenset({"name", "window", "confidence", "risks", "tasks", "water", "decisions", "capture", "symptom_rules", "drought_rules"})
@@ -191,6 +206,8 @@ def apply_use(unit: dict[str, Any], use: str | None) -> dict[str, Any]:
     """용도에 맞는 격자 — 칸마다 by_use[use] 가 있으면 그 키들을 덮어쓴 **새 사전**. 원본은 건드리지 않는다. use 가 없으면 그대로(표지만 붙인다)."""
     out = dict(unit)
     out["_use"] = use
+    # [2026-10-14 검토] 문의 시작 칸은 **잎 격자**의 수확 칸이다 — 합친 격자에서 다시 세면 by_use 가 칸의 decisions 를 덮어쓰는 순간 수확 칸이 사라져 문 전체가 꺼진다
+    out["_use_harvest_order"] = harvest_order(unit)
     stages = []
     overridden: list[int] = []
     for s in unit.get("stages", []):
@@ -201,6 +218,7 @@ def apply_use(unit: dict[str, Any], use: str | None) -> dict[str, Any]:
                 if k in OVERRIDABLE:
                     s2[k] = v
             s2["_use_source"] = ov.get("source", "")
+            s2["_use_keys"] = sorted(k for k in ov if k in OVERRIDABLE)     # 이 칸에서 **덮어써진 키** — 문(use_gap)은 소비자가 읽는 키로 본다
             overridden.append(s.get("order"))
         stages.append(s2)
     out["stages"] = stages
@@ -208,16 +226,21 @@ def apply_use(unit: dict[str, Any], use: str | None) -> dict[str, Any]:
     return out
 
 
-def use_gap(unit: dict[str, Any], stage: dict[str, Any]) -> bool:
-    """이 칸을 **용도 기준 없이** 읽으면 틀리는가 — 용도가 있고, 수확 칸 이후이고, 덮어쓰기가 없을 때. 판정기 · 계획표가 같은 함수를 부른다(두 벌 금지)."""
+def use_gap(unit: dict[str, Any], stage: dict[str, Any], keys: tuple[str, ...]) -> bool:
+    """이 칸을 **용도 기준 없이** 읽으면 틀리는가 — 용도가 있고, 수확 칸 이후이고, 이 소비자가 읽는 키(keys) 중 덮어써지지 않은 것이 있을 때.
+    판정기 · 계획표 · 촬영 안내가 같은 함수를 부른다(두 벌 금지). keys 는 빼먹지 못하게 필수다 — 칸 단위로 열면 안 온 값이 따라 열린다."""
+    bad = [k for k in keys if k not in OVERRIDABLE]
+    if not keys or bad:
+        raise ValueError(f"use_gap keys 는 덮어쓸 수 있는 키여야 한다 — {bad or '빈 목록'} · 가능: {sorted(OVERRIDABLE)}")
     use = unit.get("_use")
     if not use:
         return False
-    ho = harvest_order(unit)
+    ho = unit["_use_harvest_order"] if "_use_harvest_order" in unit else harvest_order(unit)
     order = stage.get("order")
     if ho is None or not isinstance(order, int) or order < ho:
         return False
-    return order not in (unit.get("_use_overridden") or [])
+    done = stage.get("_use_keys") or ()
+    return any(k not in done for k in keys)
 
 
 def use_gap_note(unit: dict[str, Any], stage: dict[str, Any]) -> str:

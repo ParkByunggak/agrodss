@@ -23,12 +23,15 @@ from judge import registry, run as judge_run
 
 ROOT = Path(parcels.__file__).resolve().parent.parent
 T = date(2026, 10, 7)          # 수확 칸이 7일 뒤 열리는 날 — 용도가 바뀌면 가장 많이 달라지는 날이다(실측으로 고른 날)
+# [재측정 2026-10-14 · 시점 축] 한 날로 재면 **그 날 칸을 읽는** 판단이 빠진다 — 물 · 약에 용도 문을 세우자 둘은 오늘 칸이 수확 칸부터일 때만 용도를 읽는다(10-07 은 생육 중기).
+# 날 넷(수확 칸 앞 · 수확 칸 · 수확 후 칸 · 달력 끝 뒤)의 합으로 잰다 — 선언은 「읽을 수 있는」 판단이고 그날 읽는지는 페이지(_USE_LIVE)가 따로 잰다
+DAYS = (T, date(2026, 10, 15), date(2026, 11, 4), date(2026, 11, 24))
 # 값을 이렇게 바꿔 가며 잰다. (필드, 전, 후)
 FLIPS = (("use", "시험 재배(자가)", "종구 생산"), ("drainage", None, "나쁨"))
 UNMEASURABLE = {"environment": "처방 원천(외부)이 이 환경에 없어 노지↔시설이 봉투를 바꾸지 않는다 — 소비자 0 이 아니라 못 잰 것"}
 
 
-def _judge_with(tmp_path, monkeypatch, field: str, value: str | None) -> dict[str, tuple]:
+def _judge_with(tmp_path, monkeypatch, field: str, value: str | None, today: date = T) -> dict[str, tuple]:
     """밭 값 하나만 바꿔 그날의 판정 전부를 돌린다 — 운영 data 는 건드리지 않는다(덮개 경로만)."""
     doc = json.loads((ROOT / "data" / "parcels_seed.json").read_text(encoding="utf-8"))
     rows = doc["parcels"] if isinstance(doc, dict) and "parcels" in doc else doc
@@ -42,7 +45,7 @@ def _judge_with(tmp_path, monkeypatch, field: str, value: str | None) -> dict[st
     monkeypatch.setenv("AGRODSS_PARCELS_LOCAL_PATH", str(p))
     monkeypatch.setenv("AGRODSS_PARCELS_LEGACY_PATH", str(tmp_path / "none.json"))
     out = {}
-    for _s, envs, _info in judge_run.all_judgments(T):
+    for _s, envs, _info in judge_run.all_judgments(today):
         for e in envs:
             ed = e.to_dict()
             r = ed.get("result") or {}
@@ -52,9 +55,11 @@ def _judge_with(tmp_path, monkeypatch, field: str, value: str | None) -> dict[st
 
 @pytest.mark.parametrize("field,before,after", FLIPS)
 def test_the_table_says_exactly_the_judgments_that_change(tmp_path, monkeypatch, field, before, after):
-    a = _judge_with(tmp_path, monkeypatch, field, before)
-    b = _judge_with(tmp_path, monkeypatch, field, after)
-    changed = {k for k in set(a) | set(b) if a.get(k) != b.get(k)}
+    changed: set[str] = set()
+    for day in DAYS:
+        a = _judge_with(tmp_path, monkeypatch, field, before, day)
+        b = _judge_with(tmp_path, monkeypatch, field, after, day)
+        changed |= {k for k in set(a) | set(b) if a.get(k) != b.get(k)}
     assert changed, (field, "값을 바꿨는데 아무 판정도 안 달라졌다 — 그러면 소비자 선언이 거짓이거나 측정이 닿지 않은 것이다")
     assert changed == set(parcels.FIELD_CONSUMERS[field]), (field, sorted(changed), sorted(parcels.FIELD_CONSUMERS[field]))
 
@@ -71,7 +76,9 @@ def test_the_sentence_names_the_big_ones_first():
     """농가·발행자가 읽는 줄 — 용도는 수확 시기와 위험 경보를 **먼저** 말한다(출하·저장만 말하면 넣을 이유가 작아 보인다)."""
     said = words.opened("use", "종구 생산")
     names = [words.decision(d) for d in parcels.FIELD_CONSUMERS["use"]]      # 이름은 정본에서 — 검사에 박으면 재측정마다 거짓 실패다
-    assert said.startswith("이것으로 " + " · ".join(names) + " 판단이"), said
+    # [재측정 2026-10-14 다섯 → 여덟] 다섯을 넘으면 앞 다섯과 **전체 수**로 말한다(words.NAMES_SHOWN — 줄이되 몇인지를 숨기지 않는다) — 그 줄임도 정본 하나로
+    assert said.startswith("이것으로 " + words._names_said(tuple(parcels.FIELD_CONSUMERS["use"])) + " 판단이"), said
+    assert f"{len(names)}가지" in said or len(names) <= words.NAMES_SHOWN
     assert names[:2] == [words.decision("harvest_timing"), words.decision("risk_alert")], names      # 큰 것이 먼저다(출하·저장만 들으면 넣을 이유가 작아 보인다)
     assert "종구 기준으로 읽습니다" in said
 

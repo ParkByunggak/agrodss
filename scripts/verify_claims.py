@@ -145,8 +145,9 @@ def check_consumers(s: Sheet) -> None:
     """「넣으면 어느 판단이 읽습니다」 와 보이는 이름."""
     from frontend import words
     from ingest import parcels
-    s.check(len(parcels.FIELD_CONSUMERS["use"]) == 5 and len(parcels.FIELD_CONSUMERS["drainage"]) == 2,
-            "용도를 읽는 판단 다섯 · 배수 둘", (parcels.FIELD_CONSUMERS["use"], parcels.FIELD_CONSUMERS["drainage"]))
+    # [재측정 2026-10-14] 물 · 약 · 병해충 카드에 용도 문을 세우자 다섯 → 여덟(날 넷의 합 — tests/test_consumers_are_measured_not_declared.py 가 다시 잰다)
+    s.check(len(parcels.FIELD_CONSUMERS["use"]) == 8 and len(parcels.FIELD_CONSUMERS["drainage"]) == 2,
+            "용도를 읽는 판단 여덟 · 배수 둘", (parcels.FIELD_CONSUMERS["use"], parcels.FIELD_CONSUMERS["drainage"]))
     s.check(words.plain(words.decision("drainage_alert")) == words.decision("drainage_alert") and "칸" not in words.decision("pest_alert"),
             "보이는 결정 이름에 안쪽 말이 없다", (words.decision("drainage_alert"), words.decision("pest_alert")))
     said = words.opened("use", "종구 생산")
@@ -392,7 +393,10 @@ def check_page_by_date(s: Sheet) -> None:
             os.environ["AGRODSS_TODAY"] = day.isoformat()
             p = importlib.reload(page)
             zm = next(b for h, b in p.NEXT_PUBLISHER if h.startswith("⓪ᵐ"))
-            harvest_now = "칸 '수확' 에 유기 자재 계열이 없다" in chat.answer(sub, "약 뭐 쳐요", day)
+            # [2026-10-14 W-01] 자재 답이 수확 칸을 읽는지 — 용도에 따라 문면이 갈린다(잎: 「칸 '수확' 에 …」 · 종구: 「… 수확(5단계)에 아직 없습니다」). 앞 확인이 이 사본에
+            # 용도를 넣으므로 한 문면만 보면 「수확 칸이 아니다」 로 오측정한다(자기 도구 축 — 조건이 다른 경로)
+            said = chat.answer(sub, "약 뭐 쳐요", day)
+            harvest_now = "칸 '수확' 에 유기 자재 계열이 없다" in said or "재배 달력의 수확(5단계)에 아직 없습니다" in said
             wet = any("과습" in str(a.get("risk")) for _s, es, _i in jr.all_judgments(day, only=SID) for e in es
                       if e.decision_id == "risk_alert" for a in (e.result or {}).get("alerts") or [])
             ok &= (("수확 칸에 들어선 지금은 다릅니다" in zm) == harvest_now) and p._WET == wet

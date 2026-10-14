@@ -162,6 +162,11 @@ def judge(subject: dict[str, Any], today: date | None = None, psis_search=None) 
     stage = capture.stage_for_day(unit, day)
     if stage is None:
         return Envelope("해당 없음", DECISION_ID, sid, as_of, result={"why": f"기준점 후 {day}일 — 격자 창 밖"})
+    if grid_schema.use_gap(unit, stage, ("risks", "window") if cert == "관행" else ("tasks", "window")):
+        # [앞날 걷기 2026-10-14 W-01] 관행은 그 칸의 위험(병해충 이름)으로 등록 약제를, 유기는 그 칸의 할 일(자재 계열)로 공시 자재를 찾는다 — 둘 다 잎 수확 기준의 칸 값이다.
+        # 갈래보다 **앞**에서 본다(한 갈래에만 두면 다른 갈래로 샌다 · 직렬 게이트). 문은 그 갈래가 읽는 키로 연다 — 오늘 칸을 **기간**으로 고르므로 window 도
+        # (검토: 위험만 온 칸이 자재는 열고 위험 경보는 닫혀 같은 칸에 두 말)
+        return units.use_gap_envelope(unit, stage, DECISION_ID, sid, as_of)
     if cert == "관행":
         return _conventional(subject, stage, today, as_of, sid, anchor, psis_search)
     tasks = _family_tasks(stage)

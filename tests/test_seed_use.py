@@ -54,7 +54,7 @@ def test_a_seed_bulb_unit_gets_no_leaf_harvest_window_but_everything_before_the_
     u_seed, _ = GS.load_unit(seed)
     assert u_base["_use"] is None and u_seed["_use"] == "종구" and u_seed["_use_overridden"] == []
     ho = GS.harvest_order(u_seed)
-    assert ho == 5 and [s["order"] for s in u_seed["stages"] if GS.use_gap(u_seed, s)] == [5, 6]
+    assert ho == 5 and [s["order"] for s in u_seed["stages"] if GS.use_gap(u_seed, s, HT.WINDOW_KEYS)] == [5, 6]
     e = HT.judge(seed, today=D56)
     assert e.kind == "판단 불가(지식)" and "종구 재배의 수확 때는 재배 달력에 아직 없습니다" in e.result["summary"] and "by_use" in e.result["why"]
     assert HT.judge(base, today=D56).kind == "판단함"                                # 잎 수확(자가)은 그대로
@@ -63,12 +63,13 @@ def test_a_seed_bulb_unit_gets_no_leaf_harvest_window_but_everything_before_the_
 def test_no_harvest_delay_or_leaf_risk_alert_goes_to_a_seed_bulb_unit_and_the_note_says_why():
     seed = _subject("종구 생산")
     e = RA.judge(seed, today=D75)                                                      # 창(50~70)을 넘긴 날 — 잎 기준이면 「수확 지연」 경보
-    assert e.kind == "판단함" and not any(a["risk"] == "수확 지연" for a in e.result["alerts"])
-    assert e.result["use_gap_stages"] == ["6. 수확 후 · 후작"]                           # 75일째 — 열린 칸은 6, 수확 지연은 칸 5 의 것(둘 다 안 낸다)
+    # [2026-10-14 W-03] 보는 칸(6)이 전부 기준 없음 → 「경보 없음」(판단함)이 아니라 판단 불가(지식) — 안 본 것을 없다고 하지 않는다
+    assert e.kind == "판단 불가(지식)" and not e.result.get("alerts")
+    assert e.result["use_gap_stages"] == ["5. 수확", "6. 수확 후 · 후작"]                # 75일째 — 열린 칸 6 과 지난 수확 칸 5(수확 지연 — 전에는 말없이 빠졌다)
     e5 = RA.judge(seed, today=D56)                                                     # 56일째 — 칸 5 가 열려 있고 그 위험(서리 · 지연)을 안 낸다
-    assert e5.result["use_gap_stages"] == ["5. 수확"] and not any(a["stage"].startswith("5.") for a in e5.result["alerts"])
+    assert e5.kind == "판단 불가(지식)" and e5.result["use_gap_stages"] == ["5. 수확"] and not e5.result.get("alerts")
     assert any(a["stage"].startswith("5.") for a in RA.judge(_subject(None), today=D56).result["alerts"])   # 잎 수확은 칸 5 위험(서리 주의)을 낸다
-    assert any("종구" in n and "by_use" in n for n in e.notes)
+    assert "종구" in e.result["why"] and "by_use" in e.result["why"]                    # 왜 안 냈는지는 why 에(문장은 4층 — words.use_gap_head)
     base = RA.judge(_subject(None), today=D75)
     assert any(a["risk"] == "수확 지연" for a in base.result["alerts"])                 # 반대편 — 잎 수확은 그대로 경보
     e4 = RA.judge(seed, today=D36)                                                     # 칸 4(수확 전)는 용도와 무관 — 과습 경보 그대로
@@ -107,7 +108,8 @@ def test_an_override_with_a_source_merges_into_the_unit_and_only_for_that_use(tm
     s5 = next(s for s in merged["stages"] if s["order"] == 5)
     assert s5["window"]["to_day"] == 95 and s5["name"] == "종구 비대 · 수확" and [r["name"] for r in s5["risks"]] == ["인경 부패(과습)"]
     assert GS.BY_USE_KEY not in s5 and s5["_use_source"].startswith("검사용") and merged["_use_overridden"] == [5]
-    assert not GS.use_gap(merged, s5) and GS.use_gap(merged, next(s for s in merged["stages"] if s["order"] == 6))   # 칸 6 은 아직
+    assert not GS.use_gap(merged, s5, RA.RISK_KEYS) and GS.use_gap(merged, next(s for s in merged["stages"] if s["order"] == 6), RA.RISK_KEYS)   # 칸 6 은 아직
+    assert GS.use_gap(merged, s5, plan.TASK_KEYS)                                       # [2026-10-14 키 단위] 창 · 위험만 왔다 — 할 일은 따라 열리지 않는다
     plain = GS.apply_use(unit, None)
     assert next(s for s in plain["stages"] if s["order"] == 5)["window"]["to_day"] == 70                        # 용도 없으면 잎 기준 그대로
     bad = _with_override(_unit_json(), ov={"source": "x", "order": 9, "window": {"from_day": 60, "to_day": 95, "basis": "anchor"}})

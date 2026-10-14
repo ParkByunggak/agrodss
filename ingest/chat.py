@@ -1123,14 +1123,17 @@ def answer(subject: dict[str, Any], text: str, today: date) -> str:
     return answer_with_asks(subject, text, today)[0]
 
 
-def pending_value_line(subject: dict[str, Any], did: str, skip: frozenset[str] | set[str] | None = None) -> str:
+def pending_value_line(subject: dict[str, Any], did: str, skip: frozenset[str] | set[str] | None = None,
+                       today: date | None = None, env: Any = None) -> str:
     """이 답을 **바꾸는** 값이 일지에서 읽히는데 아직 안 들어갔으면 한 줄. 없으면 빈 문자열.
 
     [10/07~10/16 걷기 2026-10-06] 카드는 **처음 한 번만** 선다(같은 초안을 다시 올리지 않는다 — 옳다). 그런데 잎 기준 답은 날마다 나간다:
     예순 답(열흘 × 물음 여섯)을 걸으니 용도 카드가 실린 것은 **하나**였고 나머지 쉰아홉은 잎 기준 사실을 **그 값과 잇지 않고** 말했다.
     「아직 안 넣은 관수 기록 N건」 줄(바로 아래 drought_alert)의 **일반형**이다 — 그쪽은 미확인 *사건*, 이쪽은 미확인 *값*.
     어느 판정이 그 값을 읽는지는 측정된 정본(`parcels.FIELD_CONSUMERS`)에서 오고, 읽히는지는 일지 정본(`known`)에서 온다. **적용하지 않는다**(넣기는 사람).
-    `skip` — 이 답에 그 값의 카드가 **함께** 서 있으면(card_line 이 「넣으면 …」 을 이미 말한다) 같은 말을 두 번 하지 않는다."""
+    `skip` — 이 답에 그 값의 카드가 **함께** 서 있으면(card_line 이 「넣으면 …」 을 이미 말한다) 같은 말을 두 번 하지 않는다.
+    [W-19 값 쪽 · 처방 직후 전수 2026-10-14] 표는 **날 넷의 합**(「읽을 수 있는」 판단)이 됐다 — 물 · 약은 수확 칸부터만 용도를 읽는다. 표만 보고 붙이면 10-08 물 답에도
+    「넣으면 다시 답합니다」 가 붙는데 그 날 그 답은 안 바뀐다. `today` · `env` 가 오면 값을 넣은 셈으로 다시 내 보고 **바뀔 때만** 말한다(사건 쪽 unconfirmed_line 과 같은 셈)."""
     from frontend import words as _w
     from ingest import known
     out = []
@@ -1141,28 +1144,118 @@ def pending_value_line(subject: dict[str, Any], did: str, skip: frozenset[str] |
             continue                                        # 이 판정이 안 읽는 값이면 말하지 않는다(§5-1 과 같은 축 — 안 바뀌는 것을 바뀐다고 하지 않는다)
         k = known.known_use_differs(subject) if field == "use" else known.known_field(subject, field)
         if k and k.get("from") == "observation" and k.get("value"):
+            if _value_moves(subject, did, field, k["value"], today, env) is False:
+                continue                                    # 오늘 이 답은 그 값으로 안 바뀐다 — 말하지 않는다(값은 카드 · 다른 답이 말한다)
             out.append((field, str(k["value"]), str(k.get("observed_at") or "")))
     # [길이 측정 2026-10-07] 기다리는 값이 둘이면 꼬리(자리 안내)가 두 번 똑같이 나갔다(위험 물음의 답 502자) — 값은 다 말하고 꼬리는 한 번(`waiting_many`)
     return ("" if not out else " · " + _w.waiting_many(out))
 
 
-def unconfirmed_line(subject_id: str, did: str) -> str:
+def unconfirmed_line(subject_id: str, did: str, today: date | None = None, env: Any = None) -> str:
     """아직 **일지에 안 넣은 사건 초안**이 이 답을 바꾸면 한 줄. 없으면 빈 문자열.
 
     [U-40 둘째 2026-10-03 "오늘 관수가 반영 안 됐다 — 초안 미확인인지 배선인지"] 그 갈림을 답이 말하게 한 줄인데, **가뭄 답 한 곳**에만 있었다.
     [사건 소비자 측정 2026-10-06] 어느 판정이 어느 사건을 읽는지 재서(`events.EVENT_CONSUMERS`) 그 전부로 넓혔다 — 특히 **계획 대 실제**:
     「10월 18일에 수확했다」 를 넣지 않은 채 「오늘 뭐 해야 하나」 를 물으면 「놓침 8 … 수확(뽑기) 다음 예정」 이 나가면서 그 초안을 말하지 않았다
-    (한 일이 **놓침으로** 읽힌다 — 짐작이 이행으로 세어졌던 그 사고의 반대 방향). 값 쪽(pending_value_line)과 같은 꼴이고, 이쪽은 미확인 **사건**이다."""
+    (한 일이 **놓침으로** 읽힌다 — 짐작이 이행으로 세어졌던 그 사고의 반대 방향). 값 쪽(pending_value_line)과 같은 꼴이고, 이쪽은 미확인 **사건**이다.
+    [앞날 걷기 2026-10-14 W-19] 표는 「센다」 이지 「답이 바뀐다」 가 아니다(events.py 의 그 표 주석) — 용도 「종구 생산」 에서 수확 기록은 넣어도 할 일 답이
+    안 바뀌는데 「누르면 판단이 읽습니다」 라고 약속했다. `today` · `env`(지금 낸 그 봉투)가 오면 초안을 **넣은 셈으로** 답을 다시 내 보고(원장에는 안 쓴다)
+    바뀌는 것만 그 약속을 한다. 안 바뀌는 것은 「영농일지에 남습니다 · 이 답은 바뀌지 않습니다」(그 날이 용도 기준 없는 칸이면 그 까닭까지).
+    잴 수 없으면(둘이 안 오면 · 날이 없는 초안) 전의 말 그대로다 — 새 주장은 잰 것만 한다."""
     from frontend import words as _w                        # 문면은 4층 정본(모듈 수준 import 는 층을 뒤집는다 — pending_value_line 과 같은 꼴)
-    out = []
+    reads: list[tuple[str, int]] = []
+    idle: list[tuple[str, int]] = []
+    gap_tags: list[str] | None = []
     for kind, ids in ev.EVENT_CONSUMERS.items():
         if did not in ids:
             continue                                        # 이 판정이 안 읽는 사건이면 말하지 않는다(안 바뀌는 것을 바뀐다고 하지 않는다)
-        n = len(unconfirmed_of(subject_id, kind))
-        if n:
-            out.append((kind, n))
-    # [길이 측정 2026-10-07] 종류가 셋이면 단추 안내가 **세 번** 똑같이 나갔다(할 일 답 651자) — 종류·건수는 다 말하고 꼬리는 한 번(`not_in_diary_many`)
-    return ("" if not out else " · " + _w.not_in_diary_many(out, confirm_label("event")))
+        drafts = unconfirmed_of(subject_id, kind)
+        if not drafts:
+            continue
+        if _answer_moves(subject_id, did, drafts, today, env) is False:
+            idle.append((kind, len(drafts)))
+            tags = _gapped_days(subject_id, drafts, env)
+            # [2026-10-14 검토] 날이 안 본 칸에 든다고 그것이 **까닭**은 아니다(관수처럼 어느 기준에서도 계획 줄이 없는 기록이 있다) — 잎 기준(용도를 뺀 셈)에서는
+            # 그 기록이 판단을 바꾸는지 재서, 바꿀 때만 「종구 기준이 없어서」 라고 말한다(잰 까닭만)
+            if tags and _answer_moves(subject_id, did, drafts, today, env, base_fields={"use": None}) is not True:
+                tags = None
+            gap_tags = None if (tags is None or gap_tags is None) else gap_tags + tags
+        else:
+            reads.append((kind, len(drafts)))
+    if not reads and not idle:
+        return ""
+    r = (getattr(env, "result", None) or {}) if gap_tags else {}
+    # [길이 측정 2026-10-07] 종류가 셋이면 단추 안내가 **세 번** 똑같이 나갔다(할 일 답 651자) — 종류·건수는 다 말하고 꼬리는 한 번(`not_in_diary_many` · 둘로 갈리면 `not_in_diary_split`)
+    if not idle:
+        return " · " + _w.not_in_diary_many(reads, confirm_label("event"))
+    return " · " + _w.not_in_diary_split(reads, idle, confirm_label("event"), gap_use=str(r.get("use_gap_use") or ""),
+                                         gap_stages=list(dict.fromkeys(gap_tags or [])))
+
+
+def _answer_moves(subject_id: str, did: str, drafts: list[dict[str, Any]], today: date | None, env: Any,
+                  base_fields: dict[str, Any] | None = None) -> bool | None:
+    """그 초안들을 넣으면 **판단이 바뀌는가** — 넣은 셈으로(원장에 안 쓴다) 같은 판정을 다시 내서 판단의 면(`envelope.reading_face`)을 대조한다. 잴 수 없으면 None.
+    「읽은 사건 수」 같은 장부만 바뀌는 것은 판단이 읽은 것이 아니다(W-19 의 그 오측정) · 답 문장만 보면 근거 · 메모에 실리는 것을 놓친다 — 그 사이가 이 면이다.
+    `base_fields` — 다른 조건에서 잰다(예: 용도를 뺀 잎 기준 — 까닭 절이 그 까닭을 **재서** 말하도록). 그때는 기준 판단도 그 조건으로 다시 낸다."""
+    if today is None or env is None:
+        return None
+    from judge import run as judge_run                      # 4층 화면과 같은 규율 — 3층 봉투만 받는다(answer_with_asks 와 같은 꼴)
+    from judge.envelope import reading_face
+    try:
+        recs = [ev.event_record(subject_id, str(d.get("type") or ""), str(d.get("observed_at") or ""), note=str(d.get("note") or ""),
+                                risk=d.get("risk") if d.get("type") == ev.DAMAGE_TYPE else None) for d in drafts]
+    except ev.EventError:
+        return None                                         # 날이 없는 초안 — 넣을 때 날을 받는다. 그 날을 모르니 셈할 수 없다
+    # [2026-10-14 검토] 넣기는 기록만 쓰는 것이 아니다 — 심은 날이 없는 농사에 파종 · 정식을 넣으면 심은 날이 선다(_confirm_locked → subjects.set_anchor).
+    # 그 셈을 빼면 판단을 통째로 여는 기록에 「지금 답은 그대로」 라고 말한다. 넣을 때 하는 일을 그대로 덮는다(등록부에는 안 쓴다)
+    fields = dict(base_fields or {})
+    s = subjects.by_id(subject_id) or {}
+    sow = next((d for d in drafts if d.get("type") in ("파종", "정식") and d.get("observed_at")), None)
+    if sow and not s.get("anchor"):
+        fields.update(anchor=str(sow["observed_at"])[:10], anchor_kind=f"{sow['type']}(채팅 확인)", status="재배 중")
+    if base_fields:
+        env = next((x for x in judge_run.judgments_for(subject_id, today=today, pending_fields=base_fields) if x.decision_id == did), None)
+        if env is None:
+            return None
+    alt = next((x for x in judge_run.judgments_for(subject_id, today=today, pending_events=recs, pending_fields=fields or None)
+                if x.decision_id == did), None)
+    if alt is None:
+        return None
+    return reading_face(alt) != reading_face(env)
+
+
+def _value_moves(subject: dict[str, Any], did: str, field: str, value: Any, today: date | None, env: Any) -> bool | None:
+    """그 밭 값을 넣으면 **판단이 바뀌는가** — 넣은 셈으로(등록부에 안 쓴다) 같은 판정을 다시 내서 판단의 면을 대조한다. 잴 수 없으면 None(전의 말 그대로)."""
+    if today is None or env is None:
+        return None
+    from judge import run as judge_run
+    from judge.envelope import reading_face
+    alt = next((x for x in judge_run.judgments_for(subject["id"], today=today, pending_fields={field: value}) if x.decision_id == did), None)
+    return None if alt is None else reading_face(alt) != reading_face(env)
+
+
+def _gapped_days(subject_id: str, drafts: list[dict[str, Any]], env: Any) -> list[str] | None:
+    """초안의 날이 **전부** 이 답이 용도 기준이 없어 안 본 칸(`use_gap_stages`)에 들면 그 칸들, 아니면 None — 안 바뀌는 까닭을 말할 수 있을 때만 말한다."""
+    gaps = set((getattr(env, "result", None) or {}).get("use_gap_stages") or [])
+    s = subjects.by_id(subject_id)
+    if not gaps or not s or not s.get("anchor"):
+        return None
+    from grid import capture as grid_capture, schema as grid_schema   # 칸 경계의 정본(season_over_line 과 같은 꼴 — 함수 안에서)
+    unit, miss = grid_schema.load_unit(s)
+    if unit is None or miss is not None:
+        return None
+    anchor = date.fromisoformat(str(s["anchor"]))
+    tags = []
+    for d in drafts:
+        try:
+            st = grid_capture.stage_for_day(unit, (date.fromisoformat(str(d.get("observed_at") or "")[:10]) - anchor).days)
+        except ValueError:
+            return None
+        tag = f"{st['order']}. {st['name']}" if st else None
+        if tag not in gaps:
+            return None
+        tags.append(tag)
+    return tags
 
 
 def use_gap_line(e: Any) -> str:
@@ -1170,6 +1263,7 @@ def use_gap_line(e: Any) -> str:
 
     [앞날 걷기 2026-10-07] 3층은 그 사실을 구조로 싣고(`use_gap_stages` · `use_gap_use`) 화면은 메모로 보여 주는데 **농가 답만 침묵**했다 —
     「서리 오나」 에서 서리가 사라지고 「다음 예정」 이 비는데 답이 그 말을 안 한다. 문장은 4층 정본(`words.use_gap_said`) · 자리는 답 **말미 1회**.
+    [2026-10-14] 부르는 자리는 summarize_envelope 하나다(답 · 대화 옆 카드가 같은 줄) — 판단을 통째로 안 낸 때는 머리(`words.use_gap_head`)가 말하고 이 꼬리는 안 붙는다.
     """
     from frontend import words as _w
     r = getattr(e, "result", None) or {}
@@ -1208,6 +1302,18 @@ def can_say_line(subject: dict[str, Any], today: date) -> str:
     return _w.can_say(list(dict.fromkeys(names)))
 
 
+def _one_source_run(fn):
+    """한 답이 판정을 여러 번 돌린다(본 답 · 답할 수 있는 것 · 넣은 셈) — 바깥 원천은 그 답 안에서 한 번만(judge.run.same_sources · 2026-10-14 W-19 검토).
+    껍데기로 두는 이유: 라우팅 본체의 이름과 몸은 그대로 둔다(그 몸을 읽는 래칫 셋이 있다)."""
+    def wrapped(*args, **kwargs):
+        from judge import run as judge_run
+        with judge_run.same_sources():
+            return fn(*args, **kwargs)
+    wrapped.__name__, wrapped.__doc__, wrapped.__wrapped__ = fn.__name__, fn.__doc__, fn
+    return wrapped
+
+
+@_one_source_run
 def answer_with_asks(subject: dict[str, Any], text: str, today: date,
                      skip_pending: frozenset[str] | set[str] | None = None) -> tuple[str, list[dict[str, Any]]]:
     """(답 문장, 그 답이 물은 것). 물은 것은 send 가 원장에 센다 — answer 는 버린다."""
@@ -1247,8 +1353,8 @@ def answer_with_asks(subject: dict[str, Any], text: str, today: date,
     said = summarize_envelope(e)
     if rounded and _w.decision(did) not in said:          # 고른 회차의 이름 — 본문이 이미 싣고 있으면(「웃거름 1회 때가 지났습니다」) 또 말하지 않는다
         said += f" · {_w.round_said(_w.decision(did))}"
-    out = (said + use_gap_line(e) + pending_value_line(subject, did, skip=skip_pending)
-           + unconfirmed_line(subject["id"], did) + season_over_line(subject, today))
+    out = (said + pending_value_line(subject, did, skip=skip_pending, today=today, env=e)       # 용도 꼬리(use_gap_line)는 summarize_envelope 가 붙인다 — 카드와 답이 같은 줄
+           + unconfirmed_line(subject["id"], did, today, e) + season_over_line(subject, today))     # 오늘 · 지금 낸 봉투 — 초안을 넣은 셈으로 다시 내 볼 재료(W-19)
     return out, asked_in(e)
 
 
@@ -1305,7 +1411,9 @@ def summarize_envelope(e: Any, plain: bool = True) -> str:
     r = e.result or {}
     head = f"[{words.said(e.kind) if plain else e.kind}]"
     if e.kind != "판단함" and e.kind != "사실 인용":
-        body = r.get("summary") or r.get("why") or ""       # 농가가 읽는 줄이 있으면 그것이 먼저
+        # [앞날 걷기 2026-10-14 W-01 · W-03] 판단 **전체**를 용도 기준이 없어 안 냈으면 그 사실이 머리다(3층은 구조만 싣는다 · 문장은 4층 하나) — 꼬리는 다시 안 붙인다
+        gap_head = "" if r.get("summary") else words.use_gap_head(str(r.get("use_gap_use") or ""), list(r.get("use_gap_stages") or []), e.decision_id)
+        body = r.get("summary") or gap_head or r.get("why") or ""       # 농가가 읽는 줄이 있으면 그것이 먼저
         # [D-18 반영 직후 전수 2026-09-28] 규칙이 서자 실제 격자의 증상 카드가 처음으로 판단 불가(데이터)가 됐고, 채팅 카드가 "채울 사람: observation: 농가 —"
         # 로 **축 안쪽 이름**을 냈다(/judge 는 words.axis 로 옮기고 있었다 — 두 화면이 어긋난 형태). 축 이름도 여기서 사람 말로(정확한 이름은 /judge 의 title 에 남는다)
         miss = " · ".join(f"{words.axis(m.get('axis')) if plain else m.get('axis')}: {m.get('who_can_fill')}" for m in (e.missing or []))
@@ -1313,9 +1421,11 @@ def summarize_envelope(e: Any, plain: bool = True) -> str:
         # [대파 걷기 2026-10-04] 지식 쪽(재배 달력 없음 · 이름 어긋남)은 missing 이 비어 있고 누가 · 어디서가 result.who 에 있다(judge.units) — 채팅 답도 그것을 말한다(/judge 와 같은 줄)
         if r.get("who") and not miss:
             out += f" — 채울 사람: {r['who']}"
-        return words.plain(out) if plain else out
+        return (words.plain(out) if plain else out) + ("" if gap_head else use_gap_line(e))
     out = _judged_line(e, r, head)
-    return words.plain(out) if plain else out
+    # [앞날 걷기 2026-10-14] 안 낸 칸의 꼬리는 판정 한 줄을 만드는 **이 자리**에서 — 전에는 채팅 답(answer_with_asks)만 붙여서 대화 옆 카드(_env_card)는
+    # 「지금 창에 경보 없음」 만 말했다(같은 판정이 두 화면에서 다른 말 · §7.5 지점 축)
+    return (words.plain(out) if plain else out) + use_gap_line(e)
 
 
 def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
@@ -1333,8 +1443,12 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
                 + (f" — {where}" if where else "")
                 + f" · 등급 {e.grade} · {r.get('basis', '')} · {r.get('final_say', '')}")
     if e.decision_id == "risk_alert":
+        from frontend import words as _w
         al = r.get("alerts") or []
-        body = " / ".join(f"{a.get('level')} {a.get('risk')}({a.get('stage')})" for a in al) or "지금 창에 경보 없음"
+        gap = list(r.get("use_gap_stages") or [])
+        # [앞날 걷기 2026-10-14 W-03] 용도 기준이 없어 **안 본 칸**이 있으면 「지금 창에 경보 없음」 은 넓게 말한 것이다 — 본 칸만 이름을 부른다(안 본 칸은 꼬리가 말한다)
+        quiet = _w.no_alert_in([s for s in (r.get("stages") or []) if s not in gap]) if gap else "지금 창에 경보 없음"
+        body = " / ".join(f"{a.get('level')} {a.get('risk')}({a.get('stage')})" for a in al) or quiet
         # [발행자 2026-09-29 "지금 어떤 병충해를 봐야 하나" → 4단계 위험 둘] 경보가 아닌 회복 가능 위험도 이름은 말한다 — 신호가 없을 뿐 그 칸의 위험이다
         watch = r.get("watch") or []
         if watch:
@@ -1809,7 +1923,9 @@ def diary_lookup(subject_id: str, event_type: str, limit: int = 12) -> str:
     what = "한 일" if event_type == "전체" else event_type
     lines = [f"{str(e.get('observed_at') or '')[:10]} {e.get('type', '')}" + (f" — {e['note']}" if e.get("note") else "") for e in evts[:limit]]
     pend = unconfirmed_of(subject_id, event_type) if event_type != "전체" else [d for _, _, d in pending_drafts(subject_id) if d.get("kind") == "event"]
-    tail = (" · " + _w.not_in_diary(what, len(pend), confirm_label("event"))) if pend else ""     # [전수 2026-10-06] 같은 말이 두 곳에 손으로 적혀 있었다(조사도 손으로) — 문장은 4층 정본 하나
+    # [전수 2026-10-06] 같은 말이 두 곳에 손으로 적혀 있었다(조사도 손으로) — 문장은 4층 정본 하나
+    # [W-19 처방 직후 전수 2026-10-14] 이 자리도 「누르면 판단이 읽습니다」 였다 — 조회는 판단이 아니고 어느 판단이 바뀌는지 재지 않았다. 잰 사실만(이 목록에 든다)
+    tail = (" · " + _w.not_in_diary(what, len(pend), confirm_label("event"), then="lookup")) if pend else ""
     if not evts:
         return f"{head} 일지에 {what} 기록이 없습니다{tail}. 판단이 아니라 기록을 그대로 찾은 것입니다."
     more = f" (최근 {limit}건만 — 전체는 영농일지 화면)" if len(evts) > limit else ""

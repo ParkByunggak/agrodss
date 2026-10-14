@@ -7,19 +7,32 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from grid import schema as grid_schema
+from grid import capture as grid_capture, schema as grid_schema
+
+TASK_KEYS: tuple[str, ...] = ("tasks",)     # 할 일이 칸에서 읽는 키 — 용도 문(use_gap)은 이 키가 덮어써져야 연다(plan_vs_actual 이 같은 것으로 말한다)
+
+
+def use_gapped(unit: dict[str, Any], s: dict[str, Any]) -> bool:
+    """이 칸에서 계획표가 용도 문 때문에 **무엇이든** 뺐는가 — 할 일 줄이든 촬영 줄이든. 아래 from_unit 과 같은 문 · 같은 조건(두 벌 금지).
+    [2026-10-14 검토] 할 일 값만 온 칸에서 촬영 줄은 문에 걸려 빠지는데 계획 대 실제는 할 일 문만 봐서 그 사실을 말하지 않았다(말없이 빠진 줄)."""
+    tasks = s.get("tasks")
+    if tasks == grid_schema.NA or not tasks:
+        return False
+    cap = s.get("capture")
+    shoots = isinstance(cap, dict) and bool(cap.get("shoot"))
+    return grid_schema.use_gap(unit, s, TASK_KEYS) or (shoots and grid_schema.use_gap(unit, s, grid_capture.CAPTURE_KEYS))
 
 
 def from_unit(unit: dict[str, Any], anchor: date, cert: str | None) -> list[dict[str, Any]]:
     """단위 전체 작업을 날짜로 펼친다. 자재는 인증 갈래만 싣는다(관행/유기 분리 — H)."""
     out = []
     for s in unit.get("stages", []):
-        if grid_schema.use_gap(unit, s):
-            continue                        # [종구 2026-10-03] 용도 기준이 재배 달력에 없는 칸 — 잎 수확 기준의 할 일을 종구 재배에 내지 않는다(plan_vs_actual 이 그 사실을 말한다)
+        # [종구 2026-10-03] 용도 기준이 재배 달력에 없는 칸 — 잎 수확 기준의 할 일을 종구 재배에 내지 않는다(plan_vs_actual 이 그 사실을 말한다)
+        # [2026-10-14 키 단위] 할 일과 촬영은 읽는 키가 다르다 — 할 일 값만 와도 촬영(잎 장면 · 잎 기간)이 따라 열리지 않게 갈래마다 문을 본다
         tasks = s.get("tasks")
         if tasks == grid_schema.NA or not tasks:
             continue
-        for t in tasks:
+        for t in (tasks if not grid_schema.use_gap(unit, s, TASK_KEYS) else []):
             wd = int(t["work_day"])
             ld = t.get("lead_days", {}) or {}
             m = t.get("materials")
@@ -39,7 +52,7 @@ def from_unit(unit: dict[str, Any], anchor: date, cert: str | None) -> list[dict
                 "fixable_by": t.get(grid_schema.FIXABLE_BY_KEY),            # [WO-ASK-01 §10 2026-10-03] 추론값이면 누가 고칠 수 있는가
             })
         cap = s.get("capture")
-        if isinstance(cap, dict) and cap.get("shoot"):
+        if isinstance(cap, dict) and cap.get("shoot") and not grid_schema.use_gap(unit, s, grid_capture.CAPTURE_KEYS):
             w = s["window"]
             out.append({
                 "kind": "plan.capture", "source": "computed:grid", "resolution": "cultivation_unit",

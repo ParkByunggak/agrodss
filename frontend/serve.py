@@ -411,11 +411,12 @@ def media_page(message: str = "", error: str = "", subject: str | None = None) -
         if h is None:
             out.append(f"<li><b>{_e(s['label'])}</b> — 재배 달력 또는 심은 날 없음</li>")
         elif h["stage"] is None:
-            out.append(f"<li><b>{_e(s['label'])}</b> — 심은 날 뒤 {h['day']}일: 재배 달력 기간 밖(단계 없음)</li>")
+            out.append(f"<li><b>{_e(s['label'])}</b> — 심은 날 뒤 {h['day']}일: {_e(words.capture_said(h))}</li>")
         else:
-            what = f"<b>찍는다</b> — {_e(h['scene'])}" if h["shoot"] else "이 단계는 촬영 칸이 아니다"
-            out.append(f"<li><b>{_e(s['label'])}</b> — 심은 날 뒤 <b>{h['day']}일</b> · 단계 {_e(h['stage'])} "
-                       f"({h['window'][0]}~{h['window'][1]}일) · {what}</li>")
+            # [앞날 걷기 2026-10-14 W-02] 갈래 문장은 4층 한 함수(대화 옆 칸과 같은 것) — 용도 기준이 없는 칸은 기간(잎 기준)도 안 찍는다
+            what = f"<b>찍는다</b> — {_e(h['scene'])}" if h["shoot"] else _e(words.capture_said(h))
+            span = f" ({h['window'][0]}~{h['window'][1]}일)" if h.get("window") else ""
+            out.append(f"<li><b>{_e(s['label'])}</b> — 심은 날 뒤 <b>{h['day']}일</b> · 단계 {_e(h['stage'])}{span} · {what}</li>")
     out.append("</ul>")
     out.append("<h2>어디서 들어오나</h2><ul>")
     out.append(f"<li>기본 inbox: <code>{_e(media.inbox_dir())}</code> — 여기 넣은 파일은 등록 시 <b>옮겨진다</b></li>")

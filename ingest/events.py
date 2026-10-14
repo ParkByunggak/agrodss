@@ -30,6 +30,10 @@ DAMAGE_TYPE = "피해"
 #   그리고 처방 직후 전수를 재니(§7.5) 처음 쓴 표가 **일곱 줄**이었다 — 쟀던 일곱만 적은 것이다. 열여섯을 다 재니 **아홉 줄이 더** 나왔다(전부 계획 대 실제).
 #   빠진 줄은 "소비자 0" 으로 읽히고, 소비자 0 이면 답이 그 초안을 말하지 않는다 — 안 쟀던 것이 안 말하기로 한 것처럼 보이는 자리다. 그래서 **전수와 같은지**를 아래에서 못 박는다.
 #   측정 경계: 봉투(판정 결과·메모)만 대조한다. 화면·되먹임 쪽 소비(피해 → 경보 대조 U-16)는 이 측정이 못 본다 — 못 잰 것이고 소비자 0 이 아니다.
+# [앞날 걷기 2026-10-14 W-19 — 이 표가 뜻하는 것] 봉투 **전부**를 대조하므로 계획 대 실제의 「읽은 사건 수」(events_used) 하나만 바뀌어도 소비자로 잡힌다 —
+#   곧 이 표는 「그 판정이 그 기록을 **센다**」 이지 「그 답이 바뀐다」 가 아니다(아홉 줄 중 여럿이 세기만 한다). 그런데 답은 이 표로 「누르면 판단이 읽습니다」 를
+#   약속했다 — 용도 「종구 생산」 에서 수확 기록은 넣어도 할 일 답이 한 글자도 안 바뀐다(수확 칸 할 일이 없다). 표는 **어느 답에서 그 초안을 말할지**로만 쓰고,
+#   약속은 그 초안을 넣은 셈으로 답을 다시 내 보고 바뀔 때만 한다(chat.unconfirmed_line · 원장에는 안 쓴다 — event_record).
 EVENT_CONSUMERS: dict[str, tuple[str, ...]] = {
     "관수": ("drought_alert", "plan_vs_actual"),
     "시비": ("top_dressing_1", "plan_vs_actual"),
@@ -94,6 +98,16 @@ def add_event(subject: str, event_type: str, observed_at: str, note: str = "", a
               chat_ref: str | None = None, risk: str | None = None, severity: str | None = None) -> dict[str, Any]:
     """사건 1건. observed_at(대상 시각) 필수 — 없으면 거부(지금 시각으로 메우지 않는다).
     피해(U-16)는 무엇의 피해인지(risk) 없이는 들어가지 않는다 — 경보와 대조할 수 없는 피해는 되먹임이 아니다."""
+    return _append(event_record(subject, event_type, observed_at, note=note, advice_ref=advice_ref, materials=materials, quantity=quantity,
+                                now=now, chat_ref=chat_ref, risk=risk, severity=severity))
+
+
+def event_record(subject: str, event_type: str, observed_at: str, note: str = "", advice_ref: str | None = None,
+                 materials: list[str] | None = None, quantity: str | None = None, now: datetime | None = None,
+                 chat_ref: str | None = None, risk: str | None = None, severity: str | None = None) -> dict[str, Any]:
+    """add_event 가 원장에 쓸 그 레코드 — **쓰지 않고** 만들기만 한다(검증 · 스키마 도장까지 같다).
+    [앞날 걷기 2026-10-14 W-19] 「누르면 판단이 읽습니다」 를 약속하기 전에 넣은 셈으로 답을 다시 내 보는 자리(chat.unconfirmed_line)가 쓴다 — 레코드를 두 벌로
+    지으면 넣을 때와 셈할 때가 갈린다(같은 함수 하나)."""
     if event_type not in EVENT_TYPES:
         raise EventError(f"사건 종류가 아니다: {event_type!r} ({', '.join(EVENT_TYPES)})")
     if not subject:
@@ -117,7 +131,7 @@ def add_event(subject: str, event_type: str, observed_at: str, note: str = "", a
         rec["risk"] = risk[:100]
     if severity:
         rec["severity"] = severity
-    return _append(rec)
+    return sch.stamp(rec)
 
 
 def add_observation(subject: str, text: str, observed_at: str, tags: list[str] | None = None,

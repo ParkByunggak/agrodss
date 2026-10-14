@@ -4,6 +4,8 @@
 #       4층(frontend)은 이 함수만 부른다. 1층 원천(ingest.kma)은 여기서만 만진다.
 from __future__ import annotations
 
+import threading
+from contextlib import contextmanager
 from datetime import date
 from typing import Any
 
@@ -14,8 +16,52 @@ from grid import capture as grid_capture
 from grid import schema as grid_schema
 from judge import boundary, evolve, harvest_timing, material_citation, plan_vs_actual, registry, risk_alert, stage_decisions
 from judge.envelope import Envelope
+from schema import records as sch      # 넣은 셈으로 덮을 수 있는 밭 값 — 3층에 붙는 필드 정본 하나(enrich_subject 와 같은 목록)
+
+# 넣은 셈으로 덮을 수 있는 재배 단위 값 — 파종 · 정식 기록을 넣으면 심은 날이 없던 농사에 심은 날이 선다(chat._confirm_locked) · 그 셈도 같은 자리로
+PENDING_SUBJECT_FIELDS: tuple[str, ...] = ("anchor", "anchor_kind", "status")      # subjects.set_anchor 가 바꾸는 셋 그대로
+
+# ── 한 답 안에서 바깥 원천은 한 번 [2026-10-14 W-19 검토] ─────────────────────────────────────────────────────────
+# 넣은 셈으로 판단을 다시 내는 회차(chat._answer_moves · _value_moves)가 예보 · 중기 · 예찰 · 지난 일강수를 **다시 불렀다** — ① 답 하나가 바깥 호출을
+# 서너 배로 늘리고(발행자 PC 는 열쇠 · 좌표가 있다) ② 그 사이 원천이 달라지면 「그 기록이 답을 바꾼다」 로 오측정한다(셈이 재는 것은 기록뿐이어야 한다).
+# same_sources() 안에서는 원천을 (이름 · 재배 단위 · 오늘)마다 한 번만 부르고 같은 값을 다시 쓴다. 화면은 스레드마다 답하므로 스레드마다 따로 둔다.
+_LOCAL = threading.local()
 
 
+@contextmanager
+def same_sources():
+    outer = getattr(_LOCAL, "memo", None) is None
+    if outer:
+        _LOCAL.memo = {}
+    try:
+        yield
+    finally:
+        if outer:
+            _LOCAL.memo = None
+
+
+def _source_key(a: Any) -> Any:
+    """원천이 실제로 쓰는 것만 열쇠로 — 넣은 셈으로 덮은 용도 · 배수는 바깥 원천과 상관없다(같은 날 같은 밭 · 같은 작목이면 같은 원천)."""
+    if isinstance(a, dict):
+        return (a.get("id"), a.get("lat"), a.get("lon"), a.get("crop"))
+    return a.isoformat() if isinstance(a, date) else a
+
+
+def _per_answer(fn):
+    """same_sources() 안에서는 한 번만 부르는 바깥 원천. 부르는 자리(all_judgments)는 그대로 둔다 — 게이트 위치 래칫이 그 이름과 순서를 본다."""
+    def wrapped(*args):
+        memo = getattr(_LOCAL, "memo", None)
+        if memo is None:
+            return fn(*args)
+        key = (fn.__name__, *map(_source_key, args))
+        if key not in memo:
+            memo[key] = fn(*args)
+        return memo[key]
+    wrapped.__name__, wrapped.__doc__, wrapped.__wrapped__ = fn.__name__, fn.__doc__, fn
+    return wrapped
+
+
+@_per_answer
 def gather_pest(subject: dict[str, Any], today: date) -> tuple[list[dict[str, Any]] | None, str]:
     """작목의 NCPMS 예찰(판정하는 해). 키·코드 없으면 (None, 이유).
 
@@ -34,6 +80,7 @@ def gather_pest(subject: dict[str, Any], today: date) -> tuple[list[dict[str, An
     return r["records"], ("대리 작물 " + r["proxy"] if r.get("proxy") else "")
 
 
+@_per_answer
 def gather_forecast(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:
     """좌표와 키가 있을 때만 단기예보를 가져온다. 없으면 (None, 이유)."""
     lat, lon = subject.get("lat"), subject.get("lon")
@@ -47,6 +94,7 @@ def gather_forecast(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | Non
     return r["records"], ""
 
 
+@_per_answer
 def gather_mid(subject: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:
     """[D-21 중기] 좌표·키·권역이 있을 때만 중기예보(D+3~D+10)를 가져온다. 없으면 (None, 이유) — 단기와 같은 꼴, 같은 키."""
     lat, lon = subject.get("lat"), subject.get("lon")
@@ -70,11 +118,14 @@ def drought_days_needed(subject: dict[str, Any], today: date) -> int:
     if miss is not None or not anchor:
         return 0
     stage = grid_capture.stage_for_day(unit, (today - date.fromisoformat(anchor)).days)
+    if stage is not None and grid_schema.use_gap(unit, stage, ("water", grid_schema.DROUGHT_RULES_KEY, "window")):
+        return 0                    # [2026-10-14] 용도 기준이 없는 칸 — 판정기가 관측을 읽기 전에 판단 불가(지식)로 돌아간다(같은 문 · 같은 키)
     rules = (stage or {}).get(grid_schema.DROUGHT_RULES_KEY)
     dd = rules.get("dry_days") if isinstance(rules, dict) else None
     return int(dd) if isinstance(dd, int) and not isinstance(dd, bool) and dd >= 1 else 0
 
 
+@_per_answer
 def gather_obs_rain(subject: dict[str, Any], today: date) -> tuple[list[dict[str, Any]] | None, str]:
     """[D-20 · 발행자 2026-09-29 "기상청 현시점 이전의 무강수일을 활용해서 관수를 권고해야"] 최근접 관측 지점의 지난 일강수(kma_sfcdd) — 마지막 비 온 날의
     원천. 좌표·apihub 키가 있을 때만. 없으면 (None, 이유) — 가뭄 판단은 그때 농가의 비·관수 기록으로만 센다."""
@@ -96,6 +147,7 @@ def gather_obs_rain(subject: dict[str, Any], today: date) -> tuple[list[dict[str
     return r["records"], ""
 
 
+@_per_answer
 def gather_outlook(today: date) -> tuple[list[dict[str, Any]] | None, str]:
     """[D-21 장기 · ⓐ] 발행자가 등재한 1·3개월 전망(수동 정본)에서 오늘 뒤를 덮는 항목. 없으면 (None, 이유) — 좌표·키와 무관(원천을 부르지 않는다)."""
     recs, bad = outlook.load()
@@ -117,19 +169,25 @@ def gather_outlook(today: date) -> tuple[list[dict[str, Any]] | None, str]:
 # 전부 우회하는 경로였다. 3층 진입점은 all_judgments 하나다(게이트 위치 래칫이 그것만 보는 이유).
 
 
-def judgments_for(subject_id: str, today: date | None = None, said: list[dict[str, Any]] | None = None) -> list[Envelope]:
+def judgments_for(subject_id: str, today: date | None = None, said: list[dict[str, Any]] | None = None,
+                  pending_events: list[dict[str, Any]] | None = None,
+                  pending_fields: dict[str, Any] | None = None) -> list[Envelope]:
     """한 재배 단위의 봉투들(채팅 답변용). 없으면 [].
 
     `said` — 방금 물으신 말을 관찰 레코드로 만든 것(원장에 없다 · `events.said_observation`). 증상 결정만 읽는다.
+    `pending_events` — 아직 안 넣은 사건 초안을 **넣은 셈으로** 다시 낼 때(원장에 없다 · `events.event_record`). 「누르면 판단이 읽습니다」 를 약속하기 전에 잰다(W-19).
+    `pending_fields` — 아직 안 넣은 밭 값을 넣은 셈으로(등록부에 안 쓴다) — 「넣으면 다시 답합니다」 도 같은 셈으로 잰다(W-19 의 값 쪽).
     """
-    for s, envs, _ in all_judgments(today=today, only=subject_id, said=said):
+    for s, envs, _ in all_judgments(today=today, only=subject_id, said=said, pending_events=pending_events, pending_fields=pending_fields):
         if s["id"] == subject_id:
             return envs
     return []
 
 
 def all_judgments(today: date | None = None, only: str | None = None,
-                  said: list[dict[str, Any]] | None = None) -> list[tuple[dict[str, Any], list[Envelope], dict[str, str]]]:
+                  said: list[dict[str, Any]] | None = None,
+                  pending_events: list[dict[str, Any]] | None = None,
+                  pending_fields: dict[str, Any] | None = None) -> list[tuple[dict[str, Any], list[Envelope], dict[str, str]]]:
     """재배 단위마다 [수확 시기, 위험 경보, 자재 인용, 계획 대 실제] 봉투 — 원천은 한 번만 모은다."""
     today = today or date.today()   # [A11] 이 회차의 '오늘'은 여기서 한 번 정하고 아래로만 내려간다 — 판정기·원천이 따로 묻지 않는다
     out = []
@@ -138,6 +196,9 @@ def all_judgments(today: date | None = None, only: str | None = None,
             continue
         # [M-6] 필지 등록부에서 3층 허용 필드만 붙인다(주소·PNU 는 안 붙는다) — 입력 병합은 게이트 앞
         s0 = parcels.enrich_subject(s_reg, parcels.by_id(s_reg.get("parcel", "")))
+        if pending_fields and only:
+            # [W-19 값 쪽 2026-10-14] 넣은 셈 — 등록부가 아니라 이 회차의 재배 단위에만 덮는다(게이트는 아래 같은 문 · 허용 키만 지난다). 한 단위를 물을 때만(judgments_for)
+            s0 = {**s0, **{k: v for k, v in pending_fields.items() if k in sch.PARCEL_FIELDS_TO_LAYER3 or k in PENDING_SUBJECT_FIELDS}}
         # [M-15 ⑥] 필지 토양 원천 저장소 — 검정값은 soil_chem 으로 붙고(값은 봉투에 안 실린다), 처방 레코드는 게이트를 지나 결정으로
         soil = soil_store.latest("observation.soil_exam", s_reg.get("parcel", ""))
         if soil and soil.get("status") == "success" and soil.get("values"):
@@ -153,6 +214,9 @@ def all_judgments(today: date | None = None, only: str | None = None,
         reasons = ev.list_records(s0.get("id"), "decision.noncompliance")
         videos = media.list_records(s0.get("id"))
         caps = fb.active_caps(s0.get("id"))
+        # [W-19 2026-10-14] 넣은 셈으로 낼 초안 — 원장이 돌려주는 자리(사건 · 원장 전체) 둘 다에 붙인다(넣으면 둘 다에 생긴다). 게이트는 아래 같은 문
+        extra = [p for p in (pending_events or []) if p.get("subject") == s0.get("id")]
+        evts, ledger = evts + [p for p in extra if p.get("kind") == "event"], ledger + extra
         # [M-3 · I-5 §3-4] 경계 게이트 — 모든 입력을 모은 뒤, 판정 직전, 한 번
         # [D-18 직렬 게이트 2026-09-27] 물으신 말(said)도 같은 문으로 — 원장에 없는 입력이라고 게이트를 비켜 가면 관문의 입력이 새는 형태
         s, recs = boundary.gate(s0, forecast=forecast, mid=mid, outlook=lng, pest=pest, obs_rain=obs_rain, events=evts, ledger=ledger, reasons=reasons, videos=videos, caps=caps,

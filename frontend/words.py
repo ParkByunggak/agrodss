@@ -120,6 +120,8 @@ SWAPS: tuple[tuple[str, str], ...] = (
     ("등급이", "근거가"), ("등급을", "근거를"), ("등급은", "근거는"),
     ("신뢰 등급", "근거"),
     ("등급 계산", "근거: 계산한 값"), ("등급 관측", "근거: 실제로 잰 값"), ("등급 추정", "근거: 짐작"),
+    # [앞날 걷기 2026-10-14 W-24] 「격자 칸이 없다」 가 「재배 달력 단계이 없다」 로 나갔다 — 받침이 바뀌는 꼴은 조사까지(위 「격자가」 와 같은 축 · 같은 꼴 네 곳을 한 줄로)
+    ("격자 칸이", "재배 달력 단계가"),
     ("격자 칸", "재배 달력 단계"), ("격자 창", "재배 달력 기간"), ("격자", "재배 달력"),
     ("재배 단위에", "이 밭에"), ("재배 단위", "농사"), ("기준점", "심은 날"),
     ("불이행 사유", "못 한 이유"), ("미이행", "아직 안 함"),
@@ -271,7 +273,45 @@ def round_said(name: str) -> str:
     return f"이 답은 「{name}」 의 것입니다 — 회차를 말씀하지 않으면 때가 안 지난 첫 회차로 답합니다"
 
 
-USE_GAP_WHAT ={"risk_alert": "위험", "plan_vs_actual": "할 일"}      # 그 칸에서 **안 낸 것** — 판정마다 다르다(검사가 전수를 본다: 빈칸을 내는 판정이 늘면 여기도 는다)
+CAPTURE_GAP = "capture"     # 촬영 안내는 판정이 아니라 결정 id 가 없다 — 그 자리의 이름(grid.capture.hint_for 가 같은 이름을 싣는다)
+# 그 칸에서 **안 낸 것** — 판정마다 다르다(검사가 전수를 본다: 빈칸을 내는 판정이 늘면 여기도 는다).
+# [앞날 걷기 2026-10-14 W-01 · W-02 · W-03] 둘(위험 · 할 일)만 있었다 — 물 · 약 · 촬영 안내는 문 자체가 없어 잎 기준으로 답했다. 문을 세운 자리마다 여기 이름이 선다.
+USE_GAP_WHAT = {"risk_alert": "위험", "plan_vs_actual": "할 일", "pest_alert": "위험", "drainage_alert": "위험",
+                "drought_alert": "물 주기(가뭄 · 관수)", "material_citation": "약 · 자재", CAPTURE_GAP: "찍을 장면"}
+
+
+def use_gap_head(use: str, stages: list[str], did: str) -> str:
+    """판단 **전체**가 용도 기준이 없어 답을 안 낸 때의 머리 한 줄 — 꼬리(use_gap_said)와 같은 결 · 수확 시기 답과 같은 꼴.
+
+    [앞날 걷기 2026-10-14 W-01] 용도 「종구 생산」 을 넣으면 수확 시기는 「아직 모릅니다」 인데 물 · 약 답은 같은 수확 칸을 **잎 기준으로** 「할 일이 아닙니다」
+    라고 단정했다(같은 날 같은 칸에 두 기준). 해당 없음은 「아무리 채워도 안 바뀐다」 는 뜻이라 거짓이다 — 종구 값이 오면 바뀐다. 3층은 구조만 싣고 문장은 여기서."""
+    what = USE_GAP_WHAT.get(did)
+    if not use or not stages or not what:
+        return ""
+    where = " · ".join(_stage_said(s) for s in stages)
+    return f"{use} 재배의 {what} 기준은 재배 달력의 {where}에 아직 없습니다 — 잎 수확 기준으로는 말하지 않습니다. 기준이 오면 냅니다"
+
+
+def no_alert_in(stages: list[str]) -> str:
+    """경보가 없을 때 **어느 칸을 보고** 없다는 것인지 — 용도 기준이 없어 안 본 칸이 있으면 「지금 창에 경보 없음」 은 넓게 말한 것이다(W-03).
+    본 칸이 없으면(달력이 끝났다) 그 사실을 말한다."""
+    if not stages:
+        return "재배 달력에 지금 볼 단계가 없습니다"
+    return f"{' · '.join(_stage_said(s) for s in stages)}에는 경보 없음"
+
+
+def capture_said(hint: dict) -> str:
+    """오늘 **찍을 장면** 한 줄 — 촬영 안내(대화 옆 · 영상 반입)가 같은 함수를 쓴다.
+
+    [앞날 걷기 2026-10-14 W-02 · W-06] 대화 옆 칸이 `scene or shoot` 를 찍어 찍지 않는 칸에서 「False」 가 나갔고, 용도 「종구 생산」 이 있어도 잎 수확 장면을
+    안내했다(촬영 안내는 날 재배 단위를 넘겨 용도를 못 받았다 — 뿌리는 grid.schema._use_of). 갈래 넷: 용도 기준 없음 · 찍는 칸 · 안 찍는 칸 · 달력 밖."""
+    if hint.get("use_gap_use"):
+        return use_gap_head(str(hint["use_gap_use"]), [str(hint.get("stage") or "")], CAPTURE_GAP)
+    if hint.get("stage") is None:
+        return "재배 달력이 끝나 찍을 단계가 없습니다"
+    if hint.get("shoot"):
+        return str(hint.get("scene") or "찍는 단계입니다 — 장면은 재배 달력에 아직 없습니다")
+    return "이 단계는 찍는 단계가 아닙니다"
 
 
 def use_gap_said(use: str, stages: list[str], did: str) -> str:
@@ -360,25 +400,67 @@ def _in_days(n: int) -> str:
     return {1: "내일", 2: "모레"}.get(n) or f"{n}일 뒤"
 
 
-def not_in_diary(kind: str, count: int, label: str) -> str:
+def not_in_diary(kind: str, count: int, label: str, then: str = "reads") -> str:
     """아직 일지에 **안 넣은 사건 초안**이 이 답을 바꾼다 — 그 사실 한 줄. `waiting`(안 넣은 *값*)의 사건 판이다.
     문장이 2층에 박혀 있었다(가뭄 답 한 곳) — 자리가 늘면 사람 말이 갈라지므로 여기 하나로 둔다. 단추 말은 부르는 쪽 정본에서 받는다(`chat.confirm_label`)."""
-    return not_in_diary_many([(kind, count)], label)
+    return not_in_diary_many([(kind, count)], label, then=then)
 
 
-def not_in_diary_many(counts: list[tuple[str, int]], label: str) -> str:
+NOT_IN_DIARY_THEN = ("reads", "idle", "lookup")     # 누르면 무엇이 되는가 — 이 답이 읽는다 · 일지에만 남는다(이 답은 안 바뀐다) · 이 목록에 든다(일지 조회)
+
+
+def not_in_diary_many(counts: list[tuple[str, int]], label: str, then: str = "reads",
+                      gap_use: str = "", gap_stages: list[str] | tuple[str, ...] = ()) -> str:
     """안 넣은 기록이 **여러 종류**면 한 문장으로 — 단추 안내는 한 번만.
 
     [길이 측정 2026-10-07] 같은 자리의 사건 판이다. 미확인 초안이 셋이면 「'일지에 넣기' 를 누르면 판단이 읽습니다」 가 **세 번** 똑같이 나갔고
     할 일 답이 651자가 됐다. 종류와 건수는 다 말하고(덜 말하면 다른 사실이다) 꼬리는 한 번만 말한다.
+
+    [앞날 걷기 2026-10-14 W-19] 「누르면 판단이 읽습니다」 는 **약속**인데 그 근거가 「그 판정이 그 종류의 기록을 센다」 는 표였다 — 세는 것과 답이 바뀌는 것은
+    다르다. 용도 「종구 생산」 에서 수확 기록은 수확 칸 할 일이 없어 넣어도 할 일 답이 한 글자도 안 바뀌었다. 그래서 꼬리가 셋이다(`then`): 넣은 셈으로
+    답을 다시 내 봐서 바뀌면 reads, 안 바뀌면 idle(일지에는 남는다 · 이 답은 안 바뀐다 — 그 날이 용도 기준 없는 칸이면 그 까닭까지), 일지 조회는 lookup.
     """
+    if then not in NOT_IN_DIARY_THEN:
+        raise ValueError(f"누르면 무엇이 되는지는 {NOT_IN_DIARY_THEN} 중 하나 — {then!r}")
     rows = [(k, int(n)) for k, n in counts if int(n) > 0]
     if not rows:
         raise ValueError("안 넣은 기록이 없으면 그 말을 하지 않는다 — 0건을 말하는 자리는 없다")
     said = " · ".join(f"{k} {n}건" for k, n in rows)
     head = (f"아직 일지에 넣지 않은 기록이 있습니다({said})" if len(rows) > 1
             else f"아직 일지에 넣지 않은 {rows[0][0]} 기록 {rows[0][1]}건이 있습니다")      # 한 종류면 전과 **같은 문장**이다(바꿀 이유가 없는 쪽은 안 바꾼다)
-    return f"{head} — '{label}' {_records.josa(label, '를')} 누르면 판단이 읽습니다"
+    press = f"'{label}' {_records.josa(label, '를')} 누르면"
+    if then == "lookup":
+        return f"{head} — {press} 일지에 들어가 이 조회에도 나옵니다"
+    if then == "idle":
+        # 한 문장으로 — 답 말미의 줄은 「 · 」 로 이어지고 「이 답은 …」 은 값 쪽 줄(waiting)의 머리라, 여기서 둘 다 쓰면 줄 수 검사가 두 줄로 센다(말이 갈린다)
+        return f"{head} — {press} {_idle_said(gap_use, gap_stages)}"
+    return f"{head} — {press} 판단이 읽습니다"
+
+
+def _idle_said(gap_use: str, gap_stages: list[str] | tuple[str, ...], only: bool = False) -> str:
+    """눌러도 **지금 답이 안 바뀌는** 기록의 꼬리 — 일지에는 남는다 · 그 날이 용도 기준 없는 칸이면 그 까닭(잰 것만)."""
+    where = " · ".join(_stage_said(s) for s in gap_stages)
+    left = "영농일지에만 남" if only else "영농일지에 남"
+    if gap_use and where:
+        return f"{left}지만, 그 날이 든 {where}에는 {gap_use} 재배 기준이 아직 없어 기준이 오기 전에는 지금 답이 그 기록을 읽지 않습니다"
+    return f"{left}고, 그 기록으로는 지금 답이 바뀌지 않습니다"
+
+
+def not_in_diary_split(reads: list[tuple[str, int]], idle: list[tuple[str, int]], label: str,
+                       gap_use: str = "", gap_stages: list[str] | tuple[str, ...] = ()) -> str:
+    """안 넣은 기록 가운데 **이 답을 바꾸는 것(reads)과 안 바꾸는 것(idle)** 이 섞이면 한 문장으로 — 종류 · 건수는 다 말하고 단추 안내는 한 번(위와 같은 규율).
+    한쪽만 있으면 위 문장 그대로다(갈래가 하나면 문장을 새로 짓지 않는다)."""
+    if not idle:
+        return not_in_diary_many(reads, label)
+    if not reads:
+        return not_in_diary_many(idle, label, then="idle", gap_use=gap_use, gap_stages=gap_stages)
+    rows = [(k, int(n)) for k, n in list(reads) + list(idle) if int(n) > 0]
+    said = " · ".join(f"{k} {n}건" for k, n in rows)
+    def _and(names: list[str]) -> str:                       # 「 · 」 는 답 말미의 줄 이음이라 종류 이름 사이에 안 쓴다 — 「관수와 방제」(조사는 정본)
+        return " ".join(f"{n}{_records.josa(n, '와')}" for n in names[:-1]) + (" " if len(names) > 1 else "") + names[-1]
+    moved, kept = _and([k for k, _ in reads]), _and([k for k, _ in idle])
+    return (f"아직 일지에 넣지 않은 기록이 있습니다({said}) — '{label}' {_records.josa(label, '를')} 누르면 {moved}{_records.josa(moved, '은')} 판단이 읽고, "
+            f"{kept}{_records.josa(kept, '은')} {_idle_said(gap_use, gap_stages, only=True)}")
 
 
 def _places() -> str:

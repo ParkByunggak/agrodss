@@ -358,39 +358,54 @@ def judge_replant(subject, today: date, observations: list[dict[str, Any]] | Non
                             "summary": f"결주 관찰 {len(seen)}건 — {dl} 까지 보식(2단계 다시 심기)"})
 
 
-def _delegate_risk(subject, did: str, today: date, forecast, pest) -> Envelope:
+def _delegate_risk(subject, did: str, today: date, forecast, pest, evts=None) -> Envelope:
     ctx, env = _base(subject, did, today)
     if env:
         return env
     unit, stage, sid, as_of = ctx
-    r = risk_alert.judge(subject, forecast=forecast, today=today, pest=pest)
-    if r.kind != "판단함":
-        return Envelope(r.kind, did, sid, as_of, missing=list(r.missing), result=dict(r.result), notes=list(r.notes))
+    # [2026-10-14 검토] 사건 원장도 위험 경보와 **같은 것**을 넘긴다 — 안 넘기면 수확을 넣은 뒤에도 카드만 「수확 칸의 위험은 안 냈다」 를 말한다(위험 경보는 수확 기록을 보고 멈춘다)
+    r = risk_alert.judge(subject, forecast=forecast, today=today, pest=pest, evts=[e for e in (evts or []) if e.get("kind") == "event"])
     tag = f"{stage['order']}. {stage['name']}"
-    if tag not in (r.result.get("stages") or []):
+    looked = r.result.get("stages")
+    # [앞날 걷기 2026-10-14 직렬 게이트] **범위를 먼저** 가른다 — 위험 경보가 판단 불가(지식)(보는 칸 전부 용도 기준 없음)로 나가자 종류를 그대로 옮기던 앞 문이
+    # 칸 3(병해충) 카드까지 「아직 모릅니다」 로 만들었다. 이 카드의 칸이 지금 안 보는 칸이면 그것이 사실이고(해당 없음), 종류를 옮기는 것은 그 다음이다
+    if r.kind in ("판단함", "판단 불가(지식)") and looked is not None and tag not in looked:
         # [발행자 2026-09-29 "답이 틀렸습니다 — '칸이 기간이 아닙니다' 는 농가에게 하는 말이 아니다"] 안쪽 사유("칸이 창 밖")가 낱말 표를 거쳐 뜻 없는 말이 됐다
         # (SURF-1 내부 표현 노출). 사람에게는 **오늘이 어느 칸이고 무엇을 보면 되는지**를 말한다 — 정확한 사유는 why 에 남긴다.
-        now_cells = " · ".join(r.result.get("stages") or []) or "없음"
+        # [2026-10-14 W-03 · W-24] 「그 칸의 위험은 「위험 경보」 에 전부 있습니다」 는 용도 기준이 없어 **안 낸** 칸에서 거짓이었고(거기 가도 없다),
+        # 달력이 끝난 날은 「없음 칸을 봅니다」 였다. 안 낸 칸은 구조로 넘기고(꼬리는 4층이 한 번 말한다) 가리키는 말은 본 칸이 있을 때만
+        gap = list(r.result.get("use_gap_stages") or [])
+        seen = [s for s in looked if s not in gap]
+        now_cells = " · ".join(looked) or "없음"
         day = r.result.get("days_since_anchor")
+        # 안 낸 칸이 섞이면 가리키는 칸을 이름으로 — 「그 칸」 이 둘(가리킨 칸 · 꼬리가 말하는 안 낸 칸)이 되면 같은 말이 다른 칸을 뜻한다
+        point = (f". {' · '.join(seen)} 칸의 위험은 「위험 경보」 에 있습니다" if gap else ". 그 칸의 위험은 「위험 경보」 에 전부 있습니다") if seen else ""
+        where = f"{now_cells} 칸을 봅니다{point}" if looked else "재배 달력에 볼 칸이 더 없습니다"
         return Envelope("해당 없음", did, sid, as_of,
                         result={"why": f"칸 '{tag}' {sch.josa(tag, '가')} horizon 밖 — 오늘 {day}일째, 보는 칸 {now_cells}",
-                                "summary": f"{tag} 칸의 경보는 지금 볼 때가 아닙니다 — 오늘은 파종 {day}일째라 {now_cells} 칸을 봅니다. 그 칸의 위험은 「위험 경보」 에 전부 있습니다"})
+                                "summary": f"{tag} 칸의 경보는 지금 볼 때가 아닙니다 — 오늘은 파종 {day}일째라 {where}",
+                                "use_gap_stages": gap, "use_gap_use": r.result.get("use_gap_use")})
+    if r.kind != "판단함":
+        return Envelope(r.kind, did, sid, as_of, missing=list(r.missing), result=dict(r.result), notes=list(r.notes))
     alerts = [a for a in r.result.get("alerts", []) if a.get("stage") == tag]
     body = " / ".join(f"{a['level']} {a['risk']}" for a in alerts) or "이 칸에 경보 없음"
     # [2026-10-03] 배수 메모는 과습 위험이 **이 칸에** 있을 때만 — 병해충 카드(칸 3)에 배수 말이 붙으면 다른 칸의 근거가 섞인다
     wet_here = any("drainage" in a or "needs" in a for a in alerts)
-    notes = [n for n in r.notes if wet_here or not n.startswith(risk_alert.DRAINAGE_NOTE_PREFIX)]
+    # [2026-10-14 검토] 용도 메모도 같은 규율 — 이 칸이 용도 기준 없는 칸이 아니면 다른 칸의 「안 냈다」 를 이 카드에 싣지 않는다(실으면 이 카드가 용도를 읽는 것처럼 센다)
+    own_gap = tag in (r.result.get("use_gap_stages") or [])
+    notes = [n for n in r.notes if (wet_here or not n.startswith(risk_alert.DRAINAGE_NOTE_PREFIX))
+             and (own_gap or not n.startswith(risk_alert.USE_NOTE_PREFIX))]
     inputs = [i for i in r.inputs if wet_here or i.axis != "soil_water"]
     return Envelope("판단함", did, sid, as_of, inputs=inputs, grade=r.grade, revisit_at=r.revisit_at,
                     result={"stage": tag, "alerts": alerts, "signals": r.result.get("signals"), "summary": body}, notes=notes)
 
 
-def judge_pest_alert(subject, today: date, forecast=None, pest=None) -> Envelope:
-    return _delegate_risk(subject, "pest_alert", today, forecast, pest)
+def judge_pest_alert(subject, today: date, forecast=None, pest=None, evts=None) -> Envelope:
+    return _delegate_risk(subject, "pest_alert", today, forecast, pest, evts)
 
 
-def judge_drainage_alert(subject, today: date, forecast=None, pest=None) -> Envelope:
-    return _delegate_risk(subject, "drainage_alert", today, forecast, pest)
+def judge_drainage_alert(subject, today: date, forecast=None, pest=None, evts=None) -> Envelope:
+    return _delegate_risk(subject, "drainage_alert", today, forecast, pest, evts)
 
 
 def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]] | None = None,
@@ -769,6 +784,10 @@ def judge_drought_alert(subject, today: date, evts: list[dict[str, Any]] | None 
         return Envelope("해당 없음", did, sid, as_of, result={"why": f"기준점 후 {day}일에 열린 격자 칸이 없다"})
     d = registry.get(did)
     key, lookback = d.params["rules_key"], int(d.params["lookback_days"])
+    if grid_schema.use_gap(unit, stage, ("water", key, "window")):     # 오늘 칸을 기간으로 고른다 — 물 값만 오고 기간이 잎이면 다른 날의 값을 읽는다(자재와 같은 처방)
+        # [앞날 걷기 2026-10-14 W-01 · 직렬 게이트] 아래 두 문(water N/A · D-22 dry_days N/A)은 **잎 수확 기준의 결정**이다 — 그 뒤에 두면 종구 재배에 잎 기준
+        # 「할 일이 아닙니다」 가 그대로 샌다. 그래서 그 둘보다 **앞**에서 본다. 용도가 없으면 이 문은 안 서고 D-22 는 그대로다(반대 방향 검사가 고정)
+        return units.use_gap_envelope(unit, stage, did, sid, as_of)
     uid = _unit_id(subject, unit)
     water = stage.get("water")
     if water == grid_schema.NA:
@@ -845,8 +864,8 @@ def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pe
     # [D-18 직렬 게이트 2026-09-27] 방금 물으신 말(said · 원장에 없다)은 **증상 결정만** 읽는다 — 재파종 판단은 저장된 관찰만
     said_obs = [e for e in (said or []) if e.get("kind") == "observation.note"]
     return [judge_sowing_window(subject, today), judge_base_fertilization(subject, today, prescriptions, unreadable), judge_replant(subject, today, obs),
-            judge_pest_alert(subject, today, forecast, pest), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions, unreadable),
-            judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions, unreadable), judge_drainage_alert(subject, today, forecast, pest),
+            judge_pest_alert(subject, today, forecast, pest, evts), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions, unreadable),
+            judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions, unreadable), judge_drainage_alert(subject, today, forecast, pest, evts),
             judge_ship_or_store(subject, today, targets, harvest), judge_forecast_citation(subject, today, forecast, forecast_why, mid, mid_why, outlook, outlook_why),
             judge_drought_alert(subject, today, evts, obs, obs_rain, obs_rain_why),
             judge_symptom_triage(subject, today, obs + said_obs)]

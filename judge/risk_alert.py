@@ -16,11 +16,13 @@ from typing import Any
 from grid import capture, schema as grid_schema   # capture.is_open — '오늘 칸' 경계 약속의 정본(B4)
 from judge import registry, units
 from judge.envelope import AxisUse, Envelope, weakest
-from judge.harvest_timing import GRID_GRADE
+from judge.harvest_timing import GRID_GRADE, WINDOW_KEYS
 from judge.need import need_anchor
 from schema import records as sch      # 조사 정본(sch.josa) — 칸 이름 · 배수 등급이 값으로 들어오는 자리
 
 DECISION_ID = "risk_alert"
+RISK_KEYS: tuple[str, ...] = ("risks", "window")   # 위험이 칸에서 읽는 키 — 위험 목록과 그 칸이 열리는 기간(용도 문은 둘 다 덮어써져야 연다)
+USE_NOTE_PREFIX = "용도 '"           # 용도 메모의 머리 — 칸 카드(stage_decisions._delegate_risk)가 제 칸 것이 아니면 걷는다(배수 메모와 같은 꼴)
 DRAINAGE_NOTE_PREFIX = "배수"       # 배수 메모의 머리 — 칸 카드(stage_decisions._delegate_risk)가 과습 위험이 없는 칸에서 이 메모를 걷는다
 # [재검토 2026-10-13] 대장 페이지 ⓪ʷ 가 이 메모를 손으로 인용해 화면과 달랐다 — 이름을 두어 인용하는 쪽이 여기서 읽는다
 NO_DRAINAGE_NOTE = "배수 등급 없음 — 밭 정보(/me)에 배수를 적으면 과습 근거에 실린다"
@@ -177,9 +179,11 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
     watched = 0
     watch: list[dict[str, Any]] = []                   # [발행자 2026-09-29] 열린 칸의 회복 가능 위험 중 신호가 없어 경보는 아닌 것 — "무엇을 봐야 하나" 에 이름은 말한다(판정은 안 바꾼다)
     gapped: list[str] = []                             # [종구 2026-10-03] 용도 기준이 없는 칸 — 잎 수확 기준의 위험을 종구 재배에 내지 않는다(메모가 말한다)
+    gap_stages: list[dict[str, Any]] = []
     for s in stages:
-        if grid_schema.use_gap(unit, s):
+        if grid_schema.use_gap(unit, s, RISK_KEYS):
             gapped.append(f"{s['order']}. {s['name']}")
+            gap_stages.append(s)
             continue
         risks = s.get("risks")
         if risks == grid_schema.NA or not risks:
@@ -225,19 +229,35 @@ def judge(subject: dict[str, Any], forecast: list[dict[str, Any]] | None = None,
         w = s.get("window")
         if harvested or ended:
             break
-        if grid_schema.use_gap(unit, s):
-            continue                                   # [종구] 잎 노화·도복은 종구 재배에선 목표 상태일 수 있다 — 기준이 오기 전엔 '수확 지연' 을 내지 않는다
-        if isinstance(w, dict) and "harvest_timing" in (s.get("decisions") or []) and day > w["to_day"]:
+        passed = isinstance(w, dict) and "harvest_timing" in (s.get("decisions") or []) and day > w["to_day"]
+        if grid_schema.use_gap(unit, s, WINDOW_KEYS):
+            # [종구] 잎 노화·도복은 종구 재배에선 목표 상태일 수 있다 — 기준이 오기 전엔 '수확 지연' 을 내지 않는다.
+            # [앞날 걷기 2026-10-14 W-03] 그런데 **안 냈다는 말도 안 했다**(11-24: 「지금 창에 경보 없음」 만) — 잎 기준이면 났을 칸을 안 낸 칸으로 싣는다
+            if passed and f"{s['order']}. {s['name']}" not in gapped:
+                gapped.append(f"{s['order']}. {s['name']}")
+                gap_stages.append(s)
+            continue
+        if passed:
             alerts.append({"risk": "수확 지연", "stage": f"{s['order']}. {s['name']}", "level": "경보",
                            "recoverable": False, "policy": "oversignal_ok",
                            "basis": f"수확 창({w['from_day']}~{w['to_day']}일)을 {day - w['to_day']}일 넘겼다", "axes": ["anchor"], "source": "격자"})
+    gap_stages.sort(key=lambda s: s.get("order") or 0)              # 보는 칸(앞)과 지난 수확 칸(뒤)이 섞여 들어온다 — 말은 달력 순서로
+    gapped = [f"{s['order']}. {s['name']}" for s in gap_stages]
+    in_scope = [f"{s['order']}. {s['name']}" for s in stages]
+    if in_scope and not alerts and all(t in gapped for t in in_scope):
+        # [앞날 걷기 2026-10-14 W-03 · D-14] 보는 칸 **전부**가 용도 기준이 없으면 「경보 없음」 은 판단이 아니라 안 본 것이다 — 판단함 「지금 창에 경보 없음」 으로
+        # 나가면 「그 칸은 괜찮다」 로 읽힌다(잎 노화 · 도복이 종구에선 목표 상태라 끈 것인데). 수확 시기와 같은 판단 불가(지식) — 값이 오면 바뀐다. 문장은 4층
+        return Envelope("판단 불가(지식)", DECISION_ID, sid, as_of,
+                        result={"why": " · ".join(grid_schema.use_gap_note(unit, s) for s in gap_stages),
+                                "days_since_anchor": day, "horizon_days": horizon, "stages": in_scope,
+                                "use_gap_stages": gapped, "use_gap_use": unit.get("_use")})
     inputs = [AxisUse("anchor", anchor, subject.get("source", "farmer"), "cultivation_unit", "관측")]
     grades = ["관측", GRID_GRADE.get(unit["unit"].get("confidence", "하"), "추정")]
     notes = [grid_schema.source_note(unit), f"임계: {d.params['sources']}"]
     if gapped:
-        notes.append(f"용도 '{unit.get('_use')}' — 칸 {' · '.join(gapped)} 의 위험은 그 용도의 기준이 재배 달력에 없어 내지 않는다(잎 수확 기준 아님 · 발행자 정본 by_use 대기)")
+        notes.append(f"{USE_NOTE_PREFIX}{unit.get('_use')}' — 칸 {' · '.join(gapped)} 의 위험은 그 용도의 기준이 재배 달력에 없어 내지 않는다(잎 수확 기준 아님 · 발행자 정본 by_use 대기)")
     if unit.get("_use_overridden"):
-        notes.append(f"용도 '{unit.get('_use')}' 덮어쓰기 칸 {unit['_use_overridden']} — 출처는 그 칸의 by_use.source")
+        notes.append(f"{USE_NOTE_PREFIX}{unit.get('_use')}' 덮어쓰기 칸 {unit['_use_overridden']} — 출처는 그 칸의 by_use.source")
     if forecast:
         f0 = forecast[0]
         inputs.append(AxisUse("forecast", f0.get("observed_at"), f0.get("source", "?"), f0.get("resolution", "?"), "관측"))

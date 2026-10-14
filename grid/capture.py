@@ -14,6 +14,9 @@ from grid import schema
 # 걸린다 — 어느 칸이 맞는지는 격자 지식(검토지 ⓓ B4)이고, 코드가 정할 일이 아니다. 답이 오기 전까지의 **약속**: 경계일은 **앞 칸**이다
 # (첫 매치). 판정기마다 따로 창을 비교하면 그 약속이 갈린다(실측: stage_for_day 는 칸 3, risk_alert 는 칸 3·4). 그래서 열린 칸 전부는
 # stages_open, 오늘 칸 하나는 stage_for_day — 둘 다 여기서만 창을 비교한다. B4 답이 오면 격자 데이터에서 겹침을 없애고 이 약속은 사라진다.
+CAPTURE_KEYS: tuple[str, ...] = ("capture", "window")     # 촬영이 칸에서 읽는 키 — 장면과 그 기간(용도 문은 이 둘이 다 덮어써져야 연다 · 계획표 · 몰도 같은 것)
+
+
 def is_open(window: Any, day: int) -> bool:
     return isinstance(window, dict) and window["from_day"] <= day <= window["to_day"]
 
@@ -30,7 +33,7 @@ def stage_for_day(unit: dict[str, Any], day: int) -> dict[str, Any] | None:
 
 
 def hint_for(subject: dict[str, Any], today: date) -> dict[str, Any] | None:
-    """subject(data/subjects.json 항목) → {day, stage, shoot, scene, window} 또는 None(격자·기준점 없음)."""
+    """subject(data/subjects.json 항목) → {day, stage, shoot, scene, window[, use_gap_use]} 또는 None(격자·기준점 없음). 문장은 frontend.words.capture_said."""
     # [U-23] 읽는 자리는 정본 하나(`schema.load_unit`) — 전에는 여기가 제 손으로 열고 **조용히 None** 을
     # 돌려줬다. 힌트 층은 봉투를 내지 않으므로 사유는 '읽다 버린 것' 에만 남는다(/changes 가 말한다).
     anchor = subject.get("anchor")
@@ -41,6 +44,10 @@ def hint_for(subject: dict[str, Any], today: date) -> dict[str, Any] | None:
     s = stage_for_day(unit, day)
     if s is None:
         return {"day": day, "stage": None, "shoot": False, "scene": "", "window": None}
+    if schema.use_gap(unit, s, CAPTURE_KEYS):
+        # [앞날 걷기 2026-10-14 W-02] 용도 기준이 없는 칸 — 잎 수확 장면(「수확 직전 전경 + 수확물 근접」)을 종구 재배에 안내하지 않는다. 찍는지조차 모르므로 shoot 은 None
+        # (False 는 「안 찍는 칸」 이라는 다른 사실이다). 문장은 4층(words.capture_said) — 여기는 용도 이름만 싣는다
+        return {"day": day, "stage": f"{s['order']}. {s['name']}", "shoot": None, "scene": "", "window": None, "use_gap_use": unit.get("_use")}
     cap = s.get("capture") if isinstance(s.get("capture"), dict) else {}
     return {
         "day": day,

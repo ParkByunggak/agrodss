@@ -53,12 +53,13 @@ def _send(q: str, day: int = 8):
 
 
 def test_only_the_judgments_that_read_the_value_say_it(publisher_state):
-    """양방향 — 용도를 읽는 판정(수확 시기)의 답에는 붙고, 안 읽는 판정(가뭄)의 답에는 안 붙는다."""
+    """양방향 — 용도를 읽는 판정(수확 시기)의 답에는 붙고, 안 읽는 판정(웃거름)의 답에는 안 붙는다.
+    [2026-10-14] 가뭄은 이제 용도를 읽는다(수확 칸부터 — 용도 문 W-01) — 안 읽는 쪽 보기를 웃거름으로 바꿨다. 날에 따라 읽는지는 test_seed_use_every_reader 가 잰다."""
     from ingest import subjects
     s = subjects.by_id(SID)
     for did in parcels.FIELD_CONSUMERS["use"]:
         assert WAIT_SAID in chat.pending_value_line(s, did), did
-    for did in ("drought_alert", "symptom_triage", "forecast_citation"):
+    for did in ("top_dressing_1", "symptom_triage", "forecast_citation"):
         assert did not in parcels.FIELD_CONSUMERS["use"]                      # 전제부터 — 소비자 표에 없다
         assert chat.pending_value_line(s, did) == "", did
 

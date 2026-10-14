@@ -48,3 +48,13 @@ def envelope_for(miss: grid_schema.UnitMiss, decision_id: str, sid: str, as_of: 
     if who:
         result["who"] = who
     return Envelope(kind, decision_id, sid, as_of, missing=missing, result=result)
+
+
+def use_gap_envelope(unit: dict, stage: dict, decision_id: str, sid: str, as_of: str) -> Envelope:
+    """용도 기준이 오늘 칸에 없어 **판단을 통째로** 안 낸다 — 판단 불가(지식)(값이 오면 바뀐다 · 해당 없음 아님 · D-14 는 판단 불가로 바꾸는 것만 허락한다).
+
+    [앞날 걷기 2026-10-14 W-01] 용도 「종구 생산」 에서 수확 시기는 「아직 모릅니다」 인데 물 · 약은 같은 수확 칸을 잎 기준으로 「할 일이 아닙니다」 라고 단정했다.
+    구조만 싣고 문장은 4층(`words.use_gap_head`) — 요약을 판정기마다 지으면 물 · 약 · 위험이 각자 한 벌씩 된다(위 envelope_for 가 한 자리인 것과 같은 이유)."""
+    tag = f"{stage.get('order')}. {stage.get('name')}"
+    return Envelope("판단 불가(지식)", decision_id, sid, as_of,
+                    result={"why": grid_schema.use_gap_note(unit, stage), "stage": tag, "use_gap_stages": [tag], "use_gap_use": unit.get("_use")})

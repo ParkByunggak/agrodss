@@ -4,6 +4,7 @@
 # 처방: 페이지가 수확 창 앞 · 안 · 뒤(_PHASE)에 따라 말을 고른다. 이 검사는 **그 말을 판정 · 답 · 화면으로 다시 잰다** — 페이지가 주장하는 것을
 # 정본이 실제로 내는지(여러 날 · 격리 사본). 그리고 ⓪ˢ 의 「안 바뀌는 것」(W-22)은 **지금의 결함을 말하는 문장**이라, W-01 · W-02 · W-03 을 고치면 여기가
 # 붉어진다 — 그때 페이지 문장도 함께 고치라는 뜻이다(고친 뒤에도 「안 바뀐다」 고 말하는 페이지가 되지 않게).
+# [2026-10-14 그 날이 왔다] 넷을 고치자 예정대로 붉어졌고 페이지는 「함께 바뀌는 것」 을 말한다 — 이제 같은 칸의 답 · 안내가 같은 말을 하는지를 잰다.
 # [재검토 L1 · L2 · L3 · R1 · R2 · R3 · R4 · WF-4 · 2026-10-14] 첫 판은 창(_PHASE) 하나로 골라 **창이 열리는 날**(경계일 — 답은 아직 생육 중기 칸)과 **수확 후 칸**
 # (촬영 칸이 아니다)에서 거짓이었고, 과습 · 배수 · 자기 점검 문장은 날을 아예 안 봤다. 이 검사는 창이 아니라 **답이 읽는 칸**(_AT)으로 나뉜 문장을 경계일 ·
 # 수확 칸 · 수확 후 칸 · 달력 끝 뒤에서 다시 잰다 — 과습 · 배수는 배수 값을 바꿔 판정이 실제로 바뀌는지로(양방향).
@@ -94,39 +95,45 @@ def test_the_stage_the_page_speaks_from_is_the_stage_the_answers_read(monkeypatc
 
 
 @pytest.mark.parametrize("day", ["2026-10-14", "2026-10-20", "2026-11-10", "2026-11-24"])
-def test_what_the_seed_use_does_not_change_is_still_true(monkeypatch, srv, day):
-    """⓪ˢ 「안 바뀌는 것」(W-22) — 용도를 넣은 뒤(격리 사본) 그 날 칸의 답 · 화면이 실제로 그렇다. 고치면 이 검사가 붉어진다(페이지 문장도 고칠 때)."""
+def test_what_the_seed_use_changes_together_is_true(monkeypatch, srv, day):
+    """⓪ˢ 「함께 바뀌는 것」 — 용도를 넣은 뒤(격리 사본) 그 날 칸의 답 · 화면이 실제로 그렇다.
+    [2026-10-14 W-01 · W-02 · W-03 · W-06 고침] 이 검사의 앞 판(「안 바뀌는 것」)은 **결함을 말하는 문장**을 고정했고 고치면 붉어지게 해 두었다 — 붉어졌고 페이지 문장도
+    함께 고쳤다. 이제 고정하는 것은 **같은 칸의 답과 안내가 같은 말을 한다**는 사실이다(양방향: 용도가 없으면 전의 잎 기준 답)."""
     page = _page(monkeypatch, day)
     body = _item(page, "⓪ˢ")
     at = page._AT
-    assert "안 바뀌는 것" in body
+    assert "함께 바뀌는 것" in body and "안 바뀌는 것" not in body and "W-01 · W-02 · W-03" not in body
     risk_plain = _ask(monkeypatch, day, "위험한 거 있나")                                # 용도를 넣기 전
     parcels.set_fields("p001", use="종구 생산", overwrite=True)
-    if at in ("전", "수확"):
+    # [검토 2026-10-14] 몰 시계열은 작기 전체를 그린다 — 넣는 그 날부터 수확 · 수확 후 칸이 「촬영 기준 대기」(날과 상관없이 · 달력 끝 뒤에도). 페이지가 그렇게 말한다
+    from mall import product as mall
+    assert page._MALL_SAID in body and f"「{mall.GAP_STATE}」" in page._MALL_SAID
+    assert _seen(monkeypatch, srv, day, f"/mall/{SID}").count(mall.GAP_STATE) == 2
+    if at in ("전", "수확", "후"):
         probe = page._HARVEST_FROM.isoformat() if at == "전" else day                 # 경계일의 문장은 「답이 수확 칸을 읽기 시작하는 날」 부터를 말한다
-        assert "W-01 · W-02 · W-03" in body and "수확 직전 전경 + 수확물 근접" in body
+        where = page._SAID_AT["후" if at == "후" else "수확"]
+        assert "모두 같은 말" in body and f"재배 달력의 {where}에 아직 없습니다" in body and "잎 수확 기준으로는 말하지 않습니다" in body
         if at == "전":
             assert page.when(page._HARVEST_FROM) in body
-            assert "지금 창에 경보 없음" not in _ask(monkeypatch, day, "위험한 거 있나")   # 그 날은 아직 생육 중기 칸 — 그래서 날짜를 붙여 말한다(L1 원 결함)
-        assert "이번엔 할 일이 아닙니다" in _ask(monkeypatch, probe, "물 줘야 하나")         # W-01 — 물 답은 잎 수확 칸 기준
-        assert "지금 창에 경보 없음" in _ask(monkeypatch, probe, "위험한 거 있나")            # W-03 — 머리가 「경보 없음」
-        assert "수확 직전 전경 + 수확물 근접" in _seen(monkeypatch, srv, probe, "/media")      # W-02 — 촬영 안내는 잎 수확 장면
-    elif at == "후":
-        assert "「이 단계는 촬영 칸이 아니다」" in body and "W-06" in body and "수확 직전 전경" not in body
-        media_seen = _seen(monkeypatch, srv, day, "/media")
-        assert "이 단계는 촬영 칸이 아니다" in media_seen and "수확 직전 전경 + 수확물 근접" not in media_seen
-        assert re.search(r"찍을 장면\s*·?\s*6\. 수확 후 · 후작\s+False", _seen(monkeypatch, srv, day, f"/c/{SID}"))   # W-06 — 고치면 붉어진다
-        for q in ("물 줘야 하나", "약 뭐 쳐요"):
-            a = _ask(monkeypatch, day, q)
-            assert "이번엔 할 일이 아닙니다" in a and "수확 후 · 후작" in a, a[:120]
-        assert "지금 창에 경보 없음" in _ask(monkeypatch, day, "위험한 거 있나")
+            assert "[아직 모릅니다 — 기준이 없습니다]" not in _ask(monkeypatch, day, "물 줘야 하나")   # 그 날은 아직 생육 중기 칸 — 그래서 날짜를 붙여 말한다(L1 원 결함)
+        for q in ("물 줘야 하나", "약 뭐 쳐요", "위험한 거 있나"):
+            a = _ask(monkeypatch, probe, q)
+            assert where in a and "잎 수확 기준으로는 말하지 않습니다" in a and "이번엔 할 일이 아닙니다" not in a and "지금 창에 경보 없음" not in a, (q, a[:160])
+        harvest = _ask(monkeypatch, probe, "수확 언제 해요")                              # 수확 답은 제 문장 그대로(페이지가 그 문장을 인용한다)
+        assert "종구 재배의 수확 때는 재배 달력에 아직 없습니다 — 잎 수확 기준으로는 말하지 않습니다" in harvest and "「종구 재배의 수확 때는 재배 달력에 아직 없습니다」" in body
+        for path in ("/media", f"/c/{SID}", f"/mall/{SID}"):
+            seen = _seen(monkeypatch, srv, probe, path)
+            assert f"찍을 장면 기준은 재배 달력의 {where}에 아직 없습니다" in seen and "수확 직전 전경 + 수확물 근접" not in seen and "False" not in seen, path
     else:
-        assert "「재배 달력 기간 밖」" in body and "W-01 · W-02 · W-03" in body
+        assert "「재배 달력 기간 밖」" in body and "용도와 상관없이 같습니다" in body
         assert "재배 달력 기간 밖" in _ask(monkeypatch, day, "약 뭐 쳐요")
-        assert "단계 없음" in _seen(monkeypatch, srv, day, "/media")
+        assert "찍을 단계가 없습니다" in _seen(monkeypatch, srv, day, "/media")
         # [재재검토] 달력 끝 뒤에도 위험 머리는 용도에 따라 갈린다 — 「볼 칸이 없어 용도와 상관없이 같다」 는 거짓이었다(양쪽을 잰다)
         assert "수확 지연" in risk_plain and "지금 창에 경보 없음" not in risk_plain
-        assert "지금 창에 경보 없음" in _ask(monkeypatch, day, "위험한 거 있나") and "(용도 없이는 「수확 지연」 경보" in body
+        seed = _ask(monkeypatch, day, "위험한 거 있나")
+        assert "재배 달력에 지금 볼 단계가 없습니다" in seed and "지금 창에 경보 없음" not in seed and "(용도 없이는 「수확 지연」 경보" in body
+        assert f"종구 재배 기준이 재배 달력의 {page._SAID_AT['수확']}에 아직 없어 그 칸의 위험은 내지 않습니다" in seed and \
+            f"종구 재배 기준이 재배 달력의 {page._SAID_AT['수확']}에 아직 없어 그 칸의 위험은 내지 않습니다" in body
         assert "볼 칸이 남지 않은" not in body
 
 
@@ -189,9 +196,15 @@ def test_the_selfcheck_and_drought_sentences_follow_the_stage(monkeypatch, day):
     # [재재검토] 가뭄 판단이 없는 까닭도 칸마다 — D-22 는 수확 칸의 결정이다(수확 후 칸 · 달력 끝 뒤에 D-22 를 대면 안 한 결정을 댄다)
     assert ("결정 D-22 대로" in one) == (page._AT == "수확")
     if page._AT == "밖":
-        assert "W-24" in one and "단계이 없다" in str(b5.get("actual"))                  # 깨진 문면(W-24) — 고치면 붉어진다
+        # [2026-10-14 W-24 고침] 깨진 문면(「단계이 없다」)을 고정하던 자리 — 고쳤으니 바른 조사를 고정한다(양방향) · 닫힌 번호는 페이지가 「고칠 것」 으로 부르지 않는다
+        assert "W-24" not in one and "단계가 없다" in str(b5.get("actual")) and "단계이" not in str(b5.get("actual")) and "단계가 없다" in one
     if na:
         assert not b5["ok"]                                                              # W-13 — 고치면 붉어진다(① 문장도 함께 고칠 때)
+    # [2026-10-14 주입 k 미적발 → 추가] ① 의 용도 조건 — 용도 「종구 생산」 PC 에서는 수확 · 수확 후 칸의 ⑤b 가 맞다(「기준이 없습니다」 를 자기 점검이 받는다).
+    # 페이지가 그 조건을 말하는 날 = 자기 점검이 실제로 맞는 날(양방향 · 용도를 넣고 다시 잰다)
+    parcels.set_fields("p001", use="종구 생산", overwrite=True)
+    seed_b5 = next(c for c in selfcheck.run(date.fromisoformat(day), None)["checks"] if c["id"] == "⑤b")
+    assert ("용도에 「종구 생산」 을 넣으신 PC 에서는" in one) == bool(seed_b5["ok"]) == (page._AT in ("수확", "후")), (day, seed_b5["ok"])
 
 
 def test_every_open_finding_the_publisher_must_answer_is_asked_on_the_page(monkeypatch):
@@ -202,6 +215,11 @@ def test_every_open_finding_the_publisher_must_answer_is_asked_on_the_page(monke
     assert any(h.startswith("⓪ᵂ") for h, _ in page.NEXT_PUBLISHER) == bool(pub)
     for r in pub:
         assert f"<b>{r['id']}</b>" in said and r["what"] in said, r["id"]
+    # [2026-10-14 검토] 등재급 중 발행자 몫(W-28 · W-44 …)도 같은 G1 꼴이었다 — 세션 몫 · 즉시급만 고르는 줄 사이로 빠졌다. ⓪ᴿ 가 표에서 세어 묻는다
+    reg_pub = [r for r in page.walk_rows() if r["grade"] == "등재" and r["owner"] == "발행자" and r["state"].startswith("열림")]
+    zr = _item(page, "⓪ᴿ")
+    assert reg_pub and all(f"<b>{r['id']}</b> {r['what']}" in zr for r in reg_pub), [r["id"] for r in reg_pub]
+    assert f"발행자 판단이 있어야 하는 등재급 {len(reg_pub)}개" in zr
 
 
 @pytest.mark.parametrize("day", ["2026-10-14", "2026-11-10", "2026-11-24"])

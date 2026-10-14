@@ -276,7 +276,10 @@ FIELDS_READ_BY_JUDGMENT = ("use", "environment", "drainage")
 # 아래 이름은 그 측정의 결과이고, 검사가 **같은 방식으로 다시 재서** 대조한다(선언을 믿지 않는다).
 FIELD_CONSUMERS: dict[str, tuple[str, ...]] = {
     # 측정 2026-10-05(10-07 기준 · 자가→종구): 수확 시기 판단 불가(지식) · 위험 경보 3→1 · 계획 대 실제 메모(그 칸 할 일 보류) · 배수 경보(위험 봉투를 칸 4 로 자른 카드) · 출하·저장 문면
-    "use": ("harvest_timing", "risk_alert", "plan_vs_actual", "drainage_alert", "ship_or_store"),      # grid.schema.use_key → apply_use/use_gap — 큰 것부터 적는다(화면이 이 순서로 말한다)
+    # [재측정 2026-10-14 · 날 넷(10-07 · 10-15 · 11-04 · 11-24)의 합 — 시점 축] 물 · 약 · 촬영 안내에 용도 문을 세우자(W-01 · W-02) 다섯 → **여덟**: 가뭄 · 자재 인용은
+    # 오늘 칸이 수확 칸부터일 때(10-15 · 11-04) · 병해충 카드는 위험 경보가 기준 없는 칸을 보는 날부터(10-07~) 「안 낸 칸」 을 싣는다. 한 날(10-07)만 재면 가뭄 · 자재가 빠진다
+    "use": ("harvest_timing", "risk_alert", "plan_vs_actual", "drought_alert", "material_citation", "pest_alert", "drainage_alert",
+            "ship_or_store"),      # grid.schema.use_key → apply_use/use_gap — 큰 것부터 적는다(화면이 이 순서로 말한다)
     "environment": ("base_fertilization",),    # ingest.fertilizer.crop_code(노지/시설) → 처방 수집 → judge.stage_decisions.judge_base_fertilization
     # [측정 한계] 이 환경에서는 처방 원천(외부)이 없어 노지↔시설을 바꿔도 봉투가 안 변한다(0) — **소비자 0 이 아니라 못 잰 것**이다(죽은 원천의 0 을 사실로 읽지 않는다)
     "drainage": ("risk_alert", "drainage_alert"),               # 측정 2026-10-05: 배수를 넣으니 둘이 달라졌다 — drainage_alert 는 risk_alert 봉투를 칸 4 로 잘라 낸 카드(_delegate_risk)라 농가에게는 **다른 카드**다

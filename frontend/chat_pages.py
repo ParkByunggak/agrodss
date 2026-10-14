@@ -693,7 +693,8 @@ def thread_panel(s: dict[str, Any], today: date) -> str:
     out = ["<h2>오늘</h2>"]
     hint = grid_capture.hint_for(s, today)
     if hint:
-        out.append(f'<div class="card"><b>찍을 장면</b> · {_e(hint.get("stage"))}<div>{_e(hint.get("scene") or hint.get("shoot"))}</div></div>')
+        # [앞날 걷기 2026-10-14 W-06] `scene or shoot` 이 안 찍는 칸에서 「False」 를 찍었다 — 갈래는 4층 한 함수(영상 반입 화면과 같은 것)
+        out.append(f'<div class="card"><b>찍을 장면</b> · {_e(hint.get("stage") or "재배 달력 밖")}<div>{_e(words.capture_said(hint))}</div></div>')
     else:
         out.append('<div class="card">심은 날이 아직 없어 촬영 시기를 못 냅니다 — 파종을 적고 넣으시면 그날부터 셉니다</div>')
     pend = chat.pending_drafts(s["id"])
@@ -887,7 +888,10 @@ def mall_main(view: dict[str, Any]) -> str:
     out.append('<h2 style="font-size:14px">촬영 시계열 (재배 달력의 촬영 단계 — 연속성이 상품)</h2>')
     for t in view["timeline"]:
         cls = {"촬영됨": "kind-판단함", "촬영 창 열림": "kind-판단불가"}.get(t["state"], "")
-        out.append(f'<div class="card {cls}"><span class="k">{_e(t["stage"])}</span><b>{_e(t["state"])}</b><div>{_e(t["scene"])}</div><div style="color:var(--muted);font-size:12px">창 {_e(t["window"])}</div>')
+        # [앞날 걷기 2026-10-14 W-02] 용도 기준이 없는 칸은 장면 · 기간 대신 그 사실 한 줄(촬영 안내와 같은 문장 정본)
+        scene = t["scene"] or (words.use_gap_head(str(t["use_gap_use"]), [t["stage"]], words.CAPTURE_GAP) if t.get("use_gap_use") else "")
+        span = f'<div style="color:var(--muted);font-size:12px">창 {_e(t["window"])}</div>' if t["window"] else ""
+        out.append(f'<div class="card {cls}"><span class="k">{_e(t["stage"])}</span><b>{_e(t["state"])}</b><div>{_e(scene)}</div>{span}')
         for c in t["clips"]:
             dur = f' · {c["duration_sec"]}초' if c.get("duration_sec") else ""
             size = f' · {c["width"]}×{c["height"]}' if c.get("width") else ""

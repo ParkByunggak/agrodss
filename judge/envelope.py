@@ -57,3 +57,19 @@ class Envelope:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+# 읽은 기록의 **수** — 판단이 그 기록을 셌다는 장부이지 판단이 바뀐 것이 아니다(계획 대 실제가 싣는다)
+COUNTERS: tuple[str, ...] = ("events_used", "videos_used", "reasons_used")
+
+
+def reading_face(e: Envelope) -> dict[str, Any]:
+    """판단이 **읽은 것으로 바뀌는 면** — 봉투에서 낸 시각(as_of)과 읽은 기록 수(COUNTERS)를 뺀 것.
+
+    [앞날 걷기 2026-10-14 W-19] 「누르면 판단이 읽습니다」 의 근거가 봉투 **전부**를 대조한 표였다 — 그러면 읽은 사건 수 하나만 바뀌어도 「읽는다」 가 되어,
+    용도 「종구 생산」 에서 넣어도 아무것도 안 바뀌는 수확 기록에 그 약속을 했다. 넣은 셈으로 다시 낸 판단과 이 면을 대조한다(답 문장만 보면 근거 · 메모에만
+    실리는 값 — 배수 등급 — 을 놓친다 · 봉투 전부를 보면 장부를 읽음으로 센다)."""
+    d = e.to_dict()
+    d.pop("as_of", None)
+    d["result"] = {k: v for k, v in (d.get("result") or {}).items() if k not in COUNTERS}
+    return d
