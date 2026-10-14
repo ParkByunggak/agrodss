@@ -27,7 +27,9 @@ from judge import run as judge_run
 from tests.test_screen_speaks_plainly import JARGON
 
 SID = "p001-jjokpa-2026f"
-DAYS = (date(2026, 9, 20), date(2026, 10, 7), date(2026, 10, 20))
+# [W-15 전수 2026-10-14 · 시점 축 세 번째] 11-04 를 더했다 — 수확 기록이 위험 경보를 바꾸는 것은 수확 창이 닫힌 **뒤**(70일 넘어)다. 날 셋이 다 그 앞이라
+# 위험 경보가 수확의 소비자로 안 보였고, 그래서 미확인 수확 초안이 있어도 위험 답이 그 말을 안 했다(측정이 안 닿은 것이 소비자 0 으로 읽힌 자리)
+DAYS = (date(2026, 9, 20), date(2026, 10, 7), date(2026, 10, 20), date(2026, 11, 4))
 SAID = "아직 일지에 넣지 않은"
 
 

@@ -14,7 +14,7 @@
 | `event` | 1층 사실 | 예 | `farmer`, `mall:settlement` | id, type, subject, observed_at, recorded_at, source, resolution | advice_ref, materials, quantity, quality_grade, return_reason, note, chat_ref, risk, severity | — |
 | `observation.note` | 1층 사실 | 예 | `farmer` | id, subject, text, observed_at, recorded_at, source, resolution | tags, chat_ref | — |
 | `plan.farmer` | 1층 계획 | 예 | `farmer` | id, subject, task, planned_day, recorded_at, observed_at, source, resolution | note, chat_ref, done_ref | — |
-| `decision.noncompliance` | 1층 사실 | 예 | `farmer` | id, subject, planned_task, planned_day, reason, observed_at, recorded_at, source, resolution | — | — |
+| `decision.noncompliance` | 1층 사실 | 예 | `farmer` | id, subject, planned_task, planned_day, reason, observed_at, recorded_at, source, resolution | deferred, chat_ref | — |
 | `observation.weather_daily` | 1층 사실 | 예 | `external:` | axis, observed_at, fetched_at, source, resolution, values, station | — | — |
 | `reference.climate_normal` | 1층 사실 | 예 | `external:` | axis, observed_at, fetched_at, source, resolution, values, station, for_day | — | — |
 | `forecast.weather_daily` | 1층 사실 | 예 | `external:` | axis, observed_at, fetched_at, source, resolution, values, for_day | hourly_tmp, sky, pty, hours | — |
@@ -26,7 +26,7 @@
 | `reference.fertilizer_prescription` | 1층 사실 | 예 | `external:` | axis, status, pnu, crop_code, observed_at, fetched_at, source, resolution, values, units | crop_name, raw, message | pnu |
 | `reference.pesticide_registration` | 1층 사실 | 예 | `external:` | axis, status, crop, pest, observed_at, fetched_at, source, resolution, total, items | queried_as, message | — |
 | `reference.fertilizer_standard` | 1층 사실 | 예 | `external:` | axis, status, crop_code, observed_at, fetched_at, source, resolution, values, units | crop_name, raw, message | — |
-| `plan.task` | 1층 계획 | 예 | `computed:grid` | source, resolution, stage, task, work_day, work_date, prep_date_own, prep_date_rental, tools, materials, retry_possible, deadline_day, deadline_date, source_note | fixable_by | — |
+| `plan.task` | 1층 계획 | 예 | `computed:grid` | source, resolution, stage, task, work_day, work_date, prep_date_own, prep_date_rental, tools, materials, retry_possible, deadline_day, deadline_date, source_note | fixable_by, stage_from_date | — |
 | `plan.capture` | 1층 계획 | 예 | `computed:grid` | source, resolution, stage, task, work_day, work_date, prep_date_own, prep_date_rental, tools, materials, retry_possible, deadline_day, deadline_date, source_note | — | — |
 | `plan.target_date` | 1층 계획 | 예 | `farmer` | subject, target_date, source, resolution | id, recorded_at, observed_at, note, chat_ref | — |
 | `chat.message` | 1층 사실 | — | `computed:chat`, `farmer`, `publisher` | id, subject, role, text, observed_at, recorded_at, source, resolution | drafts, confirmed_refs, reply_ref, retry_of, edit_of, request_ref, input_mode, media_refs, after_ask | — |

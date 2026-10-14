@@ -892,7 +892,11 @@ class Handler(BaseHTTPRequestHandler):
                 status, body = events_page(error=str(e))
         elif p == "/events/reason":
             try:
-                rec = ev.add_noncompliance(form.get("subject", ""), form.get("planned_task", ""), form.get("reason", ""), form.get("planned_day", ""))
+                # [W-14 검토 2026-10-14] 이 폼도 못 한 이유를 쓰는 길이다 — 「못 · 아직 · 미룸」 이면 채팅과 같이 아직 할 일(정본 chat.deferred_said · 지점 축) ·
+                # 계획일이 앞날이면 못 한 날은 오늘이다(앞날에 못 한 일은 없다 — 일지가 그 사유를 앞날에 세웠다)
+                pday, today_s = (form.get("planned_day") or "")[:10], config.today().isoformat()
+                rec = ev.add_noncompliance(form.get("subject", ""), form.get("planned_task", ""), form.get("reason", ""), form.get("planned_day", ""),
+                                           observed_at=today_s if pday > today_s else None, deferred=chat.deferred_said(form.get("reason", "")))
                 status, body = events_page(message=f"사유 기록됨 {rec['id']} · {rec['planned_task']}")
             except ev.EventError as e:
                 status, body = events_page(error=str(e))

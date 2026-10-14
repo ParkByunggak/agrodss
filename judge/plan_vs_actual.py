@@ -102,21 +102,57 @@ def conditional_of(task_name: str, notes: list[dict[str, Any]] | None = None,
 
 
 def reason_for(reasons: list[dict[str, Any]], task: str, work_date: str) -> dict[str, Any] | None:
-    """계획표 한 줄(작업명 · 계획일)에 기록된 불이행 사유. 계획 대 실제와 단계 결정(웃거름 등)이 **같은 키**로 잇는다 — 한 벌."""
-    return next((r for r in reasons if r.get("kind", "decision.noncompliance") == "decision.noncompliance"
-                 and r.get("planned_task") == task and r.get("planned_day") == work_date), None)
+    """계획표 한 줄(작업명 · 계획일)에 기록된 불이행 사유. 계획 대 실제와 단계 결정(웃거름 등)이 **같은 키**로 잇는다 — 한 벌.
+    [W-14 2026-10-14] 한 줄에 사유가 여럿이면 **나중에 넣은 것**(원장은 넣은 차례로 쌓인다) — 「비 때문에 못 했다」 뒤에 「안 하기로 했다」 를 넣으면 뒤의 말이 그 줄의 지금이다.
+    전에는 첫 사유가 이겼다(못 한 이유가 줄을 닫던 때에는 두 번째 사유가 붙을 자리가 없어 드러나지 않았다)."""
+    hits = [r for r in reasons if r.get("kind", "decision.noncompliance") == "decision.noncompliance"
+            and r.get("planned_task") == task and r.get("planned_day") == work_date]
+    return hits[-1] if hits else None
 
 
-def _matched_event(p: dict[str, Any], evts: list[dict[str, Any]], tol: int, params: dict[str, Any]) -> dict[str, Any] | None:
+def reason_closes(rec: dict[str, Any], today: date, deadline: date) -> bool:
+    """그 사유가 계획 줄을 **지금** 닫는가 — 계획 대 실제와 웃거름 판단이 같은 하나를 쓴다(두 벌이면 두 층이 다른 답을 낸다).
+
+    [W-14 2026-10-14] 「비 때문에 수확 못 했다」(10-14)를 넣으면 수확 줄이 그 자리에서 '사유 기록됨' 이 되어 할 일 답에서 **수확 기간 내내 사라졌다**.
+    줄을 닫던 규칙(2026-09-20)의 계기는 「웃거름 주지 않고 수분공급만」 — **안 하기로 한** 결정이었다. 그 조건이 코드에서 떨어져
+    「못 했다 · 아직 · 미뤘다」(그 일은 아직 할 일이다)까지 닫았다(G1 반대형 — 조건 탈락). 그래서 갈래를 되살린다:
+      안 하기로 함(deferred 없음)   넣은 그 자리에서 닫는다 — 옛 규칙 그대로(시스템이 결정을 대신 내리지 않는다)
+      못 함 · 미룸(deferred)        마감까지는 줄을 그대로 두고(할 일에 남는다) 사유는 근거에 싣는다 · 마감이 지나면 닫는다(그 사유가 놓친 이유다 — 다시 묻지 않는다)
+    """
+    return not rec.get("deferred") or today > deadline
+
+
+def match_window(p: dict[str, Any], tol: int) -> tuple[date, date]:
+    """계획 줄 하나가 **한 일을 세는 날들**(양끝 포함) — 정본 하나. 계획 대 실제 · 웃거름 판단 · 못 한 이유 잇기(chat._plan_row_for)가 같은 창을 본다.
+
+    위끝은 마감(재시도 마감 — 없으면 작업일 + 허용 폭). 아래끝은 작업일 − 허용 폭과 **그 칸이 열리는 날** 중 이른 날.
+    [W-15 2026-10-14] 아래끝이 작업일 − 3 뿐이라 수확 칸 첫날(10-14)부터 거둔 기록이 10-20 까지 계획에 안 잡혔다 — 같은 날 수확 시기 판단은
+    「지금 기간 안」 이었다. 처방 직후 전수: 할 일 열둘 중 열이 같은 꼴이었다(칸이 열린 뒤 작업일 − 3 전에 한 일이 안 잡힌다 — 예찰 경보는 칸 3 첫날부터 ·
+    보식 판단은 칸 2 첫날부터 · 수확은 칸 5 첫날부터 그 일을 말한다). 칸 창은 양끝 포함이라 경계일은 앞 칸 줄과 겹칠 수 있다 — 사건 하나는 **앞 줄 하나**에만
+    붙는다(judge 의 used_events · 사진의 used_media 와 같은 약속 · B4 「경계일은 앞 칸」).
+    [검토 2026-10-14] **조건부 줄**(… 시 · 결정 등록부의 조건부 작업 — 보식 · 웃거름 2회(필요 시) · 관수(건조 시))은 넓히지 않는다 — 그 줄은 사유를 묻지 않으므로
+    넓혀서 고칠 것이 없고, 넓히면 다른 뜻의 기록이 그 줄을 채웠다(이틀에 걸쳐 심은 둘째 날의 파종 기록 → 보식 이행 · 마감 넘긴 웃거름 1회 → 2회 이행)."""
+    wd = date.fromisoformat(p["work_date"])
+    lo = wd - timedelta(days=tol)
+    if p.get("stage_from_date") and conditional_of(p.get("task", "")) is None:
+        lo = min(lo, date.fromisoformat(p["stage_from_date"]))
+    hi = date.fromisoformat(p["deadline_date"]) if p.get("deadline_date") else wd + timedelta(days=tol)
+    return lo, hi
+
+
+def _matched_event(p: dict[str, Any], evts: list[dict[str, Any]], tol: int, params: dict[str, Any],
+                   used: set[int] | None = None) -> dict[str, Any] | None:
+    """그 줄을 이행한 사건 — 창 안의 같은 종류 중 **가장 이른 것**(그 일을 처음 한 날 · 같은 날이면 원장 차례). used 에 든 사건(앞 줄이 이미 쓴 것)은 건너뛴다.
+    [W-15] 창이 칸 첫날까지 넓어지자 한 사건이 두 줄에 걸릴 자리가 생겼다(시비 30일 = 웃거름 1회 마감 = 웃거름 2회 칸 첫날 · 파종 1~14일 = 밑거름 · 파종 마감 안 = 보식 칸).
+    이른 것을 고르는 이유 둘: ① 기준점(파종 0일)과 농가의 파종 기록(5일)이 둘 다 있을 때 앞 줄(밑거름 · 파종)이 기준점을 쓰고 기록은 보식 줄에 남는다
+    ② 뒤에 넣은 기록이 근거를 바꾸지 않는다 — 작업일에 가까운 것을 고르면 둘째 수확 기록이 근거 날짜를 갈아 「누르면 판단이 읽습니다」(넣은 셈)가 근거만 바뀐 것을 읽음으로 셌다"""
     types = _types_for(p["task"], params)
     if not types:
         return None
-    wd = date.fromisoformat(p["work_date"])
-    lo, hi = wd - timedelta(days=tol), (date.fromisoformat(p["deadline_date"]) if p.get("deadline_date") else wd + timedelta(days=tol))
-    for e in evts:
-        if e.get("type") in types and lo <= date.fromisoformat(e["observed_at"][:10]) <= hi:
-            return e
-    return None
+    lo, hi = match_window(p, tol)
+    hits = [(e["observed_at"][:10], n, e) for n, e in enumerate(evts)
+            if e.get("type") in types and id(e) not in (used or set()) and lo <= date.fromisoformat(e["observed_at"][:10]) <= hi]
+    return min(hits, key=lambda h: h[:2])[2] if hits else None
 
 
 def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[str, Any]] | None = None,
@@ -154,6 +190,7 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
     # 비교하면 그 약속이 갈린다"** 고까지 경고해 두었다. 단계 판정과 경보는 그 정본으로 왔는데 **촬영 대조만 제 창을 따로 비교**했다.
     # 그래서 여기서도 같은 약속을 지킨다 — 사진 한 장은 **가장 앞 칸 하나**에만 붙는다(쓰인 것은 다시 쓰지 않는다).
     used_media: set[str] = set()
+    used_events: set[int] = set()           # [W-15] 사건도 같은 약속 — 한 기록은 앞 줄 하나에만(창이 칸 첫날까지 넓어져 겹칠 자리가 생겼다)
     for p in plan.from_unit(unit, anchor_d, subject.get("cert")):
         wd = date.fromisoformat(p["work_date"])
         dl = date.fromisoformat(p["deadline_date"]) if p.get("deadline_date") else wd + timedelta(days=tol)
@@ -168,8 +205,9 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
                 # 떼어낼 수 없다. 문장과 id 를 나눠 둔다(id 는 `evidence_ref` 로 가고 화면은 그것을 `title` 에 내린다)
                 status, evidence, evidence_ref = "이행", f"{what} ({hit[0].get('observed_at', '')[:10]})", hit[0].get("id")
         else:
-            m = _matched_event(p, evts, tol, d.params)
+            m = _matched_event(p, evts, tol, d.params, used_events)
             if m:
+                used_events.add(id(m))
                 status, evidence = "이행", f"사건 {m.get('type')} {m.get('observed_at', '')[:10]}"
         cond = conditional_of(p["task"], notes, since=anchor) if status is None else None
         if cond and not cond[0]:
@@ -183,24 +221,30 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
             status, evidence = "종료 뒤", f"작기 종료({ended}) 뒤의 계획 — 놓침으로 세지 않고 사유를 묻지 않는다"
         if status is None:
             rec = reason_for(reasons, p["task"], p["work_date"])
-            if rec:
+            # [W-14 2026-10-14] 못 한 이유(못 · 아직 · 미뤘다)는 마감까지 줄을 닫지 않는다 — 근거에만 싣는다(reason_closes 정본 · 웃거름 판단과 한 벌)
+            said = f" · 못 한 이유({rec.get('observed_at', '')[:10]}): {sch.quote(rec['reason'], 80)}" if rec else ""
+            if rec and reason_closes(rec, today, dl):
                 # [발행자 2026-09-20 "웃거름 주지 않고 …"] 안 하기로 한 이유가 기록됐으면 마감 전이라도 '미이행'이 아니다 —
                 # 전에는 마감 뒤에만 봐서, 마감 안에 말한 사유가 닷새 동안 '미이행'으로 보였다. 작목 무관(계획표 줄과 같은 키로 잇는다)
                 status, evidence = "사유 기록됨", rec["reason"]
             elif today < wd:
                 status = "예정"
+                evidence = said.removeprefix(" · ") or None                    # 마감 전의 못 한 이유 — 줄은 그대로 · 근거에만
                 pr = p.get("prep_date_rental")
                 if pr and date.fromisoformat(pr) <= today:
                     prep.append({"task": p["task"], "work_date": p["work_date"], "prep_date": pr})
             elif today <= dl:
-                status, evidence = "미이행", f"마감까지 {(dl - today).days}일 (재시도 {'가능' if p['retry_possible'] else '불가'})"
+                status, evidence = "미이행", f"마감까지 {(dl - today).days}일 (재시도 {'가능' if p['retry_possible'] else '불가'}){said}"
             else:
                 status, evidence = "놓침", f"마감 {p['deadline_date'] or p['work_date']} 지남 — 불이행 사유를 묻는다"
                 ask.append({"task": p["task"], "work_date": p["work_date"], "stage": p["stage"]})
         counts[status] += 1
         rows.append({"stage": p["stage"], "task": p["task"], "work_date": p["work_date"], "deadline_date": p.get("deadline_date"),
                      "status": status, "evidence": evidence, "evidence_ref": evidence_ref, "materials": p.get("materials"), "kind": p["kind"],
-                     "source_note": p.get("source_note", ""), "fixable_by": p.get("fixable_by")})   # [WO-ASK-01 §10 지점 2026-10-03] 할 일도 추론값 — 누가 고칠 수 있는가를 답까지
+                     "source_note": p.get("source_note", ""), "fixable_by": p.get("fixable_by"),   # [WO-ASK-01 §10 지점 2026-10-03] 할 일도 추론값 — 누가 고칠 수 있는가를 답까지
+                     # [W-14] 그 줄이 한 일을 세기 시작하는 날 — 못 한 이유를 이을 때 같은 창을 본다(chat._plan_row_for · 창이 아직 안 열린 줄에 잇지 않는다)
+                     "match_from": (p["work_date"] if p["kind"] == "plan.capture" else match_window(p, tol)[0].isoformat()),
+                     "match_to": (p["deadline_date"] if p["kind"] == "plan.capture" else match_window(p, tol)[1].isoformat())})
     inputs = [AxisUse("anchor", anchor, subject.get("source", "farmer"), "cultivation_unit", "관측")]
     grades = ["관측", GRID_GRADE.get(unit["unit"].get("confidence", "하"), "추정")]
     return Envelope(

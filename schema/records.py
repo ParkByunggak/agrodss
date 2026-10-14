@@ -110,7 +110,10 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
        ("note", "chat_ref", "done_ref"), sources=("farmer",), layer3_input=True),
     _k("decision.noncompliance", "1층 사실",
        ("id", "subject", "planned_task", "planned_day", "reason", "observed_at", "recorded_at", "source", "resolution"),
-       sources=("farmer",), layer3_input=True),
+       # [W-14 2026-10-14] deferred: 농가가 「못 했다 · 아직 · 미뤘다」 로 말한 사유 — 그 일은 **아직 할 일**이다(마감 전에는 계획 줄을 닫지 않는다).
+       # observed_at 은 그 일을 못 한 날(말한 날)이고 planned_day 는 이은 계획 줄의 날이다 — 전에는 둘이 같아 10-14 에 말한 사유가 일지 10-24 에 섰다.
+       # chat_ref: 다른 농가 기록과 같이 채팅에서 왔다는 표지(일지의 「채팅에서」)
+       ("deferred", "chat_ref"), sources=("farmer",), layer3_input=True),
     # ── 1층 사실(외부 원천, D-9 인용) ───────────────────────────────────────────────────
     _k("observation.weather_daily", "1층 사실", _EXT_OBS + ("station",), sources=("external:",), layer3_input=True, subject_bound=False),
     _k("reference.climate_normal", "1층 사실", _EXT_OBS + ("station", "for_day"), sources=("external:",), layer3_input=True, subject_bound=False),
@@ -146,7 +149,8 @@ KINDS: dict[str, Kind] = {k.name: k for k in (
     _k("plan.task", "1층 계획",
        ("source", "resolution", "stage", "task", "work_day", "work_date", "prep_date_own", "prep_date_rental", "tools",
         "materials", "retry_possible", "deadline_day", "deadline_date", "source_note"),
-       ("fixable_by",),            # [WO-ASK-01 §10 2026-10-03] 격자 작업이 추론값이면 누가 고칠 수 있는가(grid.schema.FIXABLE_BY) — 계획 행이 그 표지를 든다
+       ("fixable_by",              # [WO-ASK-01 §10 2026-10-03] 격자 작업이 추론값이면 누가 고칠 수 있는가(grid.schema.FIXABLE_BY) — 계획 행이 그 표지를 든다
+        "stage_from_date"),        # [W-15 2026-10-14] 그 작업이 든 칸이 열리는 날 — 한 일은 그 날부터 센다(plan_vs_actual.match_window)
        sources=("computed:grid",), layer3_input=True, subject_bound=False),
     _k("plan.capture", "1층 계획",
        ("source", "resolution", "stage", "task", "work_day", "work_date", "prep_date_own", "prep_date_rental", "tools",

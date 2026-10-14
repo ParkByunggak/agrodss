@@ -38,7 +38,10 @@ EVENT_CONSUMERS: dict[str, tuple[str, ...]] = {
     "관수": ("drought_alert", "plan_vs_actual"),
     "시비": ("top_dressing_1", "plan_vs_actual"),
     "파종": ("plan_vs_actual",), "정식": ("plan_vs_actual",), "방제": ("plan_vs_actual",), "제초": ("plan_vs_actual",),
-    "예찰": ("plan_vs_actual",), "보식": ("plan_vs_actual",), "배수": ("plan_vs_actual",), "수확": ("plan_vs_actual",),
+    "예찰": ("plan_vs_actual",), "보식": ("plan_vs_actual",), "배수": ("plan_vs_actual",),
+    # [W-15 전수 2026-10-14 · 시점 축] 수확 기록은 **수확 창이 닫힌 뒤**(70일 넘어) 위험 경보의 「수확 지연」 을 멎게 한다 — 위 세 날(09-20 · 10-07 · 10-20)은 모두
+    # 그 앞이라 위험 경보가 안 보였다. 그래서 미확인 수확 초안이 있어도 위험 답이 그 말을 안 했다. 날에 11-04 를 더해 다시 쟀다(측정 검사가 날 넷을 합친다)
+    "수확": ("plan_vs_actual", "risk_alert"),
     "납품": ("plan_vs_actual",), "저장": ("plan_vs_actual",), "소독": ("plan_vs_actual",), "정리": ("plan_vs_actual",),
     "피해": ("plan_vs_actual",), "기타": ("plan_vs_actual",),
 }
@@ -199,16 +202,27 @@ def add_target_date(subject: str, target_date: str, note: str = "", chat_ref: st
     return _append(rec)
 
 
-def add_noncompliance(subject: str, planned_task: str, reason: str, planned_day: str, now: datetime | None = None) -> dict[str, Any]:
-    """[I-3 §5 결정] 불이행 사유 — 조언(계획)을 안 따른 이유. '안 따른 이유가 조언보다 값지다'(J)."""
+def add_noncompliance(subject: str, planned_task: str, reason: str, planned_day: str, now: datetime | None = None,
+                      observed_at: str | None = None, deferred: bool = False, chat_ref: str | None = None) -> dict[str, Any]:
+    """[I-3 §5 결정] 불이행 사유 — 조언(계획)을 안 따른 이유. '안 따른 이유가 조언보다 값지다'(J).
+
+    [W-14 2026-10-14] 날이 둘이다 — planned_day 는 이은 **계획 줄**의 날(줄을 찾는 열쇠), observed_at 은 그 일을 **못 한 날**(말한 날).
+    전에는 observed_at = planned_day 라 10-14 에 「비 때문에 수확 못 했다」 를 넣으면 일지 · 넣은 배너가 그 사유를 **10-24**(앞날)에 세웠다.
+    안 주면 예전처럼 계획일(옛 화면 폼 · 옛 호출). deferred = 「못 · 아직 · 미뤘다」 — 그 일은 아직 할 일이다(plan_vs_actual.reason_closes)."""
     reason = (reason or "").strip()
     if not reason:
         raise EventError("사유가 비어 있다")
     planned_day = _need_day(planned_day, "계획일")[:10]   # [코드 평가 C13] 다른 add_* 넷과 같은 규율 — 날짜가 아닌 문자열이 observed_at 으로 들어갔다
+    observed_at = _need_day(observed_at, "못 한 날")[:10] if observed_at else planned_day
     now = now or datetime.now(timezone.utc)
-    return _append({
+    rec: dict[str, Any] = {
         "id": f"dec_{uuid.uuid4().hex[:12]}", "kind": "decision.noncompliance", "subject": subject,
         "planned_task": planned_task, "planned_day": planned_day, "reason": reason[:500],
-        "observed_at": planned_day, "recorded_at": now.isoformat(timespec="seconds"),
+        "observed_at": observed_at, "recorded_at": now.isoformat(timespec="seconds"),
         "source": SOURCE, "resolution": "cultivation_unit",
-    })
+    }
+    if deferred:
+        rec["deferred"] = True
+    if chat_ref:
+        rec["chat_ref"] = chat_ref
+    return _append(rec)

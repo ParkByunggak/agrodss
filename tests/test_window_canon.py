@@ -17,7 +17,9 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-ROOT = Path("/home/user/agrodss") if Path("/home/user/agrodss").exists() else Path(__file__).resolve().parent.parent
+# [2026-10-14 자기 도구 오류] 여기 본 클론의 절대 경로가 있으면 그것을 쓰는 줄이 있었다 — 그 경로가 있는 환경에서는 **이 검사가 들어 있는 트리가 아니라 그 클론**을 쟀다.
+# 작업 사본 · 주입 사본 · 관문은 모두 다른 경로에서 돌므로 이 래칫은 **고친 코드를 한 번도 안 봤다**(푸시해 그 클론이 따라온 다음 회차에야 봤다). 검사는 제 트리를 잰다.
+ROOT = Path(__file__).resolve().parent.parent
 CANON = ROOT / "grid" / "capture.py"
 SKIP_DIRS = {"tests", "venv", ".git", "__pycache__", "scripts", "docs"}
 

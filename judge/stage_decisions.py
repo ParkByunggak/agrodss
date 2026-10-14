@@ -14,7 +14,7 @@ from typing import Any
 
 from grid import capture as grid_capture
 from grid import schema as grid_schema
-from judge import plan_vs_actual, registry, risk_alert, units
+from judge import plan, plan_vs_actual, registry, risk_alert, units
 from judge.envelope import AxisUse, Envelope, weakest
 from judge.need import need, need_anchor, plain_reason
 from judge.harvest_timing import GRID_GRADE
@@ -448,11 +448,15 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
     # [B3] 이행 판정은 계획 대 실제와 **한 벌** — 같은 매처 · 같은 허용 폭(registry params). 전에는 wd-7 하드코딩 · 예정 경계가 달라
     # 같은 사건이 한쪽은 이행, 다른 쪽은 미이행이었다
     pva = registry.get(plan_vs_actual.DECISION_ID)
-    row = {"task": t.get("name", d.params["task_key"]), "work_date": work_date, "deadline_date": dl}
+    # [W-15 2026-10-14] 줄에 칸 첫날도 싣는다 — 계획 대 실제가 한 일을 칸 첫날부터 세는데 여기 줄에는 그 날이 없어 같은 시비 기록(17일)을
+    # 계획 대 실제는 이행 · 웃거름 판단은 미이행으로 읽었다(두 층이 다른 답 · 결정 검사가 잡는 그 꼴). 칸 첫날은 계획과 같은 함수에서(plan.stage_from_date)
+    row = {"task": t.get("name", d.params["task_key"]), "work_date": work_date, "deadline_date": dl, "stage_from_date": plan.stage_from_date(stage, a)}
     hit = plan_vs_actual._matched_event(row, list(evts or []), int(pva.params["tolerance_days"]), pva.params)
     done = [hit] if hit else []
     reason = plan_vs_actual.reason_for(list(evts or []), row["task"], work_date)   # 불이행 사유도 계획 대 실제와 같은 키 — 한 벌
-    status = "이행" if done else ("사유 기록됨" if reason else ("예정" if day < wd else "미이행"))
+    # [W-14] 못 한 이유(못 · 아직 · 미뤘다)는 마감까지 닫지 않는다 — 계획 대 실제와 같은 규칙 하나(reason_closes)
+    closed = bool(reason) and plan_vs_actual.reason_closes(reason, today, date.fromisoformat(dl))
+    status = "이행" if done else ("사유 기록됨" if closed else ("예정" if day < wd else "미이행"))
     p = _prescription(prescriptions)
     inputs = _anchor_inputs(subject, anchor)
     if p is not None:

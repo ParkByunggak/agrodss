@@ -89,7 +89,8 @@ def test_legacy_message_level_confirmation_still_refuses_and_choose_kind_paths()
 def test_screen_renders_each_draft_and_planned_task_input():
     m, _ = chat.send(SID, SENTENCE, today=T, now=NOW)
     h0, h1 = chat_pages._draft_html(m, 0, m["drafts"][0]), chat_pages._draft_html(m, 1, m["drafts"][1])
-    assert 'name="planned_task" value="웃거름 1회"' in h0 and 'value="2026-09-16"' in h0 and "불이행 사유" in h0
+    # [W-14 2026-10-14] 날짜 칸은 **안 한 날**(말한 날 09-19)이고 이은 계획 줄의 날(09-16)은 글로 보인다 — 전에는 날짜 칸이 계획일이라 고쳐 넣으면 줄과 끊겼다
+    assert 'name="planned_task" value="웃거름 1회"' in h0 and 'name="day" value="2026-09-19"' in h0 and "계획 2026-09-16 · 안 한 날" in h0 and "불이행 사유" in h0
     assert 'name="planned_task"' not in h1 and 'name="i" value="1"' in h1
     chat.confirm(m["id"], 0, now=NOW)
     m = chat.get_message(m["id"])

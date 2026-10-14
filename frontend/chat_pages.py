@@ -509,8 +509,12 @@ def _draft_html(m: dict[str, Any], i: int, d: dict[str, Any], said: str = "") ->
         if d.get("type") == ev.DAMAGE_TYPE:
             parts.append(f'<input name="risk" value="{_e(d.get("risk") or "")}" placeholder="무엇의 피해(서리 · 부패 · 해충 · 병){" (필요)" if "risk" in need else ""}" size="16">')
     if k == "decision.noncompliance":
-        # 계획 작업명은 계획표에서 이은 값(작목 무관 — 그 재배 단위의 격자 줄). 사람이 고칠 수 있고, 계획일은 아래 날짜 칸이다
+        # 계획 작업명은 계획표에서 이은 값(작목 무관 — 그 재배 단위의 격자 줄). 사람이 고칠 수 있다.
+        # [W-14 2026-10-14] 아래 날짜 칸은 **못 한 날**이다(전에는 계획일이라 10-14 에 말한 사유가 10-24 칸으로 차 있었고, 고쳐 넣으면 줄과 끊겼다).
+        # 이은 줄의 날은 글로 보인다(고치는 칸이 아니다 — 줄을 찾는 열쇠다)
         parts.append(f'<input name="planned_task" value="{_e(d.get("planned_task") or "")}" placeholder="계획 작업명" size="18">')
+        if d.get("observed_at") and d.get("planned_day") and d.get("planned_day") != d.get("observed_at"):
+            parts.append(f'<span style="color:var(--muted)">계획 {_e(d["planned_day"])} · {"못" if d.get("deferred") else "안"} 한 날 </span>')
     day = d.get("observed_at") or d.get("planned_day") or d.get("target_date") or ""
     if k in ("parcel.field", "subject.field"):     # [§9] 밭 정보 값 · [2026-10-04] 농사 값(인증) — 날짜가 아니라 값이 보인다(고르는 말 그대로)
         word = parcels.field_word(d.get("field"))

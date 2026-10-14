@@ -50,7 +50,9 @@ def test_publisher_path_sentence_to_reason_recorded_to_judge_and_changes(srv, mo
     st, loc, _ = _post(srv, f"/c/{quote(SID)}/send", {"text": SENTENCE})
     assert st == 302
     st, _, body = _get(srv, loc)
-    assert body.count(_confirm_buttons(chat.CONFIRM_LABEL)) == 2 and 'name="planned_task" value="웃거름 1회"' in body and 'value="2026-09-16"' in body
+    # [W-14 2026-10-14] 계획 줄의 날(09-16)은 글로 · 날짜 칸은 안 한 날(말한 오늘) — 날짜 칸을 고쳐 넣어도 이은 줄과 안 끊긴다
+    assert body.count(_confirm_buttons(chat.CONFIRM_LABEL)) == 2 and 'name="planned_task" value="웃거름 1회"' in body and "계획 2026-09-16" in body
+    assert f'name="day" value="{TODAY}"' in body
     assert chat.KIND_PLAIN["decision.noncompliance"] in body and "하나씩 넣습니다" in body
     m = chat.list_messages(SID)[0]
     assert m["text"] == SENTENCE and [d["kind"] for d in m["drafts"]] == ["decision.noncompliance", "observation.note"]

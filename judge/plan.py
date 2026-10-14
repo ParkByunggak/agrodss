@@ -23,6 +23,14 @@ def use_gapped(unit: dict[str, Any], s: dict[str, Any]) -> bool:
     return grid_schema.use_gap(unit, s, TASK_KEYS) or (shoots and grid_schema.use_gap(unit, s, grid_capture.CAPTURE_KEYS))
 
 
+def stage_from_date(s: dict[str, Any], anchor: date) -> str | None:
+    """그 칸이 열리는 날(창 첫날) — 계획 줄과 웃거름 판단이 **같은 날**을 쓴다(한 벌). 창이 없는 칸은 None(작업일 − 허용 폭만 쓴다).
+    [W-15 2026-10-14] 한 일은 이 날부터 센다 — 수확 시기 판단은 수확 칸 첫날(10-14)부터 「지금 기간 안」 이라 하는데 계획은 작업일 − 3(10-21)부터 세서
+    그 사이에 거둔 기록이 계획에 안 잡혔다(수확 창이 지나면 「놓침 — 사유를 묻는다: 수확」)."""
+    w = s.get("window")
+    return (anchor + timedelta(days=int(w["from_day"]))).isoformat() if isinstance(w, dict) and w.get("from_day") is not None else None
+
+
 def from_unit(unit: dict[str, Any], anchor: date, cert: str | None) -> list[dict[str, Any]]:
     """단위 전체 작업을 날짜로 펼친다. 자재는 인증 갈래만 싣는다(관행/유기 분리 — H)."""
     out = []
@@ -50,6 +58,7 @@ def from_unit(unit: dict[str, Any], anchor: date, cert: str | None) -> list[dict
                 "deadline_date": (anchor + timedelta(days=int(rt["deadline_day"]))).isoformat() if rt.get("deadline_day") is not None else None,
                 "source_note": t.get("source", ""),
                 "fixable_by": t.get(grid_schema.FIXABLE_BY_KEY),            # [WO-ASK-01 §10 2026-10-03] 추론값이면 누가 고칠 수 있는가
+                "stage_from_date": stage_from_date(s, anchor),             # [W-15] 한 일을 세기 시작하는 날의 재료(plan_vs_actual.match_window)
             })
         cap = s.get("capture")
         if isinstance(cap, dict) and cap.get("shoot") and not grid_schema.use_gap(unit, s, grid_capture.CAPTURE_KEYS):
