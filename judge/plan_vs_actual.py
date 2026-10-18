@@ -57,6 +57,74 @@ def _types_for(task_name: str, params: dict[str, Any]) -> tuple[str, ...]:
     return ()
 
 
+def primary_type(task_name: str) -> str | None:
+    """그 계획 줄의 **첫** 사건 종류 — 못 한 이유를 그 줄에 잇는 열쇠(chat._plan_row_for). 한 일을 세는 표(task_event_types)와 한 벌이다.
+    [W-47 2026-10-18] 잇는 쪽이 제 표(작업 어휘가 줄 이름에 들었는가)를 따로 써서 「출하 못 했다」(납품) · 「잔사 못 걷었다」(정리)가 그 줄에 안 붙었다 —
+    판정은 납품 · 정리 기록으로 그 줄을 이행으로 세는데. 첫 종류만 보는 이유: 「약 못 쳤다」(방제)가 예찰 줄(예찰 · 방제로 이행)에 붙으면 안 본 것이 이유가 된다."""
+    t = _types_for(task_name or "", registry.get(DECISION_ID).params)
+    return t[0] if t else None
+
+
+# [W-48 2026-10-18] 출하 판단이 없는 작기 — 출하 또는 저장 판단(stage_decisions)과 계획 대 실제의 출하 줄이 **같은 하나**를 쓴다.
+# 전에는 그 문이 출하 판단에만 있어 같은 날 「출하 언제 해요」 는 「이번엔 할 일이 아닙니다」 인데 할 일 답은 10-28 부터 날마다 「놓침 — 사유를 묻는다: … 출하 또는
+# 단기 저장」 이었다(같은 문이 계획 줄에 없다). 문을 둘째 층으로 옮기며 그 문이 막던 것을 다시 읽었다(§7.5 직렬 게이트 — 넓힐 때 경계를 본다):
+#   ① 용도 글자에 「자가 · 시험」 이 **들어 있기만** 해도 닫혀 「자가 판매」 · 「시험 판매」 · 「몰 납품 시험」 이 출하 판단을 잃었다(측정 2026-10-18) — 파는 말이 있으면 열어 둔다
+#   ② 계획 줄은 **출하 또는 단기 저장**이다 — 쪽파는 수일 안에 낸다(격자 출처 「저장성 낮음 — 수일 안」 · 마감은 작업일 + 3). 자가 작기에 거둔 뒤 단기 저장 안내가 필요
+#      없다는 말은 어디에도 없다(D-8 은 「이번 작기 시험 재배(자가), 몰 납품은 봄 작기부터」 — 출하 · 저장 판단이 없다는 것은 세션의 읽기다). 그 줄은 농가에게 가는
+#      **유일한 저장 안내**라 지우지 않는다: 창 안에서는 그대로 할 일이고, 마감이 지나도 **놓침으로 세지 않고 이유를 묻지 않는다**(출하가 없는 작기라 안 한 것이 놓친 것이
+#      아니다 — 근거가 확실한 쪽만). 자가 작기에 저장 안내를 낼지는 발행자 몫(walk_findings W-49)
+#   ③ [검토 2026-10-18] 몰 납품 여부(mall_supply)는 씨앗에만 있고 화면 · 채팅으로 바꿀 길이 없다 — 농가가 용도를 「몰 납품」 · 「판매」 로 넣어도 씨앗의 「아니오」 가 이겨
+#      「몰 납품을 안 하는 작기라」 로 닫히고 출하 줄도 마감 뒤 말이 없었다. 용도 글자는 그 뒤에 농가가 적은 값이라 **파는 말이 이긴다** · 부정된 파는 말(「판매 안 함」)은
+#      파는 말이 아니다 · 종구는 파는 말이 있어도 닫는다(그 용도의 출하 기준이 재배 달력에 없다 — 열면 답할 수 없는 납품일을 묻는다 · 계획에도 그 칸 할 일이 없다)
+SELF_USE_WORDS = ("자가", "시험", "종구")      # 종구 — [발행자 전달 2026-10-03] 종구 생산은 출하 대상이 아니다(씨알을 남긴다)
+SALE_WORDS = ("판매", "직판", "직거래", "납품", "출하")
+_SALE_WORD = re.compile("|".join(SALE_WORDS))
+# [검토 2026-10-18 둘째] 부정된 파는 말이 바로 뒤 「안 · 않 …」 만 봐서 「시험 재배(비판매)」 · 「판매는 안 함」 · 「판매 X」 · 「판매 계획 없음」 · 「판매용 아님」 · 「판매 불가」 ·
+# 「미판매」 가 파는 말로 읽혀 자가 작기에 납품일을 묻고 마감 뒤 놓친 이유를 물었다. 앞의 비 · 미 · 안 · 못, 뒤의 조사 · 용 · 계획 + 부정을 본다.
+# 자가 · 시험과 함께 「…부터」(「몰 납품은 봄 작기부터」 — D-8 의 그 말)면 이번 작기 얘기가 아니다(자가 쪽 · 근거가 확실한 쪽)
+_SALE_NEG_BEFORE = re.compile(r"(?:(?<![가-힣])(?:안|못)\s*|[비미])$")
+_SALE_NEG_AFTER = re.compile(r"(?:\s*(?:은|는|을|를|도|이|가|할|하는|용|용으로|목적|계획|예정))*\s*"
+                             r"(?:하지\s*(?:않|말)|지\s*(?:않|말)|안(?=\s|[함해할한하])|않|없|아님|아니|금지|불가|[Xx×](?![가-힣A-Za-z]))")
+_LATER_SEASON = re.compile(r"(?:은|는)?\s*(?:[^\s,·()]+\s+){0,2}[^\s,·()]*부터")
+SHIP_TASK_KEY = "출하"                         # 격자 칸 5 「출하 또는 단기 저장」 — 출하 또는 저장 판단이 마감을 읽는 그 작업
+
+
+def sale_negated_at(text: str, start: int, end: int) -> bool:
+    """text[start:end] 의 파는 말(판매 · 팔 · 납품 …)이 부정됐는가 — 출하 문(not_shipping)과 채팅 용도 선언(parcels.use_declared)이 같은 하나를 쓴다."""
+    return bool(_SALE_NEG_BEFORE.search(text[:start]) or _SALE_NEG_AFTER.match(text, end))
+
+
+def sold(text: str) -> bool | None:
+    """용도 글에 이번 작기에 **판다**는 말이 있는가 — True(부정 안 된 파는 말) · False(파는 말이 있으나 전부 부정 · 자가와 함께 다음 작기) · None(파는 말 없음)."""
+    t = text or ""
+    self_said = any(w in t for w in SELF_USE_WORDS)
+    found = False
+    for m in _SALE_WORD.finditer(t):
+        found = True
+        if sale_negated_at(t, m.start(), m.end()) or (self_said and _LATER_SEASON.match(t, m.end())):
+            continue
+        return True
+    return False if found else None
+
+
+def not_shipping(subject: dict[str, Any]) -> str | None:
+    """이번 작기에 출하 판단이 **없으면** 그 까닭(농가 말 · 「…라」 까지), 있으면 None — 정본 하나(D-8 · 출하 판단 규칙 「필지 용도가 자가·시험이면 해당 없음」).
+    종구 → 닫는다 · 파는 말(부정 안 된) → 연다 · 자가 · 시험 · 부정된 파는 말 → 닫는다 · 몰 납품을 안 한다고 적혀 있으면(mall_supply False) 닫는다 · 아니면 연다.
+    [ⓐ 2026-10-18] 용도가 비었는데 몰 납품만 안 한다고 적혀 있으면 전에는 「이번 작기는 자가 용도라」 로 단정했다 — 근거는 몰 납품 안 함이라 그 말을 한다.
+    [검토 2026-10-18 둘째] 「판매 안 함」 은 몰 납품 값이 비어 있어도 닫는다 — 새 밭은 그 값이 늘 비어 있고 넣을 길이 없어, 판매 안 한다고 적은 농가에게 납품일을 물었다"""
+    use = str(subject.get("use") or "")
+    if "종구" in use:
+        return f"이번 작기는 {use} 용도라"
+    said_sold = sold(use)
+    if said_sold:
+        return None
+    if said_sold is False or any(w in use for w in SELF_USE_WORDS):
+        return f"이번 작기는 {use} 용도라"
+    if subject.get("mall_supply") is False:
+        return "이번 작기는 몰 납품을 안 하는 작기라"
+    return None
+
+
 _COND = re.compile(r"\((?:[^()]*\s)?시\)")   # "관수(건조 시)" · "웃거름 2회(필요 시)" — 격자 작업명의 조건 표기
 
 
@@ -182,6 +250,7 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
     rows = []
     counts = {"이행": 0, "예정": 0, "미이행": 0, "놓침": 0, "사유 기록됨": 0, "조건부": 0, "기록 없음": 0, "종료 뒤": 0}
     ended = subject.get("ended_at") if subject.get("status") == "종료" else None   # [시점 걷기 2026-09-20] 작기 종료 뒤 계획은 놓침이 아니다
+    no_ship = not_shipping(subject)                                                # [W-48] 출하 또는 저장 판단과 같은 문
     ask = []
     prep = []
     # [경계일 촬영 2026-09-21 · B4 약속이 안 닿은 지점] 칸 창은 양끝 포함이라 **경계일은 두 칸에 걸린다**. 실측: 9/24 사진 한 장이
@@ -235,6 +304,10 @@ def judge(subject: dict[str, Any], today: date | None = None, evts: list[dict[st
                     prep.append({"task": p["task"], "work_date": p["work_date"], "prep_date": pr})
             elif today <= dl:
                 status, evidence = "미이행", f"마감까지 {(dl - today).days}일 (재시도 {'가능' if p['retry_possible'] else '불가'}){said}"
+            elif no_ship and p["kind"] != "plan.capture" and SHIP_TASK_KEY in p["task"]:
+                # [W-48] 출하가 없는 작기 — 마감이 지나도 놓친 것이 아니다(창 안에서는 위 갈래 그대로 할 일 · 한 기록은 위에서 이행). 이유를 묻지 않는다
+                status, evidence = "기록 없음", (f"{no_ship} 출하 판단이 없습니다 — 마감이 지나도 놓침으로 세지 않고 이유를 묻지 않습니다"
+                                                 f"(마감 {dl.isoformat()} 안에 단기 저장을 하셨으면 그 날짜로 적어 주시면 한 일로 셉니다)")
             else:
                 status, evidence = "놓침", f"마감 {p['deadline_date'] or p['work_date']} 지남 — 불이행 사유를 묻는다"
                 ask.append({"task": p["task"], "work_date": p["work_date"], "stage": p["stage"]})

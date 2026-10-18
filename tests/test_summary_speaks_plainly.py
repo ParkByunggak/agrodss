@@ -79,8 +79,11 @@ def test_real_grid_summaries_read_as_sentences_for_the_farmer():
     assert bf.kind == "해당 없음" and bf.result["summary"].startswith("밑거름 때(파종 뒤 ") and "웃거름으로 봅니다" in bf.result["summary"]
     so = envs["ship_or_store"]
     assert so.kind == "판단 불가(데이터)" and so.result["summary"].startswith("납품 계획일이 없습니다")            # 실제 등록부는 납품 계획일이 없다
-    so2 = SD.judge_ship_or_store(dict(s, use="자가 소비"), day35, targets=[], harvest=None)
-    assert so2.kind == "해당 없음" and so2.result["summary"] == "이번 작기는 자가 소비 용도라 출하·저장 판단이 없습니다"
+    from judge import plan_vs_actual
+    s2 = dict(s, use="자가 소비")
+    so2 = SD.judge_ship_or_store(s2, day35, targets=[], harvest=None, plan_env=plan_vs_actual.judge(s2, today=day35))
+    # [W-48 2026-10-18] 「출하·저장 판단이 없습니다」 → 없는 것은 출하 판단(언제 · 며칠 두었다 낼지)이고, 단기 저장은 그 줄이 할 일인 동안 할 일에 남는다(계획 대 실제가 말한다)
+    assert so2.kind == "해당 없음" and so2.result["summary"] == "이번 작기는 자가 소비 용도라 출하 판단이 없습니다 — 거둔 뒤 며칠 안의 단기 저장은 할 일에 그대로 있습니다(~10-27)"
     for e in envs.values():                                                                       # 카드 줄에 안쪽 말이 없다 — 낱말 표를 거친 뒤 뜻 없는 말("기간이 아닙니다")도 없다
         line = chat.summarize_envelope(e)
         for bad in ("기간이 아닙니다", "기간이 지났습니다 —", "미채움", "retry", "D-8", "M-15", "정본", "horizon"):

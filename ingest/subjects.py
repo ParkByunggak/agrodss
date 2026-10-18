@@ -219,7 +219,8 @@ SUBJECT_FIELD_WORDS = {"cert": "인증", "anchor": "심은 날"}
 SUBJECT_FIELD_CONSUMERS: dict[str, tuple[str, ...]] = {
     "cert": ("material_citation", "top_dressing_1", "top_dressing_2", "plan_vs_actual", "base_fertilization"),
     "anchor": ("harvest_timing", "risk_alert", "plan_vs_actual", "drought_alert", "pest_alert", "drainage_alert",
-               "material_citation", "top_dressing_1", "top_dressing_2", "replant", "sowing_window"),
+               "material_citation", "top_dressing_1", "top_dressing_2", "replant", "sowing_window",
+               "ship_or_store"),     # [W-48 2026-10-18 재측정] 출하 판단이 없는 작기의 답이 「단기 저장은 할 일에 그대로 있습니다(~10-27)」 — 그 마감을 심은 날에서 센다(11 → 12)
 }
 # [측정 한계] 인증 → 밑거름은 **못 잰 것**이고 소비자 0 이 아니다 — 처방 원천(외부)이 이 환경에 없어 인증을 바꿔도 봉투가 안 변한다
 # (밭 정보 쪽 `environment` 와 같은 자리 · 죽은 원천의 0 을 사실로 읽으면 소비자를 지우게 된다). 재측정 래칫이 이 짝만 빼고 대조한다.

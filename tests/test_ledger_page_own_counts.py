@@ -103,7 +103,8 @@ def test_f37_the_missed_counts_are_the_judgment_s_with_their_condition(monkeypat
     zr = next(b for h, b in page.NEXT_PUBLISHER if h.startswith("⓪ᵉ"))
     assert f"놓침 {leaf} — 사유를 묻는다" in zr and f"「종구 생산」 을 넣으면 수확 칸 이후 할 일이 빠져 {seed}" in zr
     assert "열두 가지" not in _all(page)                                                  # [재검토 R5] BEST 한 것에도 같은 손 셈이 남아 있었다 — 페이지 전체를 본다
-    assert f"「놓침 {leaf} — 사유를 묻는다」(용도를 안 넣은 밭)" in " ".join(page.BEST["did"])
+    # [W-48 2026-10-18] 씨앗 밭은 용도가 「시험 재배(자가)」 로 **들어 있다** — 「용도를 안 넣은 밭」 은 틀린 조건이었다(용도 · 몰 납품이 다 빈 밭은 수가 다르다). 잰 그 밭의 말로
+    assert f"「놓침 {leaf} — 사유를 묻는다」(용도 「종구 생산」 을 넣기 전의 밭)" in " ".join(page.BEST["did"])
 
 
 def test_f38_the_dependents_are_counted_from_what_is_listed(monkeypatch):

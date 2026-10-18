@@ -160,6 +160,13 @@ def said(kind: str) -> str:
     return KIND_SAID.get(kind, kind)
 
 
+def head(kind: str, result: dict | None = None) -> str:
+    """봉투의 머리 — 판정이 머리를 따로 밝혔으면(result.head · 사람 말) 그것, 아니면 종류의 말.
+    [W-48 검토 2026-10-18 둘째] 출하 판단이 없는 작기의 「저장할까」 가 「[이번엔 할 일이 아닙니다] … 단기 저장은 할 일에 그대로 있습니다」 였다 — 종류의 말이 본문과 엇갈릴 때만
+    판정이 머리를 낸다. 머리를 내는 자리 셋(채팅 답 · 대화 옆 카드 · /judge)이 이 하나를 부른다."""
+    return str((result or {}).get("head") or said(kind))
+
+
 def grade(g: str | None) -> str:
     return GRADE_SAID.get(g or "", g or "")
 

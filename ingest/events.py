@@ -42,7 +42,9 @@ EVENT_CONSUMERS: dict[str, tuple[str, ...]] = {
     # [W-15 전수 2026-10-14 · 시점 축] 수확 기록은 **수확 창이 닫힌 뒤**(70일 넘어) 위험 경보의 「수확 지연」 을 멎게 한다 — 위 세 날(09-20 · 10-07 · 10-20)은 모두
     # 그 앞이라 위험 경보가 안 보였다. 그래서 미확인 수확 초안이 있어도 위험 답이 그 말을 안 했다. 날에 11-04 를 더해 다시 쟀다(측정 검사가 날 넷을 합친다)
     "수확": ("plan_vs_actual", "risk_alert"),
-    "납품": ("plan_vs_actual",), "저장": ("plan_vs_actual",), "소독": ("plan_vs_actual",), "정리": ("plan_vs_actual",),
+    # [W-48 검토 2026-10-18 둘째] 출하 판단이 없는 작기의 출하 답은 「출하 또는 단기 저장」 줄 **자신**의 상태를 읽는다(그 줄이 할 일인 동안만 저장 꼬리) — 그 줄을
+    # 이행으로 세는 납품 · 저장 기록이 출하 답도 바꾼다(재측정 래칫이 10-20 에 잡았다 · 나머지 종류는 그대로)
+    "납품": ("plan_vs_actual", "ship_or_store"), "저장": ("plan_vs_actual", "ship_or_store"), "소독": ("plan_vs_actual",), "정리": ("plan_vs_actual",),
     "피해": ("plan_vs_actual",), "기타": ("plan_vs_actual",),
 }
 assert set(EVENT_CONSUMERS) == set(EVENT_TYPES), sorted(set(EVENT_TYPES) ^ set(EVENT_CONSUMERS))   # 종류를 늘리면 재서 여기 적는다 — 안 적으면 그 사건은 말 없이 사라진다

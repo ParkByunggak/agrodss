@@ -59,7 +59,9 @@ def test_a_bare_date_without_the_planting_question_pending_stays_as_it_was():
 
 
 def test_the_two_fixes_live_in_their_one_place():
-    src = inspect.getsource(chat._negated_task)
+    # [W-47 2026-10-18] 걷기가 `_negated_in` 하나로 옮겨 갔다(작업 부정 · 촬영 부정이 같은 걷기) — 작업 부정이 그 걷기를 부르고, 그 걷기가 동사 바로 앞의 § 를 본다
+    assert "_negated_in(" in inspect.getsource(chat._negated_task)
+    src = inspect.getsource(chat._negated_in)
     assert 'norm[m.start() - 1] == "§"' in src                                       # 동사 바로 앞의 부정
     src2 = inspect.getsource(chat._drafts_from_answer)
     assert 'ax == "anchor"' in src2 and "_bare_date(text, today" in src2 and "answers_ask_anchor" in chat.PLAIN_BY_KEY

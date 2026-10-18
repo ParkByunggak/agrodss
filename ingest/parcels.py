@@ -209,16 +209,46 @@ def use_declared(text: str, has_work: bool | None = None) -> str | None:
     작업 어휘가 있으면 선언이 아니다. 기본값을 두는 이유: 이 가름을 부르는 자리가 둘(분류 · 묻기 전 원장 읽기)인데 **어느 쪽도 두 벌로 적지 않게** 하려는 것이다.
     """
     t = text or ""
-    if not any(w in t for w in USE_DECLARE_WORDS):
-        if not any(w in t for w in USE_DECLARE_TAILS):
-            return None
-        if has_work is None:
-            from ingest import chat                    # 같은 층(ingest) 안의 늦은 import — 활용을 보는 작업 어휘 정본 하나를 쓴다
-            has_work = chat.work_type(t) is not None
-        if has_work:
-            return None                                # 할 일이다 — 용도를 정하는 말이 아니다
-    hits = [k for k, ws in USE_WORDS.items() if any(w in t for w in ws)]
+    if not _declares(t, has_work):
+        return None
+    # [W-48 검토 2026-10-18 둘째 · §7.5 관문의 입력] 부정된 파는 말(「이번 작기는 판매 안 할 것이다」 · 「안 팔 것이다」)이 용도 「판매」 로 들어가 출하 문을 열었다 —
+    # 문은 부정을 읽게 됐는데 채팅에서 오는 값이 그 부정을 떼고 왔다. 문과 같은 정본(plan_vs_actual.sale_negated_at)으로 그 말은 파는 말로 세지 않는다
+    hits = [k for k, ws in USE_WORDS.items() if any(not (k in SALE_USE_KEYS and _sale_negated(t, i, w)) for w in ws for i in _spots(t, w))]
     return hits[0] if len(hits) == 1 else None
+
+
+def sale_declined(text: str, has_work: bool | None = None) -> bool:
+    """용도 선언 꼴인데 파는 말이 부정됐는가(「이번 작기는 판매 안 할 것이다」) — 값은 넣지 않는다(무엇에 쓰는지는 말하지 않았다 · 지어내지 않는다).
+    분류는 이 말을 할 일로도 읽지 않는다(선언 꼴이 의지 어미와 겹친다 — 전에는 「판매」 로 넣었고, 부정을 떼자 그 말 자체가 할 일 카드가 됐다)."""
+    t = text or ""
+    return _declares(t, has_work) and any(_sale_negated(t, i, w) for k in SALE_USE_KEYS for w in USE_WORDS[k] for i in _spots(t, w))
+
+
+def _declares(t: str, has_work: bool | None) -> bool:
+    if any(w in t for w in USE_DECLARE_WORDS):
+        return True
+    if not any(w in t for w in USE_DECLARE_TAILS):
+        return False
+    if has_work is None:
+        from ingest import chat                    # 같은 층(ingest) 안의 늦은 import — 활용을 보는 작업 어휘 정본 하나를 쓴다
+        has_work = chat.work_type(t) is not None
+    return not has_work                            # 작업 어휘가 있으면 할 일이다 — 용도를 정하는 말이 아니다
+
+
+def _sale_negated(t: str, i: int, w: str) -> bool:
+    from judge import plan_vs_actual               # 늦은 import — 파는 말의 부정은 출하 문 하나가 정본이다
+    return plan_vs_actual.sale_negated_at(t, i, i + len(w))
+
+
+SALE_USE_KEYS = ("판매", "몰 납품")
+
+
+def _spots(t: str, w: str) -> list[int]:
+    out, i = [], t.find(w)
+    while i >= 0:
+        out.append(i)
+        i = t.find(w, i + 1)
+    return out
 # 필드의 **농가 말** — 요구 문장(judge.need)이 "읽는 판정이 없는 값을 묻지 않는다"(WO-ASK-01 §5-1)를 이 말로 잰다.
 FIELD_WORDS: dict[str, str] = {
     "environment": "재배환경", "soil_texture": "토성", "slope": "경사", "drainage": "배수", "irrigation": "관수 시설",

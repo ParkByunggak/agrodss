@@ -690,7 +690,7 @@ def _env_card(e: Any) -> str:
     # [§7.5 전수 2026-09-21] 이름표가 `해당 없음` 이었다 — 안쪽 이름이다. 정확한 종류는 `title` 에 남긴다(잃지 않는다).
     return (f'<div class="card {cls}" title="{_e(e.kind)} · {_e((e.result or {}).get("why", ""))}">'
             f'<span class="k">{_e(DECISION_LABEL.get(e.decision_id, e.decision_id))}</span>'
-            f'<b>{_e(words.said(e.kind))}</b><div>{_e(chat.summarize_envelope(e))}</div></div>')
+            f'<b>{_e(words.head(e.kind, e.result))}</b><div>{_e(chat.summarize_envelope(e))}</div></div>')
 
 
 def thread_panel(s: dict[str, Any], today: date) -> str:

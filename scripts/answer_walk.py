@@ -16,6 +16,9 @@
 #   날짜마다 **보이는 글**을 낸다(예: --add "대파:2026 가을:2026-09-01" --screen "/c/p001-대파-2026가을" --ask 없이)
 #   [W-14 · W-15 2026-10-14] 「카드」 렌즈의 행(채팅에 적고 → 넣고 → 며칠 뒤 답)을 이 도구로 다시 잴 길이 없었다 — 재현이 스크래치 스크립트에만 있었다(목록을
 #   잃은 그 꼴). --say "<날짜>:<문장>"(여러 번)이 그 날 채팅에 그 말을 적고 **초안을 다 넣은 뒤** 걷는다(예: --say "2026-10-14:비 때문에 수확 못 했다" 2026-10-24)
+#   [W-48 2026-10-18] 출하 판단이 없는 작기(자가 · 몰 납품 안 함)의 출하 줄은 마감이 지나도 놓침이 아니다 — 씨앗 밭이 그 차림이라 W-05(출하 마감 63 · 수확 마감 70)는
+#   파는 용도로 잰다(--use 판매 2026-10-28 — 용도 글자가 몰 납품 여부를 이긴다). 파는 말도 자가 말도 없는 용도는 몰 납품 여부가 가른다 — --mall yes|no 가 그 값을
+#   격리 사본에 넣는다(예: --use 텃밭 --mall yes)
 #   규율     운영 data 를 건드리지 않는다(scripts.verify_claims.isolate — conftest · walk.sh 와 같은 격리 목록 하나를 쓴다) ·
 #            값을 제안하지 않는다 — 답을 그대로 보일 뿐이다
 from __future__ import annotations
@@ -108,7 +111,8 @@ def _screens(days: list[date], paths: tuple[str, ...]) -> list[dict[str, Any]]:
 
 
 def walk(days: list[date], only: str | None = None, use: str | None = None, asks: tuple[str, ...] = QUESTIONS,
-         add: tuple[dict[str, str], ...] = (), screens: tuple[str, ...] = (), says: tuple[tuple[date, str], ...] = ()) -> list[dict[str, Any]]:
+         add: tuple[dict[str, str], ...] = (), screens: tuple[str, ...] = (), says: tuple[tuple[date, str], ...] = (),
+         mall: bool | None = None) -> list[dict[str, Any]]:
     """날짜 × 재배 단위 × 물음 → 답(+ 화면). 격리 사본을 먼저 세운다(부르는 쪽이 따로 세우지 않아도 운영 data 에 닿지 않게)."""
     from scripts import verify_claims
     verify_claims.isolate()
@@ -123,6 +127,9 @@ def walk(days: list[date], only: str | None = None, use: str | None = None, asks
     if use:
         for pid in dict.fromkeys(s.get("parcel") for s in subs if s.get("parcel")):
             parcels.set_fields(pid, use=use, overwrite=True)          # 격리 사본의 덮개에만 쓴다
+    if mall is not None:
+        for pid in dict.fromkeys(s.get("parcel") for s in subs if s.get("parcel")):
+            parcels.set_fields(pid, mall_supply=mall, overwrite=True)  # 같은 덮개 — 몰 납품 여부(출하 판단 · 출하 줄이 읽는 문)
     # 격리 사본의 원장에만 — --only 가 있으면 그 재배 단위, 없으면 첫 단위. [검토 2026-10-14] 말한 날 **이전**의 답은 그 기록을 몰라야 한다 —
     # 처음에는 다 넣고 걸어서 10-14 의 답이 10-16 에 넣은 수확을 이미 읽었다(앞날 기록). 날 순서대로 걷고, 그 날까지 말한 것만 넣는다
     pending = sorted(says)
@@ -135,7 +142,7 @@ def walk(days: list[date], only: str | None = None, use: str | None = None, asks
             anchor = s.get("anchor")
             day = (today - date.fromisoformat(anchor)).days if anchor else None
             for q in asks:
-                rows.append({"date": today.isoformat(), "day": day, "subject": s.get("id"), "use": use or "", "ask": q,
+                rows.append({"date": today.isoformat(), "day": day, "subject": s.get("id"), "use": use or "", "mall": mall, "ask": q,
                              "answer": chat.answer(s, q, today)})
         if screens:
             rows += _screens([today], screens)                         # 화면도 그 날까지 말한 것만 안다(검토 — 처음엔 다 넣은 뒤에 화면을 받았다)
@@ -150,7 +157,8 @@ def render(rows: list[dict[str, Any]]) -> str:
         key = (r["date"], r["subject"])
         if key != last:
             out.append(f"\n===== {r['date']} · {r['subject']}" + (f" · 심은 뒤 {r['day']}일" if r["day"] is not None else "")
-                       + (f" · 용도 {r['use']}" if r["use"] else "") + " =====")
+                       + (f" · 용도 {r['use']}" if r["use"] else "")
+                       + ("" if r.get("mall") is None else f" · 몰 납품 {'예' if r['mall'] else '아니오'}") + " =====")   # [검토 2026-10-18] 넣은 조건이 머리에 — 조건을 떼면 다른 측정이 같아 보인다
             last = key
         out.append(f"-- {r['ask']}\n{r['answer']}")
     return "\n".join(out)
@@ -167,12 +175,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--add", action="append", default=[])
     ap.add_argument("--screen", action="append", default=[])
     ap.add_argument("--say", action="append", default=[])
+    ap.add_argument("--mall", choices=("yes", "no"))
     a = ap.parse_args(argv)
     from frontend import config
     try:
         days = [date.fromisoformat(d) for d in a.days] or [config.today()]
         asks = tuple(a.ask) if a.ask else (() if a.screen else QUESTIONS)          # 화면만 볼 때는 물음을 안 돌린다
-        rows = walk(days, a.only, a.use, asks, tuple(add_spec(t) for t in a.add), tuple(a.screen), tuple(say_spec(t) for t in a.say))
+        rows = walk(days, a.only, a.use, asks, tuple(add_spec(t) for t in a.add), tuple(a.screen), tuple(say_spec(t) for t in a.say),
+                    mall=None if a.mall is None else a.mall == "yes")
     except ValueError as e:
         print(f"!! {e}", file=sys.stderr)
         return 2

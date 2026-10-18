@@ -28,7 +28,8 @@ def test_every_field_a_judgment_reads_names_its_readers_and_they_are_real_decisi
     assert tuple(parcels.FIELD_CONSUMERS) == parcels.FIELDS_READ_BY_JUDGMENT
     known = CORE | set(registry.all_decisions())
     # (필드, 결정) → 그 결정의 코드가 **그 필드를 읽는 자리**의 표지. 용도는 이름이 아니라 기구로 읽는다(격자 use_gap/use_key) — 2026-10-05 측정에서 셋으로 늘었다
-    readers = {("use", "ship_or_store"): ("judge/stage_decisions.py", '"use"'),
+    # [W-48 2026-10-18] 출하 판단의 용도 문은 plan_vs_actual.not_shipping 하나로 옮겼다(계획 대 실제의 출하 줄도 같은 문) — 그 문이 용도를 읽는 것은 test_asked_rows_answerable 이 본다
+    readers = {("use", "ship_or_store"): ("judge/stage_decisions.py", "plan_vs_actual.not_shipping("),
                ("use", "harvest_timing"): ("judge/harvest_timing.py", "use_gap("),
                ("use", "risk_alert"): ("judge/risk_alert.py", "use_gap("),
                ("use", "plan_vs_actual"): ("judge/plan_vs_actual.py", "plan.use_gapped("),

@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import http.client
+import inspect
 import re
 import threading
 from urllib.parse import quote
@@ -110,7 +111,8 @@ def test_the_judgement_card_leads_with_the_plain_word_not_the_kind():
     """카드 첫 글자가 `해당 없음` 이던 자리 — 배선 래칫(호출형만 본다 · 인자 표현식은 고정하지 않는다)."""
     src = (chat_pages.__file__ and open(chat_pages.__file__, encoding="utf-8").read())
     card = src[src.index("def _env_card"):src.index("def thread_panel")]
-    assert "words.said(" in card, "카드가 종류를 사람 말로 옮기지 않는다"
+    # [W-48 검토 2026-10-18 둘째] 머리는 words.head 하나를 거친다(판정이 머리를 따로 밝히지 않으면 words.said 그대로) — 머리를 내는 자리 셋이 같은 하나
+    assert "words.head(" in card and "said(" in inspect.getsource(words.head), "카드가 종류를 사람 말로 옮기지 않는다"
     assert "title=" in card, "정확한 종류를 남길 자리가 없다"
 
 

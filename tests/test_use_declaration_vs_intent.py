@@ -62,4 +62,7 @@ def test_a_plan_written_in_the_diary_does_not_change_the_field_use():
 
 def test_the_work_word_name_is_public_so_the_vocabulary_is_not_copied():
     assert chat.work_type("종구 캘 것입니다") == "수확" and chat.work_type("이번 작기는 팔 것이다") is None
-    assert "chat.work_type" in __import__("inspect").getsource(parcels.use_declared)
+    # [2026-10-18] 선언 꼴 가름이 _declares 로 내려갔다(부정된 파는 선언 parcels.sale_declined 도 같은 가름을 쓴다) — 사슬을 끝까지 본다(한 겹 깊어진 것이지 느슨해진 것이 아니다)
+    inspect = __import__("inspect")
+    assert "_declares(" in inspect.getsource(parcels.use_declared) and "_declares(" in inspect.getsource(parcels.sale_declined)
+    assert "chat.work_type" in inspect.getsource(parcels._declares)

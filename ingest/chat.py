@@ -97,7 +97,12 @@ EVENT_NOUNS: dict[str, tuple[str, ...]] = {
     "보식": ("보식",),
     "배수": ("배수", "도랑", "고랑 정비", "고랑정비"),
     "수확": ("수확", "캐서", "뽑아서"),          # 연결형(-서)은 규칙이 만들지 않는다 — 손으로 적은 채 둔다
-    "납품": ("납품", "출하 했"), "저장": ("저장", "창고에"), "소독": ("소독",), "정리": ("걷었",),
+    "납품": ("납품", "출하 했"), "저장": ("저장", "창고에"), "소독": ("소독",),
+    # [W-47 2026-10-18] 「잔사 정리 못 했다」 가 본 것이었다(정리 어휘가 「정리하 · 정비하」 활용과 「걷었」 뿐) — 계획 줄 「잔사 정리 · 후작 준비」 가 사유를 묻는데 답할 말이 없었다.
+    # 「잔사 정리」 를 둔다. 맨 「잔사」 는 두지 않는다 — 「잔사가 많이 남았다」 가 정리한 일이 된다(이름 + 다른 동사의 과거 · 「비료가 남았다」 → 시비 와 같은 꼴, 측정).
+    # 맨 「정리」 도 두지 않는다 — 「정리함을 샀다」 가 정리한 일이 된다(말뭉치 검사가 고정)
+    # [검토 2026-10-18] 조사가 끼는 꼴(「잔사를 정리 못 했다」 · 「잔사를 걷지 못했다」 · 「잔사를 못 치웠다」)이 본 것이었다 — 어휘는 글자 사이에 부정 표지만 끼워 찾는다
+    "정리": ("걷었", "잔사 정리", "잔사정리", "잔사를 정리", "잔사를 걷", "잔사 치웠", "잔사를 치웠"),
 }
 
 _EVENT_ORDER = ("파종", "정식", "방제", "시비", "관수", "제초", "예찰", "보식", "배수", "수확", "납품", "저장", "소독", "정리")
@@ -518,12 +523,32 @@ def saved_line(draft: dict[str, Any], rec: dict[str, Any] | None = None) -> str:
     return f"{head} · {what}" if what else head
 
 
+# [W-47 2026-10-18] 못 한 이유를 **어떻게 적으면 그 일의 이유가 되는지** — 할 일 답(사유를 묻는 줄)과 일 이름 없는 답의 카드가 같은 한 문장을 쓴다.
+# 예문은 약속이다(END_SAY 와 같은 꼴 — 적어도 안 읽히는 예를 지어내지 않는다): 검사가 이 예문과, 묻는 줄마다 답에 보인 그대로 · 이름 조각으로 보내 그 줄에 붙는지 잰다.
+# [검토 2026-10-18] 예는 **지금 묻는 줄**에서 만든다 — 고정 예문(수확)은 수확을 안 묻는 날(09-25 · 10-28) 그대로 적으면 아무 줄에도 안 붙는 수확 이유가 됐다. 묻는 줄이 없을 때만 고정 예문
+REASON_SAY = "비 때문에 수확 못 했다"
+
+
+def reason_how(example: str = REASON_SAY) -> str:
+    return f"'{example}' 처럼 일 이름과 함께 적으시면 그 일의 못 한 이유로 남습니다"     # 따옴표는 「채팅에 '농사 끝났어요' 처럼」 과 같은 꼴(「」 는 고칠 수 있는 이름을 부르는 자리)
+
+
+REASON_HOW_TAIL = "처럼 일 이름과 함께 적으시면 그 일의 못 한 이유로 남습니다"        # 예가 무엇이든 같은 꼬리 — 검사 · 래칫이 찾는 말
+
+
+def reason_example(row: dict[str, Any]) -> str:
+    """묻는 줄 하나로 만든 예문 — 답에 보이는 이름 그대로(같은 이름의 줄은 단계로 갈린다 · 「촬영(2단계)」)."""
+    num = str(row.get("stage") or "").split(".", 1)[0].strip()
+    return f"비 때문에 {row.get('task')}" + (f"({num}단계)" if num.isdigit() else "") + " 못 했다"
+
 # 관찰 메모는 **서로 다른 네 가지 이유**로 나온다. 종류만 사람 말로 바꾸고 이유를 하나로 뭉개면 화면이 틀린 말을 한다
 # ("급수 시설이 없다" 에 *"관수라는 말이 없어서"* 라고 답하게 된다 — 있다). 갈래마다 한 줄을 둔다.
 PLAIN_BY_KEY = {
     "no_done_marker": "'했다 · 완료 · 날짜' 같은 표시가 없어 한 일이 아니라 본 것으로 적었습니다",
     "observed": "밭에서 보신 것으로 적었습니다(날짜를 안 적으시면 오늘로 둡니다)",
     "statement": "한 일이나 할 일을 가리키는 말이 없어 본 것으로 적었습니다",
+    # [W-47 2026-10-18] 할 일 답이 「놓침 — 사유를 묻는다」 로 여러 줄을 물은 뒤 「비 때문에 못 했다」 가 오면 어느 줄의 이유인지 모른다 — 고르지 않고(되묻기) 무엇을 더 적으면 되는지 말한다
+    "unnamed_negation": f"어느 일인지 알아볼 말이 없어 본 것으로 적었습니다 — {reason_how()}",       # 묻는 줄이 있으면 plain_why 가 그 줄의 예로 바꾼다
     "no_damage": "피해가 없었다는 것으로 적었습니다",
     "alt_after_negation": "대신 하신 일을 본 것으로도 남겨 둡니다",
     "undecided": "무엇으로 적을지 정하지 못해 우선 본 것으로 두었습니다",
@@ -542,6 +567,8 @@ def plain_why(draft: dict[str, Any]) -> str:
     """그 초안을 **왜 그렇게 읽었는지**를 농가의 말로 한 줄. 내부 `why` 는 그대로 두고 여기서만 옮긴다(정본 하나)."""
     kind = draft.get("kind", "")
     key = draft.get("why_key")
+    if key == "unnamed_negation" and draft.get("example"):
+        return f"어느 일인지 알아볼 말이 없어 본 것으로 적었습니다 — {reason_how(str(draft['example']))}"     # 지금 묻는 줄의 예(_attach_plan 이 붙인다)
     if key and key in PLAIN_BY_KEY:
         return PLAIN_BY_KEY[key]
     if kind == "event":
@@ -800,10 +827,24 @@ def _done_evidence(text: str) -> bool:
 # 「안 정했다」 의 것이라 수확은 한 일이 아닌데 **수확 사건**이 됐다(작업 어휘 + 받침 ㅆ). 수확 창을 넓히자 이 거짓 기록이 수확 줄을 채울 날도 넓어졌다(직렬 게이트).
 # 부정된 서술어(안 · 못 + 낱말 · -지 않/못)를 걷고 남은 말에서 한 일의 표지를 본다 — 「수확했는데 아직 다 못 팔았다」 는 수확했 이 남아 그대로 한 일이다
 _NEGATED_PRED = re.compile(r"(?<![가-힣])(?:안|못)\s*[가-힣]+|[가-힣]*지\s*(?:않|못)[가-힣]*")
+# [W-47 검토 2026-10-18 둘째] 목적 + 움직임(「정리하러 갔는데」 · 「약 치러 왔다」)의 ㅆ 는 **간 것**이지 그 일을 한 표지가 아니다 —
+# 「잔사 정리하러 갔는데 비가 와서 못 했다」 가 정리한 일이 됐다(갔 의 ㅆ 가 끝 부정을 그 일에서 떼고 한 일의 표지로도 세였다)
+_PURPOSE_GO = re.compile(r"(?<=[가-힣])러\s*(?:갔|왔)[가-힣]*")
 
 
 def _done_outside_negation(text: str) -> bool:
-    return _done_evidence(_NEGATED_PRED.sub(" ", text))
+    return _done_evidence(_NEGATED_PRED.sub(" ", _PURPOSE_GO.sub(" ", text)))
+
+
+# [W-47 검토 2026-10-18 둘째] 「잔사 정리 중에 비가 왔다」 — 그 일은 **하던 중**이다. 뒤의 ㅆ(왔)는 다른 서술어의 것이라 그 일을 한 표지가 아니다(정리한 일이 됐다)
+_DURING = re.compile(r"\s*(?:작업\s*)?(?:하는|하던)?\s*도?중(?:에|엔|이었|이던|인데|이라)")
+
+
+def _during(text: str, et: str) -> bool:
+    """그 종류의 어휘가 나오는 자리가 전부 「… 중에」 인가."""
+    t = _fold_adverbs(text)
+    spots = [m.end() for w in EVENT_SYNONYMS.get(et, ()) for m in re.finditer(re.escape(w), t)]
+    return bool(spots) and all(_DURING.match(t, e) for e in spots)
 
 
 # [발행자 2026-09-20 "쪽파 포장에는 웃거름 주지 않고 수분공급만 …. 그 근거는 토양검정 상태를 기준으로 함"]
@@ -835,47 +876,73 @@ _ALT_AFTER = re.compile(r"(대신|만\s|만[가-힣]|해\s?줌|해\s?준다|하�
 # [검토 2026-10-14 둘째] 「웃거름은 토양검정 결과를 보고 주지 않기로 했다」 · 「수확은 비 때문에 안 하기로 했다」 · 「웃거름은 비 때문에 주지 못했다」 도 **한 일**이었다 —
 # 결정 · 불능이 「-기로 했다」 처럼 두 낱말로 끝나거나 「-지 못」 이 일반 동사에 붙는다. 끝에 붙는 「했다 · 했어요」 한 낱말은 같은 서술어로 본다.
 # 「-지 않」 은 결정(않기로)만 — 「웃거름이 충분하지 않다」 는 상태 서술이다(작업 부정이 아니다)
+# [W-47 검토 2026-10-18 둘째] 「잔사 정리가 덜 됐다」 · 「잔사 정리를 하다 말았다」 가 **한 일**이었다(됐 · 말았 의 ㅆ) — 덜 끝난 일 · 하다 그친 일은 아직 할 일이다
+_UNDONE = r"(?<![가-힣])덜\s*(?:됐|했|끝|마쳤)|(?<=[가-힣])다가?\s*말았"
 _NEG_TAIL = re.compile(r"(?:§\s*[가-힣]|(?<![가-힣])하지\s*(?:않|못)|지\s*못|지\s*않기로"
-                       r"|(?:다음|나중)에\s*하기로|미뤘|미뤄|미룸|미루기로|연기했|연기함|연기하기로|늦췄|늦춤)[가-힣]*(?:\s+(?:했|한|합|함|해|두|뒀|놓|놨)[가-힣]*)?\s*[.!…~]*\s*$")
+                       r"|(?:다음|나중)에\s*하기로|미뤘|미뤄|미룸|미루기로|연기했|연기함|연기하기로|늦췄|늦춤|" + _UNDONE +
+                       r")[가-힣]*(?:\s+(?:했|한|합|함|해|두|뒀|놓|놨)[가-힣]*)?\s*[.!…~]*\s*$")
 #   끝에 붙는 한 낱말 = 하다 · 두다 · 놓다(「미뤄 두었다」 · 「연기해 놓았다」 — 보조 용언은 앞 서술어와 한 서술어다)
 # 「수확할 수 없었다」 · 「물 줄 수가 없었다」 — 끝 서술어가 「-ㄹ 수 없」 이면 그 앞 동사(ㄹ 받침)의 일을 못 한 것이다. 동사가 작업 어휘에 붙어 있어(수확할) 위 꼴로는 못 본다
-_UNABLE_TAIL = re.compile(r"(\S+)\s*수\s*(?:가|는|도)?\s*없[가-힣]*\s*[.!…~]*\s*$")
+# [W-47 검토 2026-10-18 · W-46 의 남은 꼴] 「잔사 정리할 시간이 없었다」 · 「물 줄 시간이 없었다」 가 **한 일**이었다(없었 의 ㅆ 를 한 일의 표지로 셌다 — 넣으면 잔사 줄이 이행).
+# 「-ㄹ 시간 · 틈 · 여유 · 짬이 없」 도 「-ㄹ 수 없」 과 같은 불능이다
+# [검토 2026-10-18 둘째] 「시간적 여유」 · 「일손」 도 같은 불능이다(그 둘은 한 일로 남았다). 조사 목록은 불능 · 미룸(_DEFERRED) · 촬영이 이 하나를 쓴다 —
+# 미룸 쪽만 「가 · 는」 이 빠져 「여유가 없었다」 가 결정(줄을 바로 닫는다)이 됐다(같은 말 두 벌이 갈라진 꼴)
+_UNABLE_NOUN = r"(?:수|시간적\s*여유|시간|틈|여유|짬|일손)"
+_UNABLE_PART = r"(?:이|가|는|은|도)?"
+_UNABLE_TAIL = re.compile(rf"(\S+)\s*{_UNABLE_NOUN}\s*{_UNABLE_PART}\s*없[가-힣]*\s*[.!…~]*\s*$")
+# 작업 어휘가 「-ㄹ」 낱말에 **닿는가** — 그 낱말 안에서 끝나거나 사이가 조사 하나 · 띄어쓰기뿐(수확할 · 잔사 정리할 · 물 줄 · 수확을 할).
+# [검토 2026-10-18 둘째] 닿지 않으면 그 「-ㄹ」 은 다른 일이다 — 「수확하느라 쉴 시간이 없었다」 · 「수확 끝내고 나니 잠잘 시간도 없었다」 는 바빴다는 말이지
+# 수확을 못 했다는 말이 아니다(멀리 있는 작업 어휘를 읽어 거둔 기록이 못 한 이유가 됐다)
+_REACH_GAP = re.compile(r"(?:을|를|은|는|도|이|가)?\s*")
+
+
+def _reaches(head: str, at: int, table: dict[str, tuple[str, ...]]) -> bool:
+    """head = 앞말 + 「-ㄹ」 낱말(끝) · at = 그 낱말이 시작하는 자리."""
+    return any(h.end() > at or _REACH_GAP.fullmatch(head[h.end():at])
+               for words in table.values() for w in words for h in re.finditer(re.escape(w), head))
 
 
 def _ssang(ch: str) -> bool:
     return "가" <= ch <= "힣" and (ord(ch) - 0xAC00) % 28 == 20 and ch not in _WILL_SSANG      # 받침 ㅆ — 과거(한 일)의 표지 · 의지의 겠은 빼고
 
 
-def _last_work_before(prefix: str) -> str | None:
+def _last_work_before(prefix: str, table: dict[str, tuple[str, ...]] | None = None) -> str | None:
     """끝 서술어 **바로 앞의** 작업 어휘(가장 뒤에 나온 것)의 종류 — 그 어휘에 제 과거 서술어가 붙어 있으면(「물 줬는데 …」) None.
     [검토 2026-10-14] 첫 판은 앞말 **어디든** 첫 작업 어휘를 읽어 「물 줬는데 비 때문에 더는 못 했다」 가 관수 불이행(이미 한 일이 안 한 일)이 됐다."""
+    table = EVENT_SYNONYMS if table is None else table
     t = _fold_adverbs(prefix)
-    hits = [(t.rfind(w), ty) for ty, words in EVENT_SYNONYMS.items() for w in words if w in t]
+    hits = [(t.rfind(w), ty) for ty, words in table.items() for w in words if w in t]
     if not hits:
         return None
     at, ty = max(hits)
-    if any(_ssang(ch) for ch in t[at:]):
+    if any(_ssang(ch) for ch in _PURPOSE_GO.sub(" ", t[at:])):
         return None
     # 앞에 **한 일**이 따로 있으면(「수확했지만 출하할 수가 없었다」) 그 한 일을 잃지 않는다 — 한 문장에 초안 하나라, 끝 부정을 고르면 거둔 기록이 사라진다
-    earlier = [t.find(w) for words in EVENT_SYNONYMS.values() for w in words if 0 <= t.find(w) < at]
-    return None if any(any(_ssang(ch) for ch in t[i:at]) for i in earlier) else ty
+    earlier = [t.find(w) for words in table.values() for w in words if 0 <= t.find(w) < at]
+    return None if any(any(_ssang(ch) for ch in _PURPOSE_GO.sub(" ", t[i:at])) for i in earlier) else ty
 
 
-def _tail_negation(norm: str) -> tuple[str, int] | None:
+def _tail_negation(norm: str, table: dict[str, tuple[str, ...]] | None = None) -> tuple[str, int] | None:
     """문장 끝 서술어의 부정 · 미룸 · 불능 → (그 앞 작업 종류, 끝 위치). 작업 어휘가 앞에 없으면 None(「비 때문에 못 했다」 는 무슨 일인지 모른다)."""
     m = _NEG_TAIL.search(norm)
     if m:
-        et = _last_work_before(norm[:m.start()])
+        et = _last_work_before(norm[:m.start()], table)
         return (et, m.end()) if et else None
     m = _UNABLE_TAIL.search(norm)
     last = m.group(1)[-1] if m else ""
     if m and "가" <= last <= "힣" and (ord(last) - 0xAC00) % 28 == 8:          # 받침 ㄹ(할 · 줄 · 칠 · 캘) — 「충분한 수 없」 같은 다른 꼴은 안 본다
-        et = _last_work_before(norm[:m.end(1)])
+        pre = _fold_adverbs(norm[:m.start(1)])
+        if not _reaches(pre + m.group(1), len(pre), EVENT_SYNONYMS if table is None else table):
+            return None
+        et = _last_work_before(norm[:m.end(1)], table)
         return (et, m.end()) if et else None
     return None
 # 그 일은 **아직 할 일**이다 — 못 함(불능) · 아직 · 미룸. 「안 하기로 했다」 · 「주지 않고 … 만」 · 「생략」 은 여기 없다(결정 — 줄을 닫는다 · plan_vs_actual.reason_closes).
 # 그냥 「안 했다」 는 둘 다로 읽혀 옛 규칙(닫는다)에 둔다 — 넓히는 것은 판단의 뜻을 바꾸는 일이다(측정한 결함은 「못 · 아직 · 미룸」 이다)
-_DEFERRED = re.compile(r"(?<![가-힣])못(?!자리)(?=\s|[가-힣])|지\s*못|수\s*(?:가|는|도)?\s*없|(?:다음|나중)에\s*하기로|미뤘|미뤄|미룸|미루기로"
+# [검토 2026-10-18 둘째] 미룸 · 불능의 낱말은 그것을 알아보는 쪽(끝 부정 · 촬영 부정)과 **같은 조각**을 쓴다 — 「사진은 나중에 찍기로 했다」 를 촬영 미룸으로 알아보고도
+# 여기는 「하기로」 만 알아 결정(줄을 바로 닫는다)이 됐다 · 「여유가 없었다」 도 같은 꼴(_UNABLE_PART)
+_LATER = r"(?:다음|나중)에\s*(?:하기로|찍기로)"
+_DEFERRED = re.compile(rf"(?<![가-힣])못(?!자리)(?=\s|[가-힣])|지\s*못|{_UNABLE_NOUN}\s*{_UNABLE_PART}\s*없|{_LATER}|미뤘|미뤄|미룸|미루기로|{_UNDONE}"
                        r"|연기했|연기함|연기하기로|늦췄|늦춤|(?<![가-힣])아직(?![가-힣])")
 # [검토 2026-10-14] 결정을 **말로** 밝히면 그것이 이긴다 — 「트랩을 못 구해서 예찰은 안 하기로 했다」 · 「아직 비가 와서 수확은 생략했다」 는 못 · 아직 이 섞여도 결정이다
 # (그 일을 안 하기로 했다 · 할 일에 남기지 않는다). 「다음에 하기로」 는 미룸이라 결정이 아니다
@@ -891,8 +958,102 @@ def deferred_said(text: str) -> bool:
 
 def _negated_task(text: str) -> tuple[str, int] | None:
     """(부정된 작업 종류, 부정 표현 끝 위치) — 사건 어휘 바로 뒤에 부정이 붙은 첫 종류. 없으면 문장 끝 서술어의 부정 · 미룸(그 앞의 작업 어휘). 없으면 None."""
-    norm = _NEG_FOLD_WORK.sub("§", text)
-    for et, words in EVENT_SYNONYMS.items():
+    return _negated_in(_NEG_FOLD_WORK.sub("§", text), EVENT_SYNONYMS)
+
+
+# [W-47 2026-10-18] 촬영 — 계획표에 촬영 줄이 다섯이고 마감이 지나면 「놓침 — 사유를 묻는다: 촬영(2단계) …」 인데 「촬영 못 했다」 · 「사진 못 찍었다」 가 본 것이었다
+# (촬영은 사건 종류가 아니다 — 한 일의 증거는 사진 자체다). 못 한 이유만 받는다: 이유는 계획 줄(작업명 · 계획일)에 붙고 사건 종류가 필요 없다(plan_vs_actual.reason_for).
+# 「사진 찍었다」(사진 없이)를 한 일로 셀지는 판정의 증거 규칙이라 발행자 몫 — 여기서 정하지 않는다.
+CAPTURE_TYPE = "촬영"
+CAPTURE_WORDS = ("촬영", "사진") + conjugations("찍") + conjugations("촬영하")
+# [검토 2026-10-18] 첫 판은 작업 부정의 걷기(_negated_in)에 촬영 어휘를 더 얹었다 — 그 걷기는 끝 서술어 앞의 **가장 가까운 어휘**를 읽어, 맨 이름 「사진」 이 남의 부정을
+# 가져갔다: 「사진 찍고 나서 비 때문에 못 했다」 · 「사진 보시면 알겠지만 … 아무것도 못 했어요」(찍었다 · 보낸 사진을 가리킨다) · 「사진 보정은 안 했다」 · 「사진 정리 못 했다」 가
+# 촬영 못 한 이유가 되어 묻던 촬영 줄을 닫았다. 「찍히다」(안 찍혔다 — 결과)도 접혔고 「못 찍었는데 나중에 찍었다」 는 다시 찍은 것을 못 봤다.
+# 그래서 부정된 서술어가 **찍다 · 촬영(하다) 자체**일 때만 읽는다 — 이름 「사진」 은 무엇을 못 했는지를 말하지 않는다(작업 어휘의 이름과 다르다: 그쪽은 작업 이름이 곧 그 일이다)
+# [검토 2026-10-18 둘째] 찍히다는 활용 전부(찍힌다 · 찍힘 · 찍힐 — 첫 판은 찍히 · 찍혀 · 찍혔 셋만 뺐다)가 결과다 · 「안 찍어도 된다」 · 「찍지 않으면」 처럼 **해도 되는 · 하면**
+# 꼴은 안 한 일을 말하지 않는다 — 둘 다 묻던 촬영 줄을 남의 이유로 닫았다
+_NOT_REPORT = r"(?!아도|으면|해도|하면|하더라)"
+_CAPTURE_NEG = re.compile(
+    r"(?<![가-힣])(?:안|못)\s*찍(?![히-힣혀-혛]|어도|으면)"                         # 안 찍었다 · 못 찍음 (찍히다 — 결과 — 는 아니다)
+    rf"|찍(?:지|진)(?:는|도|를)?\s*(?:않|못){_NOT_REPORT}"                            # 찍지 않았다 · 찍지는 못했다
+    rf"|촬영(?:\(\d+단계\)|\(칸\s*\d+\))?(?:을|은|는|도)?\s*(?:(?:안|못)\s*(?:했|함|하(?!면|더라)|해(?!도)|한(?!다면))|하지\s*(?:않|못){_NOT_REPORT})"
+    rf"|촬영하지\s*(?:않|못){_NOT_REPORT}"                                              # 촬영 못 했다 · 촬영(2단계) 못 했다(답에 보인 그대로)
+    rf"|(?:찍을|촬영할)\s*{_UNABLE_NOUN}\s*{_UNABLE_PART}\s*없"                        # 찍을 수 없었다 · 찍을 시간이 없었다
+    rf"|(?:촬영|사진)(?:은|는|을|를|도)?\s*(?:{_LATER}|미뤘|미뤄|미룸|미루기로|연기)")    # 촬영은 나중에 하기로 · 사진은 미뤘다
+_CAPTURE_TOPIC = re.compile(r"촬영(?:\(\d+단계\)|\(칸\s*\d+\))?(?:은|는|도)\s+")
+def _captured_after(rest: str) -> bool:
+    """부정 뒤에 **안 부정된** 찍었다 · 촬영했다가 있는가 — 「못 찍었는데 나중에 찍었다」 는 다시 찍은 것이라 못 한 이유가 아니다."""
+    return any(not re.search(r"(?<![가-힣])(?:안|못)$", rest[:m.start()].rstrip()) for m in re.finditer(r"찍었|촬영했", rest))
+
+
+def _capture_negated(text: str) -> tuple[str, int] | None:
+    """촬영(사진 찍기)을 안 · 못 했다는 말이면 (CAPTURE_TYPE, 끝 위치) — 부정된 서술어가 찍다 · 촬영(하다)일 때만 · 그 뒤에 다시 찍었다면 아니다.
+    작업 어휘와 함께면 작업 쪽이 먼저다(분류 순서 — 작업 부정 · 한 일이 이 갈래보다 앞에 선다)."""
+    t = text or ""
+    m = _CAPTURE_NEG.search(t)
+    if m and not _captured_after(t[m.end():]):
+        return CAPTURE_TYPE, m.end()
+    # [검토 2026-10-18 둘째] 이름을 앞에 내건 꼴 — 「촬영(2단계)은 비 때문에 못 했다」 는 작업 줄의 같은 꼴(「종구 선별 · 소독(1단계)은 비 때문에 못 했다」)은 잇는데 촬영은 본 것이었다.
+    # 「촬영」 이 말머리(은 · 는 · 도)이고 끝이 하다의 부정 · 미룸이며 그 사이에 한 일(ㅆ) · 다른 작업이 없을 때만(「촬영은 했는데 세척은 못 했다」 는 아니다)
+    tm, tail = _CAPTURE_TOPIC.search(t), _DO_NEG_TAIL.search(t)
+    if tm and tail and tail.start() >= tm.end():
+        between = t[tm.end():tail.start()]
+        last = (between.split() or [""])[-1]
+        if not any(_ssang(ch) for ch in between) and not _event_type(between) and not re.search(r"(?:을|를)$", last):    # 「… 세척을 못 했다」 — 못 한 것은 다른 일
+            return CAPTURE_TYPE, tail.end()
+    return None
+
+
+# 「비 때문에 못 했다」 · 「아직 못 했어요」 · 「미뤘다」 — 끝 서술어가 **하다**의 부정 · 미룸인데 무슨 일인지(작업 · 촬영 어휘)가 없다.
+# [검토 2026-10-18] 첫 판은 앞말을 안 보고 「안/못 + 하다」 끝이면 다 그렇다고 했다 — 「날씨가 좋지는 못했다」 · 「작년만 못하다」 · 「생각도 못 했다」 · 「물 걱정은 안 했다」 가
+# 「어느 일인지 알아볼 말이 없어」 카드를 받았다(본 것 · 평가인데 할 일의 이유로 다시 적으라 했다). 그래서 **부정 바로 앞 낱말**이 일을 대신 가리키는 말(아직 · 아무것도 · 일을)이거나
+# 까닭 말(… 때문에 · …서)이거나 없을 때만이다. 「세척 못 했다」 처럼 앞 낱말이 이름이면 이 갈래가 아니다(그 이름이 계획 줄이면 _attach_plan 이 그 줄에 잇는다)
+_UNNAMED_PRED = re.compile(r"(?:(?<![가-힣])|(?<=[서라니]))(?:(?:안|못)\s*(?:했|함|하|해|한)|하지\s*(?:않|못)|미뤘|미뤄|미룸|미루기로|연기했|연기함|연기하기로|늦췄|늦춤|(?:다음|나중)에\s*하기로)"
+                           r"[가-힣]*(?:\s+(?:했|한|합|함|해|두|뒀|놓|놨)[가-힣]*)?\s*[.!…~]*\s*$")
+# [검토 2026-10-18 둘째] 낱말 그대로만 맞춰 「아직도 · 여태 · 그냥 · 결국엔 · 명절이라 · 비 오는 바람에 · 날씨 탓에 · 비로 인해 · 제대로 · 하나도」 가 빠졌다 — 할 일 답의
+# 「일 이름과 함께」 안내가 같은 말의 다른 꼴에는 안 갔다. 까닭 끝(…라 · …길래 · …니 · …가지고 · …바람에 · …탓에 · …로 인해 · …로)과 정도 말을 더 둔다
+_UNNAMED_LEAD = re.compile(r"(?:^|\s)(?:아직(?:도|은|까지)?|여태|여지껏|그냥|다|전혀|도무지|도저히|결국(?:엔|은)?|끝내|"
+                           r"오늘(?:은|도)?|어제(?:는|도)?|그제(?:는)?|그날(?:은|도)?|이번(?:엔|에는|에도)?|오전(?:에|에는|엔)?|오후(?:에|에는|엔)?|아무것도|아무\s*것도|"
+                           r"일(?:을|은|도)|작업(?:을|은|도)|그건|그것(?:은|도)?|그거|하나도|제대로|많이|거의|통|"
+                           r"[가-힣]*때문에|[가-힣]*(?:서|니까|느라|느라고|라|라서|길래|니|가지고|바람에|탓에|로|인지)|[가-힣]+(?:으)?로\s*인해)\s*$")
+# 목적 + 움직임(「약 치러 갔는데 …」 · 「물 주러 왔다가 …」) · 하려다(「약 치려다 …」)는 **일을 댔다** — 그 꼴을 작업 어휘가 못 읽어도 「일 이름이 없다」 고 말하지 않는다(거짓 안내)
+_PURPOSE_FORM = re.compile(r"[가-힣]러\s*(?:갔|왔|가|와|나가|나왔)|[가-힣]려다(?:가)?\s")
+
+
+def unnamed_work_negated(text: str) -> bool:
+    """못 · 안 한 **일**을 말하는데 무슨 일인지가 없는가 — 그러면 계획 줄을 고르지 않고(어느 줄인지 모른다) 무엇을 더 적으면 되는지 말한다(되묻기)."""
+    t = (text or "").strip()
+    if _event_type(t) or any(w in t for w in CAPTURE_WORDS) or _PURPOSE_FORM.search(t):
+        return False
+    m = _UNNAMED_PRED.search(t)
+    return bool(m) and (not t[:m.start()].strip() or bool(_UNNAMED_LEAD.search(t[:m.start()])))
+
+
+# [W-47 검토 2026-10-18] 할 일 답은 「'비 때문에 수확 못 했다' 처럼 일 이름과 함께」 라고 말하는데, 답에 보이는 이름의 **조각**(「세척 못 했다」 · 「선별 못 했다」 ·
+# 「육안 확인 못 했다」 · 「후작 준비 못 했다」)은 작업 어휘가 아니라 본 것으로 떨어졌다 — 약속이 돌았다. 그 조각이 **열린 계획 줄 하나**의 이름이고 바로 뒤에 부정이 오면
+# 그 줄의 못 한 이유로 잇는다(줄이 둘 이상이면 고르지 않는다). 흔한 낱말(준비 · 관리 · 정리 …)은 조각으로 안 쓴다 — 「사진 정리 못 했다」 가 잔사 줄로 가지 않게
+_NAME_GENERIC = frozenset({"준비", "관리", "또는", "필요", "건조", "정리", "정비", "확인", "작업", "단기"})
+_DO_NEG = (r"(?:(?:안|못)\s*(?:했|함|하|해|한)|하지\s*(?:않|못)|미뤘|미뤄|미룸|미루기로|연기했|연기함|연기하기로|늦췄|늦춤|(?:다음|나중)에\s*하기로)"
+           r"[가-힣]*(?:\s+(?:했|한|합|함|해|두|뒀|놓|놨)[가-힣]*)?\s*[.!…~]*\s*$")          # 하다의 부정 · 미룸이 문장 끝으로
+_DO_NEG_TAIL = re.compile(_DO_NEG)
+_NAMED_NEG = r"(?:을|를|은|는|도)?(?:\s*(?:확인|작업|일)(?:을|를|은|는|도)?)?\s*" + _DO_NEG    # 「출하를 못 했다」 · 「육안 확인 못 했다」 (이 · 가 는 상태 — 「선별이 안 된다」)
+
+
+def _named_in(task: str, text: str) -> bool:
+    """계획 줄 이름의 조각(흔한 낱말 · 숫자 빼고)이 말에 있고 그 바로 뒤(같은 줄 이름의 다른 조각 · 조사 · 「확인」 까지)에 하다의 부정 · 미룸이 문장 끝으로 오는가."""
+    toks = [x for x in re.split(r"[\s·()]+", task or "") if x]
+    distinct = [x for x in toks if len(x) >= 2 and x not in _NAME_GENERIC and not x[0].isdigit()]
+    if not distinct:
+        return False
+    any_tok = "|".join(re.escape(x) for x in sorted(set(toks), key=len, reverse=True))
+    pat = (rf"(?:{'|'.join(re.escape(x) for x in distinct)})(?:(?:을|를|은|는|도|와|과)?[\s·()]*(?:{any_tok}))*"
+           rf"(?:[\s(]*\d+단계\)?)?{_NAMED_NEG}")
+    return bool(re.search(pat, text or ""))
+
+
+def _negated_in(norm: str, table: dict[str, tuple[str, ...]]) -> tuple[str, int] | None:
+    """접은 글(§)과 어휘 표 → (부정된 종류, 끝 위치). 작업 부정 · 촬영 부정이 같은 걷기를 쓴다(규칙을 두 벌 두지 않는다)."""
+    for et, words in table.items():
         for w in words:
             m = re.search("§?".join(re.escape(ch) for ch in w), norm)
             if not m:
@@ -904,10 +1065,89 @@ def _negated_task(text: str) -> tuple[str, int] | None:
             a = _NEG_AFTER.match(norm[m.end():])
             if a:
                 return et, m.end() + a.end()
-    return _tail_negation(norm)
+    return _tail_negation(norm, table)
 
 
-def _plan_row_for(subject_id: str, et: str, today: date, stated: str | None = None) -> dict[str, Any] | None:
+# 못 한 이유를 이을 수 있는 줄 — 계획이 아직 할 일로 보는 줄만. 이행 · 사유 기록됨은 닫혔고, 기록 없음(기준점 전 촬영 · 출하 판단이 없는 작기의 마감 지난 출하 줄) ·
+# 종료 뒤는 묻지 않는 줄이다 — [W-47 2026-10-18] 전에는 닫힌 둘만 빼서, 촬영 이유를 받게 되자 묻지 않는 칸 1 촬영 줄에도 붙을 자리가 생겼다.
+# 조건부는 남긴다(다른 줄이 없을 때만 — W-14 ②의 옛 갈래 · 그 이유는 보이지 않는다)
+_OPEN_ROW = ("예정", "미이행", "놓침", "조건부")
+# [W-47 검토 2026-10-18] 같은 종류의 줄이 여럿이면(촬영 다섯 · 같은 작업의 1회 · 2회 줄) 말 안의 **가르는 말**을 본다 — 답은 「촬영(2단계)」 처럼 단계를 붙여 묻는데
+# 잇는 쪽은 그것을 안 읽고 가장 늦게 열린 줄(지금 창 안의 칸 5)에 붙여, 묻던 칸 2 줄은 계속 묻고 칸 5 줄에 남의 이유가 섰다
+_STAGE_SAID = re.compile(r"(\d+)\s*단계|칸\s*(\d+)")
+
+
+def _stage_no(row: dict[str, Any]) -> int | None:
+    num = str(row.get("stage") or "").split(".", 1)[0].strip()
+    return int(num) if num.isdigit() else None
+
+
+def _name_tokens(task: str) -> set[str]:
+    return {x for x in re.split(r"[\s·()]+", task or "") if len(x) >= 2 and x not in _NAME_GENERIC}
+
+
+def _narrowed(rows: list[dict[str, Any]], said: str, wider: str | None = None) -> list[dict[str, Any]]:
+    """말한 단계(「2단계」 · 「칸 2」)와 줄 이름의 낱말(「밑거름」 · 「2회」)로 줄을 좁힌다 — 말이 어느 줄도 가리키지 않으면 그대로.
+    낱말이 가장 많이 맞는 줄들만 남긴다(닫힌 줄이 이기면 그 말은 그 줄 얘기다 — 열린 다른 줄에 붙이지 않는다 · 부르는 쪽이 열림을 거른다).
+    단계는 **부정에 가장 가까운**(마지막) 것 · `said` 가 아무것도 안 가리키면 `wider`(부정 끝까지의 말 전체)로 한 번 더 본다."""
+    stages = list(_STAGE_SAID.finditer(said or ""))
+    if stages:
+        n = int(stages[-1].group(1) or stages[-1].group(2))
+        rows = [r for r in rows if _stage_no(r) == n]
+    score = {id(r): sum(1 for x in _name_tokens(r.get("task") or "") if x in (said or "")) for r in rows}
+    best = max(score.values(), default=0)
+    if best:
+        return [r for r in rows if score[id(r)] == best]
+    return _narrowed(rows, wider) if not stages and wider and wider != said else rows
+
+
+# [검토 2026-10-18 둘째] 줄을 가르는 말은 **못 한 그 절**에서 읽는다 — 「3단계 촬영은 했는데 4단계 촬영은 못 했다」 의 첫 단계는 한 일이고 · 「파종 때 밑거름 넣고 1회 줄은
+# 비 때문에 못 줬다」 꼴의 밑거름은 지나가는 말이다(문장 전체를 읽어 한 일의 줄을 닫거나 · 닫힌 줄이 이겨 이유가 아무 줄에도 안 붙었다 — 검사가 그 문장을 본다). 부정 끝까지 자르고
+# 그 앞 마지막 절(…고 · …는데 · …지만 · …뒤로 뒤)만 본다 — 그 절이 아무것도 안 가리키면 부정 끝까지의 말 전체(_narrowed 의 wider)
+_CLAUSE_CUT = re.compile(r"(?<=[가-힣])(?:고|는데|은데|지만|면서|으며)\s+|(?:뒤로|뒤에|후에|후로)\s+")
+
+
+def _said_part(d: dict[str, Any]) -> tuple[str, str]:
+    """못 한 이유 초안 → (못 한 그 절, 부정 끝까지의 말)."""
+    t = d.get("reason") or ""
+    if d.get("task_type") == CAPTURE_TYPE:
+        s, hit = t, _capture_negated(t)
+    else:
+        s = _NEG_FOLD_WORK.sub("§", t)
+        hit = _negated_in(s, EVENT_SYNONYMS)
+    upto = s[:hit[1]] if hit else s
+    return _CLAUSE_CUT.split(upto)[-1], upto
+
+
+def _answers_row(et: str, row: dict[str, Any], said: str | None = None) -> bool:
+    """그 종류의 못 한 이유가 이 계획 줄의 답인가. 촬영은 촬영 줄 · 작업은 줄 이름에 그 작업 어휘가 있거나 **판정이 그 줄을 세는 첫 종류**가 그 작업일 때.
+    [W-47 2026-10-18] 판정은 「출하 또는 단기 저장」 을 납품 기록으로 · 「잔사 정리 · 후작 준비」 를 정리 기록으로 이행으로 세는데(plan_vs_actual 표) 잇는 쪽은 줄 이름만 봐서
+    「출하 못 했다」 · 「잔사 못 걷었다」 가 「계획표에 같은 종류의 미완 작업이 없다」 였다(그 줄이 놓침으로 사유를 묻는 중에). 표는 판정의 것 하나를 읽는다.
+    [검토 2026-10-18 둘째] 첫 종류로**만** 맞는 줄은 그 말(`said`)에 줄 이름의 낱말이나 종류 이름이 있을 때만 — 납품의 「보냈」 은 사진 · 문자도 보낸다
+    (「사진을 아직 못 보냈어요」 가 출하 줄의 이유가 됐다 · 그 말을 납품으로 읽는 것은 이 묶음 전부터다)."""
+    from judge import plan_vs_actual
+    task = row.get("task") or ""
+    if et == CAPTURE_TYPE:
+        return row.get("kind") == "plan.capture"
+    if row.get("kind") == "plan.capture":
+        return False
+    if any(w in task for w in EVENT_SYNONYMS.get(et, ())):
+        return True
+    return plan_vs_actual.primary_type(task) == et and (said is None or any(x in said for x in _name_tokens(task) | {et}))
+
+
+def _plan_env(subject_id: str, today: date) -> Any:
+    """그 재배 단위의 계획 대 실제 봉투(3층) — 판단함이 아니면 None. 한 말을 잇는 동안 한 번만 낸다(_attach_plan)."""
+    from judge import run as judge_run   # answer() 와 같은 규율 — 3층 봉투만 받는다
+    e = next((x for x in judge_run.judgments_for(subject_id, today=today) if x.decision_id == "plan_vs_actual"), None)
+    return e if e is not None and e.kind == "판단함" else None
+
+
+_UNSET = object()
+
+
+def _plan_row_for(subject_id: str, et: str, today: date, stated: str | None = None, said: str | None = None,
+                  by_name: bool = False, env: Any = _UNSET, wider: str | None = None) -> dict[str, Any] | None:
     """부정된 작업 종류 → 그 재배 단위의 계획표(계획 대 실제 봉투)에서 같은 종류의 미완 작업 한 줄. 작목 무관 — 격자가 무엇이든 그 격자의 줄이다.
     이행된 줄은 제외. 농가가 날짜를 말했으면(stated) 그 날에 가장 가까운 줄, 아니면 지난 것(놓침·미이행)을 먼저, 없으면 가장 가까운 예정.
     계획표가 없으면(기준점 없음 등) None.
@@ -916,19 +1156,22 @@ def _plan_row_for(subject_id: str, et: str, today: date, stated: str | None = No
       ① 그 날(말한 날 · 없으면 오늘)에 **창이 아직 안 열린 줄**에는 잇지 않는다 — 10-14 의 「비 때문에 수확 못 했다」 가 열흘 뒤 계획 줄(10-24)에 붙어
          그 줄을 닫았다. 아직 오지 않은 계획을 못 한 것은 없다. 창은 계획 대 실제가 한 일을 세는 그 창(rows 의 match_from · 정본 match_window)
       ② 조건부 줄은 다른 줄이 없을 때만 — 조건부 판정이 사유보다 앞이라 거기 이은 사유는 **어디에도 안 보인다**(같은 꼴 측정: 같은 종류의 회차 줄
-         둘 중 지난 줄은 놓침으로 사유를 묻는데, 사유는 가장 늦은 줄인 조건부 회차에 붙어 사라지고 지난 줄은 계속 사유를 물었다)"""
-    from judge import run as judge_run   # answer() 와 같은 규율 — 3층 봉투만 받는다
-    e = next((x for x in judge_run.judgments_for(subject_id, today=today) if x.decision_id == "plan_vs_actual"), None)
-    if e is None or e.kind != "판단함":
+         둘 중 지난 줄은 놓침으로 사유를 묻는데, 사유는 가장 늦은 줄인 조건부 회차에 붙어 사라지고 지난 줄은 계속 사유를 물었다)
+    [W-47 검토 2026-10-18] `said`(그 말)가 있으면 단계 · 줄 이름의 낱말로 같은 종류의 줄을 먼저 좁힌다(_narrowed) · `by_name` 이면 종류 대신 **줄 이름의 조각**으로
+    고른다(_named_in) — 이름이 서로 다른 줄 둘 이상에 걸리면 고르지 않는다(None). `wider` = 부정 끝까지의 말(said 가 못 한 그 절일 때 — _said_part)."""
+    e = _plan_env(subject_id, today) if env is _UNSET else env
+    if e is None:
         return None
-    words = EVENT_SYNONYMS.get(et, ())
     on = stated or today.isoformat()
+    typed = [r for r in (e.result or {}).get("rows", []) if (_named_in(r.get("task") or "", said or "") if by_name else _answers_row(et, r, wider or said))]
+    if said:
+        typed = _narrowed(typed, said, wider)
     # [검토 2026-10-14] 날을 **말했으면**(「오늘 …」 · 「10월 20일에 …」) 그 날이 창 **안**인 줄에만 — 마감이 몇 주 전에 지난 줄에 오늘의 이유를 붙여 그 줄의 물음을
     # 엉뚱한 이유로 닫았다. 날을 안 말했으면 창이 열린 줄 전부(놓침 줄 — 계획이 지금 묻는 줄에 대한 답일 수 있다)
-    rows = [r for r in (e.result or {}).get("rows", []) if r.get("status") not in ("이행", "사유 기록됨") and any(w in (r.get("task") or "") for w in words)
+    rows = [r for r in typed if r.get("status") in _OPEN_ROW
             and (r.get("match_from") or r.get("work_date") or "") <= on and (not stated or on <= (r.get("match_to") or r.get("deadline_date") or on))]
     rows = [r for r in rows if r.get("status") != "조건부"] or rows
-    if not rows:
+    if not rows or (by_name and len({r.get("task") for r in rows}) != 1):
         return None
     if stated:
         sd = date.fromisoformat(stated)
@@ -942,10 +1185,24 @@ def _attach_plan(subject_id: str, drafts: list[dict[str, Any]], today: date) -> 
     [검토 2026-09-20 ①] 날짜를 말한 발화("9월 16일에 … 안 줬다")도 잇는다 — 전에는 날짜가 있으면 건너뛰어 작업명이 종류 이름('시비')으로
     남았고, 그 사유는 계획표 줄·단계 결정과 영영 안 맞았다. 말한 날짜에 가장 가까운 줄을 잇고 계획일은 그 줄의 것, 말한 날짜는 사유(원문)에 남는다."""
     out = []
+    box: list[Any] = []
+
+    def env() -> Any:                    # 계획 대 실제는 한 번만 낸다(판정 회차 전체를 돈다 — 원천을 다시 부르지 않게)
+        if not box:
+            box.append(_plan_env(subject_id, today))
+        return box[0]
     for d in drafts:
         if d.get("kind") == "decision.noncompliance" and d.get("planned_task") == d.get("task_type"):
-            row = _plan_row_for(subject_id, d["task_type"], today, stated=d.get("planned_day"))
+            part, upto = _said_part(d)
+            row = _plan_row_for(subject_id, d["task_type"], today, stated=d.get("planned_day"), said=part, wider=upto, env=env())
             d = dict(d)
+            if not row and d["task_type"] not in EVENT_SYNONYMS and d["task_type"] != CAPTURE_TYPE and deferred_said(d.get("reason") or ""):
+                # [검토 2026-10-18 둘째] 손으로 「못 한 이유」 를 고른 이름 조각(「벌레가 많아서 선별 못 했다」) — 종류가 원문이라 어느 줄에도 안 맞아 고친 길이 이유를 아무 데도
+                # 안 붙였다. 이름 조각의 길(아래 · 못 · 미룸만)과 같은 규칙으로 잇는다
+                row = _plan_row_for(subject_id, "", today, stated=d.get("planned_day"), said=d.get("reason") or "", by_name=True, env=env())
+                if row:
+                    from judge import plan_vs_actual
+                    d["task_type"] = CAPTURE_TYPE if row.get("kind") == "plan.capture" else (plan_vs_actual.primary_type(row["task"]) or row["task"])
             if row:
                 # [W-14 2026-10-14] 날이 둘이다 — planned_day 는 이은 줄의 날(줄을 찾는 열쇠) · observed_at 은 **못 한 날**(말한 날, 없으면 말한 오늘).
                 # 전에는 줄의 날 하나만 남아 카드 날짜 칸 · 넣은 배너 · 일지가 그 사유를 10-24(앞날)에 세웠고, 날짜 칸을 고쳐 넣으면 줄과 끊겼다
@@ -953,6 +1210,23 @@ def _attach_plan(subject_id: str, drafts: list[dict[str, Any]], today: date) -> 
                          why=d["why"] + f" · 계획표 '{row['task']}'({row['work_date']} · {row.get('status')})에 맞췄다")
             elif not d.get("planned_day"):
                 d["why"] += " · 계획표에 같은 종류의 미완 작업이 없다 — 계획일을 적는다"
+        elif d.get("kind") == "observation.note" and d.get("why_key") in ("statement", "unnamed_negation", "observed") and _DO_NEG_TAIL.search(d.get("text") or ""):
+            # [W-47 검토 2026-10-18] 작업 어휘는 없는데 **열린 계획 줄 하나의 이름 조각**을 대고 못 · 안 했다고 한 말(「비 때문에 세척 못 했다」) — 할 일 답이 「일 이름과 함께」
+            # 라고 했으니 그 줄의 못 한 이유다. 날을 말했으면 그 날이 창 안인 줄
+            # [검토 2026-10-18 둘째] 잇는 것은 **못 · 아직 · 미룸**(답의 예문 꼴 · 아직 할 일)만 — 조각 하나에 그냥 「안 하다」 는 줄 전부를 닫았다(「원래 세척 안 해요」 가
+            # 수확 · 다듬기 · 세척 줄을 · 「올해는 후작은 안 한다」 가 잔사 정리 줄을 — 버릇 · 남 얘기 · 줄의 한 조각이다). 본 것(벌레가 많아서 선별 못 했다)도 같은 길이다
+            text = d.get("text") or ""
+            row = (_plan_row_for(subject_id, "", today, stated=parse_day(text, today, past=True), said=text, by_name=True, env=env())
+                   if deferred_said(text) else None)
+            ask = ((env().result or {}).get("ask_reason") or []) if env() is not None else []
+            if not row and d.get("why_key") == "unnamed_negation" and ask:
+                d = dict(d, example=reason_example(ask[0]))          # 「'비 때문에 종구 선별 · 소독(1단계) 못 했다' 처럼」 — 지금 묻는 줄의 예(고정 예문은 안 묻는 줄일 수 있다)
+            if row:
+                from judge import plan_vs_actual
+                d = {"kind": "decision.noncompliance", "planned_task": row["task"], "planned_day": row["work_date"],
+                     "task_type": CAPTURE_TYPE if row.get("kind") == "plan.capture" else (plan_vs_actual.primary_type(row["task"]) or row["task"]),
+                     "observed_at": d.get("observed_at") or today.isoformat(), "reason": text, "needs": [], "deferred": True,
+                     "why": f"계획표 줄 이름의 조각 + 못 · 미룸 → 그 줄의 못 한 이유(원문이 사유 · 아직 할 일) · 계획표 '{row['task']}'({row['work_date']} · {row.get('status')})에 맞췄다"}
         out.append(d)
     return out
 
@@ -1069,6 +1343,22 @@ def _with_symptom_observation(drafts: list[dict[str, Any]], t: str, today: date,
                       "why": "말 안의 증상 어휘 — 관찰로도 남긴다(I-3 이중 사용 · 원문 그대로)", "why_key": key, "needs": []}]
 
 
+def _noncompliance_drafts(t: str, neg: tuple[str, int], day_past: str | None, today: date, why: str) -> list[dict[str, Any]]:
+    """못 · 안 한 이유 초안(작업 부정 · 촬영 부정이 같은 하나) — 종류만 정하고 계획 작업 · 계획일은 send() 가 계획표에서 잇는다(_attach_plan)."""
+    et_neg, end = neg
+    drafts: list[dict[str, Any]] = [{"kind": "decision.noncompliance", "task_type": et_neg, "planned_task": et_neg, "planned_day": day_past,
+                                     "reason": t, "why": why, "needs": [] if day_past else ["planned_day"]}]
+    if deferred_said(t):
+        # [W-14 2026-10-14] 「못 · 아직 · 미뤘다」 — 그 일은 아직 할 일이다. 넣어도 계획 줄을 마감까지 닫지 않는다(plan_vs_actual.reason_closes)
+        drafts[0].update(deferred=True, why=drafts[0]["why"] + " · 못 함 · 미룸(아직 할 일 — 마감까지 계획 줄을 닫지 않는다)")
+    if _ALT_AFTER.search(t[end:]):
+        # 부정 뒤에 대신 한 일이 이어진다("… 주지 않고 수분공급만 …") — 그 관행은 관찰 메모로도 남길 수 있다(선택 · 원문 그대로)
+        drafts.append({"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
+                       "why": "불이행 뒤에 이어진 실행 서술 — 관행을 관찰 메모로도 남긴다(선택)",
+                       "why_key": "alt_after_negation", "needs": []})
+    return drafts
+
+
 def _classify(text: str, today: date) -> list[dict[str, Any]]:
     t = text.strip()
     if not t:
@@ -1101,7 +1391,8 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
     # 같은 가로채기가 **작기 종료**에서도 났다(「이번 작기 끝낼게요」 → 계획) — 그 갈래는 확인하면 재배 단위를 닫으므로 잘못 걸릴 때의 대가가 가장 크다(아래 주석).
     # [2026-10-05] 용도 선언은 **한 번만** 묻는다(아래 용도 갈래가 이 값을 그대로 쓴다) — 두 번 부르면 작업 어휘 인자가 어긋날 수 있다(같은 말에 다른 답)
     use_v = parcels.use_declared(t, has_work=bool(et))
-    said_declaration = bool(use_v) or _end_declared(t)
+    # [W-48 검토 2026-10-18 둘째] 파는 말을 부정한 선언(「이번 작기는 판매 안 할 것이다」)은 값을 안 넣지만(parcels.sale_declined) 할 일도 아니다 — 선언 꼴은 그대로 비켜 간다
+    said_declaration = bool(use_v) or _end_declared(t) or parcels.sale_declined(t, has_work=bool(et))
     said_plan = (_PLAN_RE.search(t) or (et and _INTENT_RE.search(t)) or (et and _POLITE_WILL_RE.search(t))
                  or (not said_declaration and (_plan_ending(t) or (_GUESS_TAIL_RE.search(t) and willing)))
                  or (et and _PLAN_TAIL_RE.search(t)) or future)
@@ -1123,19 +1414,7 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
     neg = _negated_task(t)
     if neg:
         # 사건 어휘 + 부정 = 하지 않았다는 사실과 그 이유(원문이 사유다). 종류만 정하고 계획 작업·계획일은 send() 가 계획표에서 잇는다
-        et_neg, end = neg
-        drafts: list[dict[str, Any]] = [{"kind": "decision.noncompliance", "task_type": et_neg, "planned_task": et_neg, "planned_day": day_past,
-                                         "reason": t, "why": f"사건 어휘 + 부정 → {et_neg} 불이행 사유(원문이 사유)",
-                                         "needs": [] if day_past else ["planned_day"]}]
-        if deferred_said(t):
-            # [W-14 2026-10-14] 「못 · 아직 · 미뤘다」 — 그 일은 아직 할 일이다. 넣어도 계획 줄을 마감까지 닫지 않는다(plan_vs_actual.reason_closes)
-            drafts[0].update(deferred=True, why=drafts[0]["why"] + " · 못 함 · 미룸(아직 할 일 — 마감까지 계획 줄을 닫지 않는다)")
-        if _ALT_AFTER.search(t[end:]):
-            # 부정 뒤에 대신 한 일이 이어진다("… 주지 않고 수분공급만 …") — 그 관행은 관찰 메모로도 남길 수 있다(선택 · 원문 그대로)
-            drafts.append({"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
-                           "why": "불이행 뒤에 이어진 실행 서술 — 관행을 관찰 메모로도 남긴다(선택)",
-                           "why_key": "alt_after_negation", "needs": []})
-        return drafts
+        return _noncompliance_drafts(t, neg, day_past, today, f"사건 어휘 + 부정 → {neg[0]} 불이행 사유(원문이 사유)")
     dmg = _damage_risk(t)
     if dmg == NO_DAMAGE:
         # 피해 어휘 + 부정 = 피해가 **없었다**는 관찰. 사건으로 두면 경보↔피해 대조가 적중으로 센다(되먹임 오염)
@@ -1147,7 +1426,7 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
         risk = None if dmg == "피해" else dmg
         return [{"kind": "event", "type": ev.DAMAGE_TYPE, "observed_at": day_past or today.isoformat(), "risk": risk, "note": t,
                  "why": f"피해 어휘 → {risk or '갈래 미상'}", "needs": [] if risk else ["risk"]}]
-    if et and _done_outside_negation(t):
+    if et and _done_outside_negation(t) and not _during(t, et):
         return [{"kind": "event", "type": et, "observed_at": day_past, "note": t, "why": f"사건 어휘 → {et}",
                  "needs": [] if day_past else ["observed_at"]}]
     if use_v:                                    # 위에서 한 번 쟀다(작업 어휘를 함께 넘겨서) — 여기서 다시 묻지 않는다
@@ -1162,11 +1441,22 @@ def _classify(text: str, today: date) -> list[dict[str, Any]]:
         # 인용·시비 판단은 인증 유형을 계속 묻는다. 용도와 같은 길: 농사(재배 단위) 값 초안 → 확인 → subjects.set_cert.
         return [{"kind": "subject.field", "field": "cert", "value": cert_v, "subject": None, "text": t,
                  "why": f"인증 선언 → 농사 정보 인증 '{cert_v}' (확인 뒤 subjects.set_cert)", "why_key": "cert_declared", "needs": []}]
+    cap = _capture_negated(t)
+    if cap:
+        # [W-47 2026-10-18] 촬영을 못 · 안 했다 — 한 일 뒤 · 용도 · 인증 선언 뒤에 둔다(「수확했는데 사진은 못 찍었다」 는 거둔 기록을 · 「종구생산을 위한 목적이라 사진은
+        # 안 찍었다」 는 용도 선언을 잃지 않는다 — 한 문장에 초안 하나 · 선언은 상태를 바꾸고 못 한 이유는 고르는 것이다(검토 2026-10-18))
+        return _noncompliance_drafts(t, cap, day_past, today, "촬영 어휘 + 부정 → 촬영 못 한 이유(원문이 사유 · 촬영 줄에 잇는다)")
     if et:
         # 사건 어휘는 있는데 한 일의 표지가 없다("비료 상태가 안 좋다" · "웃거름 시기다") — 상태 서술이다. 사건이면 확인에서 '다른 종류'로 바꾼다
         return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
                  "why": f"'{et}' 어휘는 있으나 한 일의 표지(과거 어미 · 날짜 · 완료)가 없어 관찰 메모로 제안(사건이면 종류를 바꾼다)",
                  "why_key": "no_done_marker", "needs": []}]
+    if unnamed_work_negated(t):
+        # [W-47 2026-10-18] 「비 때문에 못 했다」 — 못 한 일이 무엇인지가 없다. 할 일 답이 여러 줄을 물은 뒤라 어느 줄인지 고르지 않는다(지어내지 않는다 · 되묻기).
+        # 본 것으로 두되 무엇을 더 적으면 그 일의 이유가 되는지 말한다(PLAIN_BY_KEY — 그 예문은 검사가 보내 본다)
+        return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
+                 "why": "못 · 안 한 일을 말하나 무슨 일인지(작업 · 촬영 어휘)가 없다 — 계획 줄을 고르지 않고 본 것으로 · 일 이름을 묻는다",
+                 "why_key": "unnamed_negation", "needs": []}]
     if any(w in t for w in OBS_WORDS):
         return [{"kind": "observation.note", "text": t, "observed_at": day_past or today.isoformat(),
                  "why": "관찰 어휘(날짜 없으면 오늘 본 것으로 제안 — 확인에서 고친다)",
@@ -1502,7 +1792,7 @@ def summarize_envelope(e: Any, plain: bool = True) -> str:
     from frontend import words
 
     r = e.result or {}
-    head = f"[{words.said(e.kind) if plain else e.kind}]"
+    head = f"[{words.head(e.kind, r) if plain else e.kind}]"
     if e.kind != "판단함" and e.kind != "사실 인용":
         # [앞날 걷기 2026-10-14 W-01 · W-03] 판단 **전체**를 용도 기준이 없어 안 냈으면 그 사실이 머리다(3층은 구조만 싣는다 · 문장은 4층 하나) — 꼬리는 다시 안 붙인다
         gap_head = "" if r.get("summary") else words.use_gap_head(str(r.get("use_gap_use") or ""), list(r.get("use_gap_stages") or []), e.decision_id)
@@ -1571,13 +1861,16 @@ def _judged_line(e: Any, r: dict[str, Any], head: str) -> str:
             parts.append(f"다음 예정 {len(by['예정'])}: " + " · ".join(f"{_with_stage(x)}({(x.get('work_date') or '')[5:]})" for x in by["예정"][:3]))
         ask = r.get("ask_reason") or []
         if by["놓침"]:
-            parts.append(f"놓침 {len(by['놓침'])}" + (f" — 사유를 묻는다: {', '.join(_with_stage(a) for a in ask)}" if ask else ""))
+            # [W-47 2026-10-18] 묻기만 하고 **어떻게 답하는지**를 안 말했다 — 촬영 · 잔사 줄은 채팅으로 답할 길도 없었다(그 길을 연 뒤 그 문장을 단다 · 예문은 검사가 잰다)
+            # [검토 2026-10-18] 예는 지금 묻는 첫 줄(reason_example) — 고정 예문(수확)은 수확을 안 묻는 날 그대로 적으면 아무 줄에도 안 붙었다
+            parts.append(f"놓침 {len(by['놓침'])}" + (f" — 사유를 묻는다: {', '.join(_with_stage(a) for a in ask)} — {reason_how(reason_example(ask[0]))}" if ask else ""))
         line = f"{head} " + (" / ".join(parts) or "밀린 것 없음 · 다음 예정 없음")
         # [WO-ASK-01 §10 지점 2026-10-03] 할 일도 추론값 — 이 답에 실린 것(지금 할 것 · 다음 예정) 가운데 농가가 고칠 수 있는 것만 이름을 부른다(위험 경보와 같은 자리 · 같은 함수)
         from frontend import words as _w
         from judge import inference
         names = inference.farmer_fixable(by["미이행"] + by["예정"][:3])
-        return f"{line} {_w.fix_offer(names)}" if names else line
+        # 묻는 말(…남습니다)과 고칠 수 있다는 말이 마침표 없이 한 문장으로 붙었다(검토 2026-10-18)
+        return f"{line}{'.' if by['놓침'] and ask else ''} {_w.fix_offer(names)}" if names else line
     return f"{head} {json.dumps(r, ensure_ascii=False)[:300]}"
 
 
@@ -1876,7 +2169,10 @@ def choose_kind(msg_id: str, kind: str, today: date | None = None) -> dict[str, 
     elif kind == "feedback.request":
         d = {"kind": "feedback.request", "text": t, "target": "other", "why": CHOSEN_WHY}
     elif kind == "decision.noncompliance":
-        et = _event_type(_NEG_FOLD.sub("", t)) or sch.quote(t, 60)
+        # [W-47 검토 2026-10-18] 분류와 같은 차례 — 부정된 작업 → 부정된 촬영 → 말 안의 작업 어휘. 전에는 작업 어휘가 먼저라 「수확했는데 사진은 못 찍었다」 를 못 한 이유로
+        # 고르면 수확 줄이 닫히고(놓침 10 → 9) 촬영 줄은 계속 물었다 — 그 말에서 못 한 것은 촬영이다
+        neg, cap = _negated_task(t), _capture_negated(t)
+        et = (neg[0] if neg else None) or (CAPTURE_TYPE if cap else None) or _event_type(_NEG_FOLD.sub("", t)) or sch.quote(t, 60)
         d = {"kind": "decision.noncompliance", "task_type": et, "planned_task": et, "planned_day": day_past, "reason": t, "why": CHOSEN_WHY,
              "needs": [] if day_past else ["planned_day"]}
         if deferred_said(t):

@@ -234,7 +234,8 @@ def all_judgments(today: date | None = None, only: str | None = None,
                                           forecast_why=why,     # [D-21] 예보를 못 받은 이유를 날씨 인용이 그대로 싣는다(관문의 입력 — 빈 채 넘기면 이유 없는 미비)
                                           mid=recs["mid"], mid_why=mwhy,   # [D-21 중기] 게이트를 지난 중기 줄 + 못 받은 이유 — 둘 다 넘긴다(입력 도착 래칫의 대상)
                                           outlook=recs["outlook"], outlook_why=lwhy,   # [D-21 장기] 같은 형태 — 셋째 입력 쌍
-                                          obs_rain=recs["obs_rain"], obs_rain_why=orwhy)   # [D-20] 넷째 입력 쌍 — 지난 일강수 + 못 받은 이유
+                                          obs_rain=recs["obs_rain"], obs_rain_why=orwhy,   # [D-20] 넷째 입력 쌍 — 지난 일강수 + 못 받은 이유
+                                          plan_env=envs[3])   # [W-48 검토 2026-10-18 둘째] 출하 답의 저장 꼬리는 계획 대 실제의 그 줄 상태를 읽는다(날짜로 짐작하지 않는다)
         # [M-6 · D-14] 자율진화 보수 상한 — 판정기 뒤, 돌려주기 전, 한 번. 규칙은 안 바꾸고 등급만 낮춘다
         envs = evolve.apply_caps(s["id"], envs, caps=recs["caps"])
         out.append((s, envs, {"forecast": why or "예보 사용", "mid": mwhy or "중기예보 사용", "outlook": lwhy or "장기 전망(등재분) 사용", "pest": pwhy or "예찰 사용",

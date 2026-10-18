@@ -182,7 +182,7 @@ def _render_env(out: list[str], e: dict, title: str) -> None:
     # 미뤄 둔 것이 틀렸다. 종류·등급·자료 이름은 사람 말로 내되 **정확한 이름은 title 에 남긴다**(채팅 카드와 같은 형태).
     # 이 함수가 내는 글자는 전부 시스템 문장이다(농가가 쓴 글은 여기 안 실린다) — 그래서 말미에 낱말 표를 한 번 댄다.
     start = len(out)
-    badge = f'<span class="st st-{KIND_CLASS.get(e["kind"], "대기")}" title="{_e(e["kind"])}">{_e(words.said(e["kind"]))}</span>'
+    badge = f'<span class="st st-{KIND_CLASS.get(e["kind"], "대기")}" title="{_e(e["kind"])}">{_e(words.head(e["kind"], e.get("result")))}</span>'
     out.append(f"<h2>{_e(title)} {badge}</h2>")
     r = e["result"]
     if e["kind"] == "판단함" and e["decision_id"] == "risk_alert":

@@ -21,7 +21,7 @@ from judge.harvest_timing import GRID_GRADE
 from schema import records as sch      # 사람이 쓴 글 인용 정본(sch.quote) — 불이행 사유를 요약에 실을 때
 
 FORB = ("humidity_air",)
-SELF_USE_WORDS = ("자가", "시험", "종구")      # 종구 — [발행자 전달 2026-10-03] 종구 생산은 출하 대상이 아니다(씨알을 남긴다)
+SELF_USE_WORDS = plan_vs_actual.SELF_USE_WORDS   # [W-48 2026-10-18] 문은 plan_vs_actual.not_shipping 하나 — 계획 대 실제의 출하 줄도 같은 문을 쓴다(같은 이름은 같은 것)
 REPLANT_WORDS = ("결주", "빈", "안 났", "안났", "드문", "듬성", "성글", "출현 불량", "안 올라")
 TOP_DRESSING_EVENT = "시비"
 
@@ -120,7 +120,8 @@ DRAINAGE_ALERT = _R(registry.Decision(
     revisit_days=1, params={"delegate": "risk_alert", "stage_order": 4}))
 SHIP_OR_STORE = _R(registry.Decision(
     id="ship_or_store", name="출하 또는 저장", required_axes=("anchor",), optional_axes=("forecast", "temp"), forbidden_axes=FORB,
-    rule="필지 용도가 자가·시험(D-8)이면 해당 없음. 납품 계획일(plan.target_date, 농가만)이 없으면 판단 불가(데이터). "
+    rule="필지 용도가 자가·시험(D-8 · 파는 말이 없을 때)이거나 몰 납품을 안 하면 해당 없음 — 문은 plan_vs_actual.not_shipping 하나(계획 대 실제의 출하 줄도 같은 문). "
+         "납품 계획일(plan.target_date, 농가만)이 없으면 판단 불가(데이터). "
          "있으면 수확 창 끝과 계획일의 간격을 저장 일수로 내고, 칸 5 '출하 또는 단기 저장' 마감(63일)을 넘기면 상한 제약.", revisit_days=7,
     params={"source": "격자 칸 5 tasks[출하 또는 단기 저장] retry.deadline_day"}))
 
@@ -481,14 +482,35 @@ def judge_top_dressing(subject, did: str, today: date, evts: list[dict[str, Any]
                     notes=[grid_schema.source_note(unit), "양(kg/10a)은 지어내지 않는다 — 처방 정본이 없으면 비운다"])
 
 
-def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | None = None, harvest: Envelope | None = None) -> Envelope:
+def _ship_row_to_do(plan_env: Envelope | None) -> dict[str, Any] | None:
+    """계획 대 실제의 출하 줄이 **아직 할 일**(예정 · 미이행)이면 그 줄 — 아니면(이행 · 사유 기록됨 · 기록 없음 · 종료 뒤 · 계획이 없음) None."""
+    if plan_env is None or plan_env.kind != "판단함":
+        return None
+    return next((r for r in (plan_env.result or {}).get("rows", []) if r.get("kind") != "plan.capture" and plan_vs_actual.SHIP_TASK_KEY in (r.get("task") or "")
+                 and r.get("status") in ("예정", "미이행")), None)
+
+
+def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | None = None, harvest: Envelope | None = None,
+                        plan_env: Envelope | None = None) -> Envelope:
     ctx, env = _base(subject, "ship_or_store", today)
     if env:
         return env
     unit, stage, sid, as_of = ctx
-    use = str(subject.get("use") or "")
-    if subject.get("mall_supply") is False or any(w in use for w in SELF_USE_WORDS):
-        return Envelope("해당 없음", "ship_or_store", sid, as_of, result={"why": f"이번 작기 용도 '{use or '자가'}'(D-8) — 출하 결정 대상 아님", "summary": f"이번 작기는 {use or '자가'} 용도라 출하·저장 판단이 없습니다"})
+    no_ship = plan_vs_actual.not_shipping(subject)      # [W-48] 계획 대 실제의 출하 줄과 같은 문 · [ⓐ] 까닭도 그 문이 말한다(용도가 비었으면 「자가」 로 단정하지 않는다)
+    if no_ship:
+        # [W-48 검토 2026-10-18] 전에는 「출하·저장 판단이 없습니다」 — 같은 날 할 일 답은 「출하 또는 단기 저장(~10-27)」 을 지금 할 것으로 낸다(그 줄은 남겼다 · 유일한
+        # 단기 저장 안내). 이 판단이 내는 것은 **언제 낼지 · 며칠 두었다 낼지**라 없는 것은 출하 판단이다. 계획에 그 줄이 할 일로 있는 동안은 그 사실도 말한다 —
+        # 「저장할까」 가 이 판단으로 온다. 자가 작기에 그 안내를 낼지는 발행자 몫(W-49 · 낸다면 이 줄 그대로 · 안 낸다면 계획 줄과 함께 걷는다)
+        # [검토 2026-10-18 둘째] 첫 판은 날짜(마감까지)만 봐서 거둬 저장한 뒤 · 안 하기로 한 뒤 · 작기를 닫은 뒤에도 「할 일에 그대로 있습니다」 였다(같은 화면의 계획 표는
+        # 이행이라 말한다 — W-48 이 걷으려던 두 층의 엇갈림). 그 줄 **자신**의 상태를 읽는다(계획 대 실제 봉투 · judge.run 이 넘긴다 · 없으면 말하지 않는다).
+        # 그 동안은 머리도 「이번엔 할 일이 아닙니다」 가 아니다 — 본문이 저장은 할 일이라고 말한다(머리와 본문이 서로 다른 말)
+        row = _ship_row_to_do(plan_env)
+        result = {"why": f"{no_ship.removesuffix('라')}(D-8) — 출하 결정 대상 아님",
+                  "summary": f"{no_ship} 출하 판단이 없습니다"
+                             + (f" — 거둔 뒤 며칠 안의 단기 저장은 할 일에 그대로 있습니다(~{str(row.get('deadline_date') or '')[5:]})" if row else "")}
+        if row:
+            result["head"] = "이번엔 출하 판단이 없습니다"
+        return Envelope("해당 없음", "ship_or_store", sid, as_of, result=result)
     tg = sorted((t for t in (targets or []) if t.get("target_date")), key=lambda t: t["target_date"])
     if not tg:
         return Envelope("판단 불가(데이터)", "ship_or_store", sid, as_of,
@@ -501,7 +523,7 @@ def judge_ship_or_store(subject, today: date, targets: list[dict[str, Any]] | No
     target = date.fromisoformat(tg[0]["target_date"])
     h_end = date.fromisoformat(harvest.result["window_end"])
     store_days = (target - h_end).days
-    t = _task(stage, "출하")
+    t = _task(stage, plan_vs_actual.SHIP_TASK_KEY)      # 계획 대 실제가 문을 거는 그 작업
     deadline = _deadline_day(t)   # 마감을 읽는 법은 한 벌 — 네 결정이 같은 함수를 쓴다
     if deadline is None:
         # [B6 코드 쪽 2026-09-20] 전에는 63 을 기본값으로 메웠다(하드코딩 · 대리값 금지 위반) — 격자에 마감이 없으면 지식 미비다
@@ -861,7 +883,8 @@ def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pe
               said: list[dict[str, Any]] | None = None, forecast_why: str | None = None,
               mid: list[dict[str, Any]] | None = None, mid_why: str | None = None,
               outlook: list[dict[str, Any]] | None = None, outlook_why: str | None = None,
-              obs_rain: list[dict[str, Any]] | None = None, obs_rain_why: str | None = None) -> list[Envelope]:
+              obs_rain: list[dict[str, Any]] | None = None, obs_rain_why: str | None = None,
+              plan_env: Envelope | None = None) -> list[Envelope]:
     evts = evts or []
     obs = [e for e in evts if e.get("kind") == "observation.note"]
     targets = [e for e in evts if e.get("kind") == "plan.target_date"]
@@ -870,6 +893,6 @@ def judge_all(subject: dict[str, Any], today: date, evts=None, forecast=None, pe
     return [judge_sowing_window(subject, today), judge_base_fertilization(subject, today, prescriptions, unreadable), judge_replant(subject, today, obs),
             judge_pest_alert(subject, today, forecast, pest, evts), judge_top_dressing(subject, "top_dressing_1", today, evts, prescriptions, unreadable),
             judge_top_dressing(subject, "top_dressing_2", today, evts, prescriptions, unreadable), judge_drainage_alert(subject, today, forecast, pest, evts),
-            judge_ship_or_store(subject, today, targets, harvest), judge_forecast_citation(subject, today, forecast, forecast_why, mid, mid_why, outlook, outlook_why),
+            judge_ship_or_store(subject, today, targets, harvest, plan_env), judge_forecast_citation(subject, today, forecast, forecast_why, mid, mid_why, outlook, outlook_why),
             judge_drought_alert(subject, today, evts, obs, obs_rain, obs_rain_why),
             judge_symptom_triage(subject, today, obs + said_obs)]
